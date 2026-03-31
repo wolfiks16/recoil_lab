@@ -1,0 +1,259 @@
+{% extends "recoil_app/base.html" %}
+
+{% block title %}Результат расчёта{% endblock %}
+
+{% block content %}
+<h1>Результат расчёта</h1>
+
+<div class="actions">
+    <a href="{% url 'index' %}?from_run={{ run.id }}">Подставить в новый расчёт</a>
+    <a href="{% url 'index' %}">Назад</a>
+    {% if run.report_file %}
+        <a href="{{ run.report_file.url }}">Скачать Excel-отчёт</a>
+    {% endif %}
+
+    <form method="post" action="{% url 'delete_run' run.id %}" class="inline-form"
+          onsubmit="return confirm('Удалить расчёт и все его файлы?');">
+        {% csrf_token %}
+        <button type="submit" class="danger-btn">Удалить расчёт</button>
+    </form>
+</div>
+
+<div class="card page-nav-card">
+    <h2>Навигация по результату</h2>
+    <div class="page-nav">
+        <a href="#summary">Итоговые результаты</a>
+        <a href="#status">Статус расчёта</a>
+        <a href="#charts-main">Общие графики</a>
+        <a href="#charts-recoil">Графики отката</a>
+        <a href="#charts-return">Графики наката</a>
+        <a href="#source-data">Исходные данные</a>
+    </div>
+</div>
+
+<div class="card" id="summary">
+    <h2>Итоговые результаты</h2>
+    <table class="info-table">
+        <tbody>
+            <tr><th>Имя</th><td>{{ run.name }}</td></tr>
+            <tr><th>Максимальный путь отката</th><td>{{ run.x_max }} м</td></tr>
+            <tr><th>Максимальная скорость</th><td>{{ run.v_max }} м/с</td></tr>
+            <tr><th>Точка остановки</th><td>{{ run.x_final }} м</td></tr>
+            <tr><th>Конечная скорость</th><td>{{ run.v_final }} м/с</td></tr>
+            <tr><th>Конечное ускорение</th><td>{{ run.a_final }} м/с²</td></tr>
+            <tr><th>Время отката</th><td>{{ run.recoil_end_time }} с</td></tr>
+            <tr><th>Возврат в x=0</th><td>{{ run.return_end_time }} с</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card" id="status">
+    <h2>Статус расчёта</h2>
+    <table class="info-table">
+        <tbody>
+            <tr>
+                <th>Причина завершения</th>
+                <td>
+                    {% if run.termination_reason == "returned_to_zero" %}
+                        Возврат в x = 0
+                    {% elif run.termination_reason == "time_limit" %}
+                        Достигнуто заданное время расчёта
+                    {% else %}
+                        Не определена
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>Выход по перемещению за диапазон характеристики пружины</th>
+                <td>{% if run.spring_out_of_range %}Да{% else %}Нет{% endif %}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    {% if run.warnings_text %}
+        <div class="notice" style="margin-top: 16px;">
+            <strong>Предупреждения:</strong>
+            <pre style="white-space: pre-wrap; margin: 10px 0 0;">{{ run.warnings_text }}</pre>
+        </div>
+    {% endif %}
+</div>
+
+<section id="charts-main" class="section-block">
+    <div class="section-head">
+        <h2>Общие графики</h2>
+        <button type="button" class="section-toggle-btn" data-target="section-main-body">Свернуть</button>
+    </div>
+    <div id="section-main-body" class="section-body">
+        <div class="plot-grid">
+            {% if chart_html.chart_x_t %}
+                <div class="plot-card">
+                    <h3>Перемещение от времени</h3>
+                    <div class="plot-embed">{{ chart_html.chart_x_t|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_v_a_t %}
+                <div class="plot-card">
+                    <h3>Скорость и ускорение от времени</h3>
+                    <div class="plot-embed">{{ chart_html.chart_v_a_t|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_v_x %}
+                <div class="plot-card">
+                    <h3>Скорость от перемещения</h3>
+                    <div class="plot-embed">{{ chart_html.chart_v_x|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_forces_secondary %}
+                <div class="plot-card">
+                    <h3>Распределение сил от времени</h3>
+                    <div class="plot-embed">{{ chart_html.chart_forces_secondary|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_fmag_v %}
+                <div class="plot-card">
+                    <h3>Магнитные силы от скорости</h3>
+                    <div class="plot-embed">{{ chart_html.chart_fmag_v|safe }}</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section id="charts-recoil" class="section-block">
+    <div class="section-head">
+        <h2>Графики фазы отката</h2>
+        <button type="button" class="section-toggle-btn" data-target="section-recoil-body">Свернуть</button>
+    </div>
+    <div id="section-recoil-body" class="section-body">
+        <div class="plot-grid">
+            {% if chart_html.chart_x_t_recoil %}
+                <div class="plot-card">
+                    <h3>Перемещение — откат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_x_t_recoil|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_v_a_t_recoil %}
+                <div class="plot-card">
+                    <h3>Скорость и ускорение — откат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_v_a_t_recoil|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_forces_main_recoil %}
+                <div class="plot-card">
+                    <h3>Движущая и общая сила — откат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_forces_main_recoil|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_forces_secondary_recoil %}
+                <div class="plot-card">
+                    <h3>Распределение сил — откат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_forces_secondary_recoil|safe }}</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section id="charts-return" class="section-block">
+    <div class="section-head">
+        <h2>Графики фазы наката</h2>
+        <button type="button" class="section-toggle-btn" data-target="section-return-body">Свернуть</button>
+    </div>
+    <div id="section-return-body" class="section-body">
+        <div class="plot-grid">
+            {% if chart_html.chart_x_t_return %}
+                <div class="plot-card">
+                    <h3>Перемещение — накат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_x_t_return|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_v_a_t_return %}
+                <div class="plot-card">
+                    <h3>Скорость и ускорение — накат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_v_a_t_return|safe }}</div>
+                </div>
+            {% endif %}
+
+            {% if chart_html.chart_forces_secondary_return %}
+                <div class="plot-card">
+                    <h3>Распределение сил — накат</h3>
+                    <div class="plot-embed">{{ chart_html.chart_forces_secondary_return|safe }}</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section id="source-data" class="section-block">
+    <div class="section-head">
+        <h2>Исходные данные расчёта</h2>
+        <button type="button" class="section-toggle-btn" data-target="section-source-body">Свернуть</button>
+    </div>
+    <div id="section-source-body" class="section-body">
+        <div class="two-col">
+            <div class="card">
+                <h3>Общие параметры</h3>
+                <table class="info-table">
+                    <tbody>
+                        <tr><th>Масса</th><td>{{ run.mass }}</td></tr>
+                        <tr><th>Угол</th><td>{{ run.angle_deg }}</td></tr>
+                        <tr><th>Начальная скорость</th><td>{{ run.v0 }}</td></tr>
+                        <tr><th>Начальное перемещение</th><td>{{ run.x0 }}</td></tr>
+                        <tr><th>Время расчёта</th><td>{{ run.t_max }}</td></tr>
+                        <tr><th>Шаг dt</th><td>{{ run.dt }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div>
+                {% for brake in brakes %}
+                    <div class="card">
+                        <h3>Магнитный тормоз {{ brake.index }}</h3>
+                        <table class="info-table">
+                            <tbody>
+                                <tr><th>gamma</th><td>{{ brake.gamma }}</td></tr>
+                                <tr><th>delta</th><td>{{ brake.delta }}</td></tr>
+                                <tr><th>xm</th><td>{{ brake.xm }}</td></tr>
+                                <tr><th>ym</th><td>{{ brake.ym }}</td></tr>
+                                <tr><th>dh1</th><td>{{ brake.dh1 }}</td></tr>
+                                <tr><th>dh2</th><td>{{ brake.dh2 }}</td></tr>
+                                <tr><th>dm</th><td>{{ brake.dm }}</td></tr>
+                                <tr><th>n</th><td>{{ brake.n }}</td></tr>
+                                <tr><th>mu</th><td>{{ brake.mu }}</td></tr>
+                                <tr><th>bz</th><td>{{ brake.bz }}</td></tr>
+                                <tr><th>lya</th><td>{{ brake.lya }}</td></tr>
+                                <tr><th>wn0</th><td>{{ brake.wn0 }}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(function () {
+    const buttons = document.querySelectorAll(".section-toggle-btn");
+
+    buttons.forEach((btn) => {
+        btn.addEventListener("click", function () {
+            const targetId = btn.dataset.target;
+            const target = document.getElementById(targetId);
+            if (!target) return;
+
+            const collapsed = target.classList.toggle("is-collapsed");
+            btn.textContent = collapsed ? "Развернуть" : "Свернуть";
+        });
+    });
+})();
+</script>
+{% endblock %}

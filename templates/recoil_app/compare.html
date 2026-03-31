@@ -1,0 +1,102 @@
+{% extends "recoil_app/base.html" %}
+
+{% block title %}Сравнение расчётов{% endblock %}
+
+{% block content %}
+<h1>Сравнение расчётов</h1>
+
+<div class="actions">
+    <a href="{% url 'index' %}">Назад к новому расчёту</a>
+</div>
+
+<div class="card">
+    <h2>Выбор расчётов</h2>
+
+    <form method="get">
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="{{ form.run_a.id_for_label }}">{{ form.run_a.label }}</label>
+                {{ form.run_a }}
+            </div>
+            <div class="form-field">
+                <label for="{{ form.run_b.id_for_label }}">{{ form.run_b.label }}</label>
+                {{ form.run_b }}
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit">Сравнить</button>
+        </div>
+    </form>
+</div>
+
+{% if run_a and run_b %}
+    <div class="card">
+        <h2>Сравниваемые расчёты</h2>
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th>Расчёт A</th>
+                    <td>{{ run_a.name }}</td>
+                </tr>
+                <tr>
+                    <th>Расчёт B</th>
+                    <td>{{ run_b.name }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Итоговые результаты</h2>
+        <table class="info-table">
+            <thead>
+                <tr>
+                    <th>Параметр</th>
+                    <th>{{ run_a.name }}</th>
+                    <th>{{ run_b.name }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><th>Максимальный путь отката</th><td>{{ run_a.x_max }}</td><td>{{ run_b.x_max }}</td></tr>
+                <tr><th>Максимальная скорость</th><td>{{ run_a.v_max }}</td><td>{{ run_b.v_max }}</td></tr>
+                <tr><th>Точка остановки</th><td>{{ run_a.x_final }}</td><td>{{ run_b.x_final }}</td></tr>
+                <tr><th>Конечная скорость</th><td>{{ run_a.v_final }}</td><td>{{ run_b.v_final }}</td></tr>
+                <tr><th>Конечное ускорение</th><td>{{ run_a.a_final }}</td><td>{{ run_b.a_final }}</td></tr>
+                <tr><th>Время отката</th><td>{{ run_a.recoil_end_time }}</td><td>{{ run_b.recoil_end_time }}</td></tr>
+                <tr><th>Возврат в x=0</th><td>{{ run_a.return_end_time }}</td><td>{{ run_b.return_end_time }}</td></tr>
+                <tr><th>Причина завершения</th><td>{{ run_a.termination_reason }}</td><td>{{ run_b.termination_reason }}</td></tr>
+                <tr><th>Выход по пружине</th><td>{% if run_a.spring_out_of_range %}Да{% else %}Нет{% endif %}</td><td>{% if run_b.spring_out_of_range %}Да{% else %}Нет{% endif %}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% for block in compare_chart_blocks %}
+        <section class="section-block">
+            <div class="section-head">
+                <h2>{{ block.title }}</h2>
+            </div>
+
+            <div class="compare-grid">
+                <div class="plot-card">
+                    <h3>{{ run_a.name }}</h3>
+                    {% if block.html_a %}
+                        <div class="plot-embed">{{ block.html_a|safe }}</div>
+                    {% else %}
+                        <div class="notice">График отсутствует для этого расчёта.</div>
+                    {% endif %}
+                </div>
+
+                <div class="plot-card">
+                    <h3>{{ run_b.name }}</h3>
+                    {% if block.html_b %}
+                        <div class="plot-embed">{{ block.html_b|safe }}</div>
+                    {% else %}
+                        <div class="notice">График отсутствует для этого расчёта.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+    {% endfor %}
+{% endif %}
+{% endblock %}
