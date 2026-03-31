@@ -1,0 +1,391 @@
+{% extends "recoil_app/base.html" %}
+
+{% block title %}Расчёт откатной системы{% endblock %}
+
+{% block content %}
+<h1>Расчёт откатной системы</h1>
+
+{% if request.GET.from_run %}
+    <div class="notice">
+        <strong>Форма заполнена данными из предыдущего расчёта.</strong>
+    </div>
+{% endif %}
+
+<div class="card">
+    <h2>Новый расчёт</h2>
+
+    <form method="post" enctype="multipart/form-data" id="calculation-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="notice">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <h3>Общие параметры</h3>
+
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="field-error">{{ form.name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.input_file.id_for_label }}">{{ form.input_file.label }}</label>
+                {{ form.input_file }}
+                {% if form.input_file.errors %}<div class="field-error">{{ form.input_file.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.mass.id_for_label }}">{{ form.mass.label }}</label>
+                {{ form.mass }}
+                {% if form.mass.errors %}<div class="field-error">{{ form.mass.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.angle_deg.id_for_label }}">{{ form.angle_deg.label }}</label>
+                {{ form.angle_deg }}
+                {% if form.angle_deg.errors %}<div class="field-error">{{ form.angle_deg.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.v0.id_for_label }}">{{ form.v0.label }}</label>
+                {{ form.v0 }}
+                {% if form.v0.errors %}<div class="field-error">{{ form.v0.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.x0.id_for_label }}">{{ form.x0.label }}</label>
+                {{ form.x0 }}
+                {% if form.x0.errors %}<div class="field-error">{{ form.x0.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.t_max.id_for_label }}">{{ form.t_max.label }}</label>
+                {{ form.t_max }}
+                {% if form.t_max.errors %}<div class="field-error">{{ form.t_max.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-field">
+                <label for="{{ form.dt.id_for_label }}">{{ form.dt.label }}</label>
+                {{ form.dt }}
+                {% if form.dt.errors %}<div class="field-error">{{ form.dt.errors }}</div>{% endif %}
+            </div>
+        </div>
+
+        <h3>Магнитные тормоза</h3>
+
+        <div class="brake-controls">
+            <button type="button" id="add-brake-btn">Добавить тормоз</button>
+            <span class="muted">Минимум 1 тормоз</span>
+        </div>
+
+        {{ brake_formset.management_form }}
+
+        {% if brake_formset.non_form_errors %}
+            <div class="notice">
+                {{ brake_formset.non_form_errors }}
+            </div>
+        {% endif %}
+
+        <div id="brake-forms" class="brake-grid">
+            {% for brake_form in brake_formset %}
+                <div class="brake-card brake-form-item">
+                    <div class="brake-card__head">
+                        <h4>Тормоз {{ forloop.counter }}</h4>
+                        <div class="brake-card__actions">
+                            <button type="button" class="copy-brake-btn">Копировать</button>
+                            <button type="button" class="delete-brake-btn">Удалить</button>
+                        </div>
+                    </div>
+
+                    <div class="brake-card__body">
+                        {% if brake_form.non_field_errors %}
+                            <div class="notice">
+                                {{ brake_form.non_field_errors }}
+                            </div>
+                        {% endif %}
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="{{ brake_form.gamma.id_for_label }}">{{ brake_form.gamma.label }}</label>
+                                {{ brake_form.gamma }}
+                                {% if brake_form.gamma.errors %}<div class="field-error">{{ brake_form.gamma.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.delta.id_for_label }}">{{ brake_form.delta.label }}</label>
+                                {{ brake_form.delta }}
+                                {% if brake_form.delta.errors %}<div class="field-error">{{ brake_form.delta.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.xm.id_for_label }}">{{ brake_form.xm.label }}</label>
+                                {{ brake_form.xm }}
+                                {% if brake_form.xm.errors %}<div class="field-error">{{ brake_form.xm.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.ym.id_for_label }}">{{ brake_form.ym.label }}</label>
+                                {{ brake_form.ym }}
+                                {% if brake_form.ym.errors %}<div class="field-error">{{ brake_form.ym.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.dh1.id_for_label }}">{{ brake_form.dh1.label }}</label>
+                                {{ brake_form.dh1 }}
+                                {% if brake_form.dh1.errors %}<div class="field-error">{{ brake_form.dh1.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.dh2.id_for_label }}">{{ brake_form.dh2.label }}</label>
+                                {{ brake_form.dh2 }}
+                                {% if brake_form.dh2.errors %}<div class="field-error">{{ brake_form.dh2.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.dm.id_for_label }}">{{ brake_form.dm.label }}</label>
+                                {{ brake_form.dm }}
+                                {% if brake_form.dm.errors %}<div class="field-error">{{ brake_form.dm.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.n.id_for_label }}">{{ brake_form.n.label }}</label>
+                                {{ brake_form.n }}
+                                {% if brake_form.n.errors %}<div class="field-error">{{ brake_form.n.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.mu.id_for_label }}">{{ brake_form.mu.label }}</label>
+                                {{ brake_form.mu }}
+                                {% if brake_form.mu.errors %}<div class="field-error">{{ brake_form.mu.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.bz.id_for_label }}">{{ brake_form.bz.label }}</label>
+                                {{ brake_form.bz }}
+                                {% if brake_form.bz.errors %}<div class="field-error">{{ brake_form.bz.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.lya.id_for_label }}">{{ brake_form.lya.label }}</label>
+                                {{ brake_form.lya }}
+                                {% if brake_form.lya.errors %}<div class="field-error">{{ brake_form.lya.errors }}</div>{% endif %}
+                            </div>
+
+                            <div class="form-field">
+                                <label for="{{ brake_form.wn0.id_for_label }}">{{ brake_form.wn0.label }}</label>
+                                {{ brake_form.wn0 }}
+                                {% if brake_form.wn0.errors %}<div class="field-error">{{ brake_form.wn0.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div id="empty-brake-form" class="hidden-template">
+            <div class="brake-card brake-form-item">
+                <div class="brake-card__head">
+                    <h4>Тормоз __number__</h4>
+                    <div class="brake-card__actions">
+                        <button type="button" class="copy-brake-btn">Копировать</button>
+                        <button type="button" class="delete-brake-btn">Удалить</button>
+                    </div>
+                </div>
+
+                <div class="brake-card__body">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-gamma">gamma</label>
+                            {{ brake_formset.empty_form.gamma }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-delta">delta</label>
+                            {{ brake_formset.empty_form.delta }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-xm">xm</label>
+                            {{ brake_formset.empty_form.xm }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-ym">ym</label>
+                            {{ brake_formset.empty_form.ym }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-dh1">dh1</label>
+                            {{ brake_formset.empty_form.dh1 }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-dh2">dh2</label>
+                            {{ brake_formset.empty_form.dh2 }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-dm">dm</label>
+                            {{ brake_formset.empty_form.dm }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-n">n</label>
+                            {{ brake_formset.empty_form.n }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-mu">mu</label>
+                            {{ brake_formset.empty_form.mu }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-bz">bz</label>
+                            {{ brake_formset.empty_form.bz }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-lya">lya</label>
+                            {{ brake_formset.empty_form.lya }}
+                        </div>
+                        <div class="form-field">
+                            <label for="id_brakes-__prefix__-wn0">wn0</label>
+                            {{ brake_formset.empty_form.wn0 }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" id="submit-calc-btn">Запустить расчёт</button>
+        </div>
+    </form>
+
+    <div id="calculation-overlay" class="calc-overlay">
+        <div class="calc-overlay__box">
+            <div class="calc-spinner"></div>
+            <h3>Идёт расчёт</h3>
+            <p>Пожалуйста, дождитесь завершения...</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Последние расчёты</h2>
+    <ul>
+        {% for run in runs %}
+            <li>
+                <a href="{% url 'run_detail' run.id %}">{{ run }}</a>
+                — {{ run.created_at }}
+            </li>
+        {% empty %}
+            <li>Пока нет расчётов</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+(function () {
+    const formsContainer = document.getElementById("brake-forms");
+    const addBtn = document.getElementById("add-brake-btn");
+    const totalFormsInput = document.getElementById("id_brakes-TOTAL_FORMS");
+    const emptyFormTemplate = document.getElementById("empty-brake-form");
+
+    if (!formsContainer || !addBtn || !totalFormsInput || !emptyFormTemplate) return;
+
+    function renumberBrakeTitles() {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        items.forEach((item, index) => {
+            const title = item.querySelector("h4");
+            if (title) title.textContent = `Тормоз ${index + 1}`;
+        });
+    }
+
+    function reindexForms() {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        items.forEach((item, index) => {
+            item.querySelectorAll("input, select, textarea, label").forEach((el) => {
+                ["name", "id", "for"].forEach((attr) => {
+                    if (el.hasAttribute && el.hasAttribute(attr)) {
+                        el.setAttribute(attr, el.getAttribute(attr).replace(/brakes-\d+-/g, `brakes-${index}-`));
+                    }
+                });
+            });
+        });
+        totalFormsInput.value = items.length;
+        renumberBrakeTitles();
+    }
+
+    function fillNewCardFromSource(sourceCard, newCard) {
+        const sourceInputs = sourceCard.querySelectorAll("input, select, textarea");
+        const newInputs = newCard.querySelectorAll("input, select, textarea");
+
+        sourceInputs.forEach((src, index) => {
+            const dst = newInputs[index];
+            if (!dst) return;
+            if (src.type === "checkbox" || src.type === "radio") {
+                dst.checked = src.checked;
+            } else {
+                dst.value = src.value;
+            }
+        });
+    }
+
+    function createBrakeForm() {
+        const formIndex = parseInt(totalFormsInput.value, 10);
+        let templateHtml = emptyFormTemplate.innerHTML
+            .replace(/__prefix__/g, formIndex)
+            .replace(/__number__/g, formIndex + 1);
+
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = templateHtml.trim();
+        const newForm = wrapper.firstElementChild;
+
+        formsContainer.appendChild(newForm);
+        totalFormsInput.value = formIndex + 1;
+        bindCardActions(newForm);
+        renumberBrakeTitles();
+        return newForm;
+    }
+
+    function bindCardActions(card) {
+        const deleteBtn = card.querySelector(".delete-brake-btn");
+        const copyBtn = card.querySelector(".copy-brake-btn");
+
+        if (deleteBtn) {
+            deleteBtn.addEventListener("click", function () {
+                const items = formsContainer.querySelectorAll(".brake-form-item");
+                if (items.length <= 1) return;
+                card.remove();
+                reindexForms();
+            });
+        }
+
+        if (copyBtn) {
+            copyBtn.addEventListener("click", function () {
+                const newCard = createBrakeForm();
+                fillNewCardFromSource(card, newCard);
+            });
+        }
+    }
+
+    addBtn.addEventListener("click", createBrakeForm);
+    formsContainer.querySelectorAll(".brake-form-item").forEach(bindCardActions);
+    renumberBrakeTitles();
+})();
+</script>
+
+<script>
+(function () {
+    const form = document.getElementById("calculation-form");
+    const overlay = document.getElementById("calculation-overlay");
+    const submitBtn = document.getElementById("submit-calc-btn");
+
+    if (!form || !overlay) return;
+
+    form.addEventListener("submit", function () {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Идёт расчёт...";
+        }
+        overlay.classList.add("active");
+        form.classList.add("is-submitting");
+    });
+})();
+</script>
+{% endblock %}
