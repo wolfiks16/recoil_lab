@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 
 from .forms import CalculationForm, CompareRunsForm, MagneticBrakeFormSet
 from .models import CalculationRun, CalculationSnapshot, MagneticBrakeConfig
+from .services.analysis import enrich_with_basic_analysis
 from .services.charting import save_interactive_charts
 from .services.dynamics import RecoilParams, simulate_recoil
 from .services.magnetic import MagneticParams
@@ -262,6 +263,7 @@ def index_view(request):
             run.save()
 
             calculation_model = build_calculation_model(run, brake_objects, result)
+            calculation_model, analysis_snapshot = enrich_with_basic_analysis(calculation_model)
 
             CalculationSnapshot.objects.update_or_create(
                 run=run,
@@ -269,7 +271,7 @@ def index_view(request):
                     "model_version": calculation_model.model_version,
                     "input_snapshot": calculation_model.input_snapshot(),
                     "result_snapshot": calculation_model.result_snapshot(),
-                    "analysis_snapshot": {},
+                    "analysis_snapshot": analysis_snapshot,
                     "thermal_snapshot": {},
                 },
             )

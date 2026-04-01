@@ -44,6 +44,7 @@ class PhaseInterval:
     start_time: float | None = None
     end_time: float | None = None
     duration: float | None = None
+    available: bool = False
 
 
 @dataclass
@@ -149,6 +150,9 @@ def _to_matrix(values) -> list[list[float]]:
 
 
 def build_calculation_model(run, brakes, result) -> CalculationModel:
+    recoil_available = result.recoil_end_index is not None and result.recoil_end_time is not None
+    return_available = result.return_end_index is not None and result.return_end_time is not None
+
     recoil_phase = PhaseInterval(
         start_index=0 if len(result.t) > 0 else None,
         end_index=result.recoil_end_index,
@@ -159,6 +163,7 @@ def build_calculation_model(run, brakes, result) -> CalculationModel:
             if len(result.t) > 0 and result.recoil_end_time is not None
             else None
         ),
+        available=recoil_available,
     )
 
     return_phase = PhaseInterval(
@@ -171,6 +176,7 @@ def build_calculation_model(run, brakes, result) -> CalculationModel:
             if result.return_end_time is not None and result.recoil_end_time is not None
             else None
         ),
+        available=return_available,
     )
 
     input_data = CalculationInputData(
