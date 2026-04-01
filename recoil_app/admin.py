@@ -1,12 +1,27 @@
 from django.contrib import admin
 
-from .models import CalculationRun, MagneticBrakeConfig
+from .models import CalculationRun, CalculationSnapshot, MagneticBrakeConfig
 
 
 class MagneticBrakeConfigInline(admin.TabularInline):
     model = MagneticBrakeConfig
     extra = 0
     ordering = ("index",)
+
+
+class CalculationSnapshotInline(admin.StackedInline):
+    model = CalculationSnapshot
+    extra = 0
+    can_delete = False
+    readonly_fields = (
+        "model_version",
+        "input_snapshot",
+        "result_snapshot",
+        "analysis_snapshot",
+        "thermal_snapshot",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(CalculationRun)
@@ -31,7 +46,7 @@ class CalculationRunAdmin(admin.ModelAdmin):
     )
     search_fields = ("name",)
     ordering = ("-created_at",)
-    inlines = [MagneticBrakeConfigInline]
+    inlines = [MagneticBrakeConfigInline, CalculationSnapshotInline]
 
     fieldsets = (
         (
@@ -149,6 +164,23 @@ class CalculationRunAdmin(admin.ModelAdmin):
         "chart_x_t_return",
         "chart_v_a_t_return",
         "chart_forces_secondary_return",
+    )
+
+
+@admin.register(CalculationSnapshot)
+class CalculationSnapshotAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "run",
+        "model_version",
+        "created_at",
+        "updated_at",
+    )
+    search_fields = ("run__name",)
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "created_at",
+        "updated_at",
     )
 
 

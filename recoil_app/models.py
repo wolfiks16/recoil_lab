@@ -55,6 +55,28 @@ class CalculationRun(models.Model):
         return self.name or f"Расчёт #{self.pk}"
 
 
+class CalculationSnapshot(models.Model):
+    run = models.OneToOneField(
+        CalculationRun,
+        on_delete=models.CASCADE,
+        related_name="snapshot",
+    )
+    model_version = models.CharField(max_length=32, default="2.0")
+    input_snapshot = models.JSONField(default=dict, blank=True)
+    result_snapshot = models.JSONField(default=dict, blank=True)
+    analysis_snapshot = models.JSONField(default=dict, blank=True)
+    thermal_snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Снимок расчёта"
+        verbose_name_plural = "Снимки расчётов"
+
+    def __str__(self):
+        return f"Снимок расчёта {self.run_id} (v{self.model_version})"
+
+
 class MagneticBrakeConfig(models.Model):
     run = models.ForeignKey(
         CalculationRun,

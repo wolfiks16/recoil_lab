@@ -8,10 +8,11 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from .forms import CalculationForm, CompareRunsForm, MagneticBrakeFormSet
-from .models import CalculationRun, MagneticBrakeConfig
+from .models import CalculationRun, CalculationSnapshot, MagneticBrakeConfig
 from .services.charting import save_interactive_charts
 from .services.dynamics import RecoilParams, simulate_recoil
 from .services.magnetic import MagneticParams
+from .services.modeling import build_calculation_model
 from .services.reporting import export_results_to_excel
 
 
@@ -20,14 +21,14 @@ COMPARE_CHART_FIELDS = [
     ("chart_v_a_t", "Скорость и ускорение от времени"),
     ("chart_v_x", "Скорость от перемещения"),
     ("chart_fmag_v", "Магнитные силы от скорости"),
-    ("chart_forces_secondary", "Остальные силы от времени"),
+    ("chart_forces_secondary", "Распределение сил от времени"),
     ("chart_x_t_recoil", "Перемещение — откат"),
     ("chart_v_a_t_recoil", "Скорость и ускорение — откат"),
-    ("chart_forces_main_recoil", "Движущая и суммарная силы — откат"),
-    ("chart_forces_secondary_recoil", "Остальные силы — откат"),
+    ("chart_forces_main_recoil", "Движущая и общая сила — откат"),
+    ("chart_forces_secondary_recoil", "Распределение сил — откат"),
     ("chart_x_t_return", "Перемещение — накат"),
     ("chart_v_a_t_return", "Скорость и ускорение — накат"),
-    ("chart_forces_secondary_return", "Остальные силы — накат"),
+    ("chart_forces_secondary_return", "Распределение сил — накат"),
 ]
 
 
@@ -173,13 +174,14 @@ def index_view(request):
                 dt=form.cleaned_data["dt"],
             )
 
+            brake_objects: list[MagneticBrakeConfig] = []
             magnetic_list: list[MagneticParams] = []
 
             for index, brake_form in enumerate(brake_formset.cleaned_data, start=1):
                 if not brake_form:
                     continue
 
-                MagneticBrakeConfig.objects.create(
+                brake_obj = MagneticBrakeConfig.objects.create(
                     run=run,
                     index=index,
                     gamma=brake_form["gamma"],
@@ -195,6 +197,7 @@ def index_view(request):
                     lya=brake_form["lya"],
                     wn0=brake_form["wn0"],
                 )
+                brake_objects.append(brake_obj)
                 magnetic_list.append(_magnetic_params_from_cleaned_data(brake_form))
 
             recoil = RecoilParams(
@@ -257,6 +260,20 @@ def index_view(request):
             run.report_file.name = f"reports/{run_folder_name}/{report_name}"
 
             run.save()
+
+            calculation_model = build_calculation_model(run, brake_objects, result)
+
+            CalculationSnapshot.objects.update_or_create(
+                run=run,
+                defaults={
+                    "model_version": calculation_model.model_version,
+                    "input_snapshot": calculation_model.input_snapshot(),
+                    "result_snapshot": calculation_model.result_snapshot(),
+                    "analysis_snapshot": {},
+                    "thermal_snapshot": {},
+                },
+            )
+
             return redirect("run_detail", run_id=run.id)
     else:
         initial_main, brakes_initial = _build_initial_from_run(request.GET.get("from_run"))
