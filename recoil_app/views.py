@@ -327,6 +327,23 @@ def run_detail_view(request, run_id):
             except FileNotFoundError:
                 chart_html[field_name] = ""
 
+    analysis_snapshot = {}
+    phase_analysis = {}
+    characteristic_points = {}
+    engineering_metrics = {}
+
+    try:
+        snapshot = run.snapshot
+        analysis_snapshot = snapshot.analysis_snapshot or {}
+        phase_analysis = analysis_snapshot.get("phase_analysis", {})
+        characteristic_points = analysis_snapshot.get("characteristic_points", {})
+        engineering_metrics = analysis_snapshot.get("engineering_metrics", {})
+    except CalculationSnapshot.DoesNotExist:
+        analysis_snapshot = {}
+        phase_analysis = {}
+        characteristic_points = {}
+        engineering_metrics = {}
+
     return render(
         request,
         "recoil_app/run_detail.html",
@@ -334,7 +351,10 @@ def run_detail_view(request, run_id):
             "run": run,
             "brakes": brakes,
             "chart_html": chart_html,
-            "brake_speed_charts": [],
+            "analysis_snapshot": analysis_snapshot,
+            "phase_analysis": phase_analysis,
+            "characteristic_points": characteristic_points,
+            "engineering_metrics": engineering_metrics,
         },
     )
 
