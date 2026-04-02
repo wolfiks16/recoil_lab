@@ -24,7 +24,7 @@
     <aside class="workspace-sidebar card">
         <div class="workspace-sidebar__head">
             <h2>Модули анализа</h2>
-            <p class="muted">Выберите, какие инструменты отображать в рабочей области.</p>
+            <p class="muted">Выберите модули и подмодули для рабочей области.</p>
         </div>
 
         <div class="workspace-toolbar">
@@ -43,30 +43,47 @@
                 <span>Статус расчёта</span>
             </label>
 
-            <label class="workspace-module-toggle">
-                <input type="checkbox" class="workspace-module-checkbox" data-module="phase-analysis" checked>
-                <span>Фазовый анализ</span>
-            </label>
+            <div class="workspace-group">
+                <label class="workspace-module-toggle">
+                    <input type="checkbox" class="workspace-module-checkbox" data-module="engineering-analysis" checked>
+                    <span>Инженерный анализ</span>
+                </label>
+                <div class="workspace-submodules">
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="engineering-analysis" data-submodule="phase-analysis" checked>
+                        <span>Фазовый анализ</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="engineering-analysis" data-submodule="characteristic-points" checked>
+                        <span>Характерные точки</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="engineering-analysis" data-submodule="engineering-metrics" checked>
+                        <span>Инженерные показатели</span>
+                    </label>
+                </div>
+            </div>
 
-            <label class="workspace-module-toggle">
-                <input type="checkbox" class="workspace-module-checkbox" data-module="characteristic-points" checked>
-                <span>Характерные точки</span>
-            </label>
-
-            <label class="workspace-module-toggle">
-                <input type="checkbox" class="workspace-module-checkbox" data-module="charts-main" checked>
-                <span>Общие графики</span>
-            </label>
-
-            <label class="workspace-module-toggle">
-                <input type="checkbox" class="workspace-module-checkbox" data-module="charts-recoil" checked>
-                <span>Графики отката</span>
-            </label>
-
-            <label class="workspace-module-toggle">
-                <input type="checkbox" class="workspace-module-checkbox" data-module="charts-return" checked>
-                <span>Графики наката</span>
-            </label>
+            <div class="workspace-group">
+                <label class="workspace-module-toggle">
+                    <input type="checkbox" class="workspace-module-checkbox" data-module="charts" checked>
+                    <span>Графики</span>
+                </label>
+                <div class="workspace-submodules">
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="charts" data-submodule="charts-main" checked>
+                        <span>Общие графики</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="charts" data-submodule="charts-recoil" checked>
+                        <span>Графики отката</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="charts" data-submodule="charts-return" checked>
+                        <span>Графики наката</span>
+                    </label>
+                </div>
+            </div>
 
             <label class="workspace-module-toggle">
                 <input type="checkbox" class="workspace-module-checkbox" data-module="source-data" checked>
@@ -127,307 +144,356 @@
             {% endif %}
         </section>
 
-        <section id="module-phase-analysis" class="workspace-module-section">
+        <section id="module-engineering-analysis" class="workspace-module-section">
             <div class="section-block">
                 <div class="section-head">
-                    <h2>Фазовый анализ</h2>
-                    <button type="button" class="section-toggle-btn" data-target="section-phase-body">Свернуть</button>
+                    <h2>Инженерный анализ</h2>
+                    <button type="button" class="section-toggle-btn" data-target="section-engineering-analysis-body">Свернуть</button>
                 </div>
-                <div id="section-phase-body" class="section-body">
-                    <div class="two-col">
-                        <div class="card">
-                            <h3>Фаза отката</h3>
-                            {% if phase_analysis.recoil.available %}
-                                <table class="info-table">
-                                    <tbody>
-                                        <tr><th>Начало, индекс</th><td>{{ phase_analysis.recoil.start_index }}</td></tr>
-                                        <tr><th>Конец, индекс</th><td>{{ phase_analysis.recoil.end_index }}</td></tr>
-                                        <tr><th>Начало, время</th><td>{{ phase_analysis.recoil.start_time|fmt5 }}</td></tr>
-                                        <tr><th>Конец, время</th><td>{{ phase_analysis.recoil.end_time|fmt5 }}</td></tr>
-                                        <tr><th>Длительность</th><td>{{ phase_analysis.recoil.duration|fmt5 }}</td></tr>
-                                        <tr><th>x_min</th><td>{{ phase_analysis.recoil.x_min|fmt5 }}</td></tr>
-                                        <tr><th>x_max</th><td>{{ phase_analysis.recoil.x_max|fmt5 }}</td></tr>
-                                        <tr><th>v_min</th><td>{{ phase_analysis.recoil.v_min|fmt5 }}</td></tr>
-                                        <tr><th>v_max</th><td>{{ phase_analysis.recoil.v_max|fmt5 }}</td></tr>
-                                        <tr><th>a_min</th><td>{{ phase_analysis.recoil.a_min|fmt5 }}</td></tr>
-                                        <tr><th>a_max</th><td>{{ phase_analysis.recoil.a_max|fmt5 }}</td></tr>
-                                        <tr><th>|v| max</th><td>{{ phase_analysis.recoil.v_abs_max|fmt5 }}</td></tr>
-                                        <tr><th>|a| max</th><td>{{ phase_analysis.recoil.a_abs_max|fmt5 }}</td></tr>
-                                    </tbody>
-                                </table>
-                            {% else %}
-                                <div class="notice">Данные по фазе отката отсутствуют.</div>
-                            {% endif %}
+                <div id="section-engineering-analysis-body" class="section-body">
+                    <div class="analysis-subblocks">
+                        <div id="submodule-phase-analysis" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Фазовый анализ</h3>
+                            </div>
+                            <div class="two-col">
+                                <div class="card inner-card">
+                                    <h4>Фаза отката</h4>
+                                    {% if phase_analysis.recoil.available %}
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>Начало, индекс</th><td>{{ phase_analysis.recoil.start_index }}</td></tr>
+                                                <tr><th>Конец, индекс</th><td>{{ phase_analysis.recoil.end_index }}</td></tr>
+                                                <tr><th>Начало, время</th><td>{{ phase_analysis.recoil.start_time|fmt5 }}</td></tr>
+                                                <tr><th>Конец, время</th><td>{{ phase_analysis.recoil.end_time|fmt5 }}</td></tr>
+                                                <tr><th>Длительность</th><td>{{ phase_analysis.recoil.duration|fmt5 }}</td></tr>
+                                                <tr><th>x_min</th><td>{{ phase_analysis.recoil.x_min|fmt5 }}</td></tr>
+                                                <tr><th>x_max</th><td>{{ phase_analysis.recoil.x_max|fmt5 }}</td></tr>
+                                                <tr><th>v_min</th><td>{{ phase_analysis.recoil.v_min|fmt5 }}</td></tr>
+                                                <tr><th>v_max</th><td>{{ phase_analysis.recoil.v_max|fmt5 }}</td></tr>
+                                                <tr><th>a_min</th><td>{{ phase_analysis.recoil.a_min|fmt5 }}</td></tr>
+                                                <tr><th>a_max</th><td>{{ phase_analysis.recoil.a_max|fmt5 }}</td></tr>
+                                                <tr><th>|v| max</th><td>{{ phase_analysis.recoil.v_abs_max|fmt5 }}</td></tr>
+                                                <tr><th>|a| max</th><td>{{ phase_analysis.recoil.a_abs_max|fmt5 }}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="notice">Данные по фазе отката отсутствуют.</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="card inner-card">
+                                    <h4>Фаза наката</h4>
+                                    {% if phase_analysis.return.available %}
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>Начало, индекс</th><td>{{ phase_analysis.return.start_index }}</td></tr>
+                                                <tr><th>Конец, индекс</th><td>{{ phase_analysis.return.end_index }}</td></tr>
+                                                <tr><th>Начало, время</th><td>{{ phase_analysis.return.start_time|fmt5 }}</td></tr>
+                                                <tr><th>Конец, время</th><td>{{ phase_analysis.return.end_time|fmt5 }}</td></tr>
+                                                <tr><th>Длительность</th><td>{{ phase_analysis.return.duration|fmt5 }}</td></tr>
+                                                <tr><th>x_min</th><td>{{ phase_analysis.return.x_min|fmt5 }}</td></tr>
+                                                <tr><th>x_max</th><td>{{ phase_analysis.return.x_max|fmt5 }}</td></tr>
+                                                <tr><th>v_min</th><td>{{ phase_analysis.return.v_min|fmt5 }}</td></tr>
+                                                <tr><th>v_max</th><td>{{ phase_analysis.return.v_max|fmt5 }}</td></tr>
+                                                <tr><th>a_min</th><td>{{ phase_analysis.return.a_min|fmt5 }}</td></tr>
+                                                <tr><th>a_max</th><td>{{ phase_analysis.return.a_max|fmt5 }}</td></tr>
+                                                <tr><th>|v| max</th><td>{{ phase_analysis.return.v_abs_max|fmt5 }}</td></tr>
+                                                <tr><th>|a| max</th><td>{{ phase_analysis.return.a_abs_max|fmt5 }}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="notice">Данные по фазе наката отсутствуют.</div>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="card">
-                            <h3>Фаза наката</h3>
-                            {% if phase_analysis.return.available %}
-                                <table class="info-table">
-                                    <tbody>
-                                        <tr><th>Начало, индекс</th><td>{{ phase_analysis.return.start_index }}</td></tr>
-                                        <tr><th>Конец, индекс</th><td>{{ phase_analysis.return.end_index }}</td></tr>
-                                        <tr><th>Начало, время</th><td>{{ phase_analysis.return.start_time|fmt5 }}</td></tr>
-                                        <tr><th>Конец, время</th><td>{{ phase_analysis.return.end_time|fmt5 }}</td></tr>
-                                        <tr><th>Длительность</th><td>{{ phase_analysis.return.duration|fmt5 }}</td></tr>
-                                        <tr><th>x_min</th><td>{{ phase_analysis.return.x_min|fmt5 }}</td></tr>
-                                        <tr><th>x_max</th><td>{{ phase_analysis.return.x_max|fmt5 }}</td></tr>
-                                        <tr><th>v_min</th><td>{{ phase_analysis.return.v_min|fmt5 }}</td></tr>
-                                        <tr><th>v_max</th><td>{{ phase_analysis.return.v_max|fmt5 }}</td></tr>
-                                        <tr><th>a_min</th><td>{{ phase_analysis.return.a_min|fmt5 }}</td></tr>
-                                        <tr><th>a_max</th><td>{{ phase_analysis.return.a_max|fmt5 }}</td></tr>
-                                        <tr><th>|v| max</th><td>{{ phase_analysis.return.v_abs_max|fmt5 }}</td></tr>
-                                        <tr><th>|a| max</th><td>{{ phase_analysis.return.a_abs_max|fmt5 }}</td></tr>
-                                    </tbody>
-                                </table>
-                            {% else %}
-                                <div class="notice">Данные по фазе наката отсутствуют.</div>
-                            {% endif %}
+                        <div id="submodule-characteristic-points" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Характерные точки</h3>
+                            </div>
+                            <div class="two-col">
+                                <div class="card inner-card">
+                                    <h4>Экстремумы</h4>
+                                    {% if characteristic_points %}
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr>
+                                                    <th>x_max</th>
+                                                    <td>
+                                                        {% if characteristic_points.x_max %}
+                                                            value={{ characteristic_points.x_max.value|fmt5 }},
+                                                            t={{ characteristic_points.x_max.time|fmt5 }},
+                                                            idx={{ characteristic_points.x_max.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>v_max</th>
+                                                    <td>
+                                                        {% if characteristic_points.v_max %}
+                                                            value={{ characteristic_points.v_max.value|fmt5 }},
+                                                            t={{ characteristic_points.v_max.time|fmt5 }},
+                                                            idx={{ characteristic_points.v_max.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>v_min</th>
+                                                    <td>
+                                                        {% if characteristic_points.v_min %}
+                                                            value={{ characteristic_points.v_min.value|fmt5 }},
+                                                            t={{ characteristic_points.v_min.time|fmt5 }},
+                                                            idx={{ characteristic_points.v_min.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>a_max</th>
+                                                    <td>
+                                                        {% if characteristic_points.a_max %}
+                                                            value={{ characteristic_points.a_max.value|fmt5 }},
+                                                            t={{ characteristic_points.a_max.time|fmt5 }},
+                                                            idx={{ characteristic_points.a_max.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>a_min</th>
+                                                    <td>
+                                                        {% if characteristic_points.a_min %}
+                                                            value={{ characteristic_points.a_min.value|fmt5 }},
+                                                            t={{ characteristic_points.a_min.time|fmt5 }},
+                                                            idx={{ characteristic_points.a_min.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="notice">Характерные точки отсутствуют.</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="card inner-card">
+                                    <h4>Ключевые события</h4>
+                                    {% if characteristic_points %}
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr>
+                                                    <th>Конец отката</th>
+                                                    <td>
+                                                        {% if characteristic_points.recoil_end %}
+                                                            t={{ characteristic_points.recoil_end.time|fmt5 }},
+                                                            x={{ characteristic_points.recoil_end.x|fmt5 }},
+                                                            v={{ characteristic_points.recoil_end.v|fmt5 }},
+                                                            a={{ characteristic_points.recoil_end.a|fmt5 }},
+                                                            idx={{ characteristic_points.recoil_end.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Конец наката</th>
+                                                    <td>
+                                                        {% if characteristic_points.return_end %}
+                                                            t={{ characteristic_points.return_end.time|fmt5 }},
+                                                            x={{ characteristic_points.return_end.x|fmt5 }},
+                                                            v={{ characteristic_points.return_end.v|fmt5 }},
+                                                            a={{ characteristic_points.return_end.a|fmt5 }},
+                                                            idx={{ characteristic_points.return_end.index }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="notice">Ключевые события отсутствуют.</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="submodule-engineering-metrics" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Инженерные показатели</h3>
+                            </div>
+                            <div class="two-col">
+                                <div class="card inner-card">
+                                    <h4>Общие диапазоны</h4>
+                                    {% if engineering_metrics %}
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>Общая длительность</th><td>{{ engineering_metrics.total_duration|fmt5 }}</td></tr>
+
+                                                <tr><th>x_min</th><td>{{ engineering_metrics.x_range.min|fmt5 }}</td></tr>
+                                                <tr><th>x_max</th><td>{{ engineering_metrics.x_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах x</th><td>{{ engineering_metrics.x_range.span|fmt5 }}</td></tr>
+
+                                                <tr><th>v_min</th><td>{{ engineering_metrics.v_range.min|fmt5 }}</td></tr>
+                                                <tr><th>v_max</th><td>{{ engineering_metrics.v_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах v</th><td>{{ engineering_metrics.v_range.span|fmt5 }}</td></tr>
+                                                <tr><th>|v| max</th><td>{{ engineering_metrics.v_range.abs_max|fmt5 }}</td></tr>
+
+                                                <tr><th>a_min</th><td>{{ engineering_metrics.a_range.min|fmt5 }}</td></tr>
+                                                <tr><th>a_max</th><td>{{ engineering_metrics.a_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах a</th><td>{{ engineering_metrics.a_range.span|fmt5 }}</td></tr>
+                                                <tr><th>|a| max</th><td>{{ engineering_metrics.a_range.abs_max|fmt5 }}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="notice">Инженерные показатели отсутствуют.</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="card inner-card">
+                                    <h4>Структура процесса</h4>
+                                    {% if engineering_metrics %}
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>Фаза отката доступна</th><td>{% if phase_analysis.recoil.available %}Да{% else %}Нет{% endif %}</td></tr>
+                                                <tr><th>Фаза наката доступна</th><td>{% if phase_analysis.return.available %}Да{% else %}Нет{% endif %}</td></tr>
+                                                <tr><th>Количество фаз отката</th><td>{{ engineering_metrics.phase_count.recoil }}</td></tr>
+                                                <tr><th>Количество фаз наката</th><td>{{ engineering_metrics.phase_count.return }}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="notice">Структура процесса отсутствует.</div>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section id="module-characteristic-points" class="workspace-module-section">
+        <section id="module-charts" class="workspace-module-section">
             <div class="section-block">
                 <div class="section-head">
-                    <h2>Характерные точки</h2>
-                    <button type="button" class="section-toggle-btn" data-target="section-characteristic-body">Свернуть</button>
+                    <h2>Графики</h2>
+                    <button type="button" class="section-toggle-btn" data-target="section-charts-body">Свернуть</button>
                 </div>
-                <div id="section-characteristic-body" class="section-body">
-                    <div class="two-col">
-                        <div class="card">
-                            <h3>Экстремумы</h3>
-                            {% if characteristic_points %}
-                                <table class="info-table">
-                                    <tbody>
-                                        <tr>
-                                            <th>x_max</th>
-                                            <td>
-                                                {% if characteristic_points.x_max %}
-                                                    value={{ characteristic_points.x_max.value|fmt5 }},
-                                                    t={{ characteristic_points.x_max.time|fmt5 }},
-                                                    idx={{ characteristic_points.x_max.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <th>v_max</th>
-                                            <td>
-                                                {% if characteristic_points.v_max %}
-                                                    value={{ characteristic_points.v_max.value|fmt5 }},
-                                                    t={{ characteristic_points.v_max.time|fmt5 }},
-                                                    idx={{ characteristic_points.v_max.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <th>v_min</th>
-                                            <td>
-                                                {% if characteristic_points.v_min %}
-                                                    value={{ characteristic_points.v_min.value|fmt5 }},
-                                                    t={{ characteristic_points.v_min.time|fmt5 }},
-                                                    idx={{ characteristic_points.v_min.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <th>a_max</th>
-                                            <td>
-                                                {% if characteristic_points.a_max %}
-                                                    value={{ characteristic_points.a_max.value|fmt5 }},
-                                                    t={{ characteristic_points.a_max.time|fmt5 }},
-                                                    idx={{ characteristic_points.a_max.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <th>a_min</th>
-                                            <td>
-                                                {% if characteristic_points.a_min %}
-                                                    value={{ characteristic_points.a_min.value|fmt5 }},
-                                                    t={{ characteristic_points.a_min.time|fmt5 }},
-                                                    idx={{ characteristic_points.a_min.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            {% else %}
-                                <div class="notice">Характерные точки отсутствуют.</div>
-                            {% endif %}
+                <div id="section-charts-body" class="section-body">
+                    <div class="analysis-subblocks">
+                        <div id="submodule-charts-main" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Общие графики</h3>
+                            </div>
+                            <div class="plot-grid">
+                                {% if chart_html.chart_x_t %}
+                                    <div class="plot-card">
+                                        <h3>Перемещение от времени</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_x_t|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_v_a_t %}
+                                    <div class="plot-card">
+                                        <h3>Скорость и ускорение от времени</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_v_a_t|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_v_x %}
+                                    <div class="plot-card">
+                                        <h3>Скорость от перемещения</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_v_x|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_forces_secondary %}
+                                    <div class="plot-card">
+                                        <h3>Распределение сил от времени</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_forces_secondary|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_fmag_v %}
+                                    <div class="plot-card">
+                                        <h3>Магнитные силы от скорости</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_fmag_v|safe }}</div>
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
 
-                        <div class="card">
-                            <h3>Ключевые события</h3>
-                            {% if characteristic_points %}
-                                <table class="info-table">
-                                    <tbody>
-                                        <tr>
-                                            <th>Конец отката</th>
-                                            <td>
-                                                {% if characteristic_points.recoil_end %}
-                                                    t={{ characteristic_points.recoil_end.time|fmt5 }},
-                                                    x={{ characteristic_points.recoil_end.x|fmt5 }},
-                                                    v={{ characteristic_points.recoil_end.v|fmt5 }},
-                                                    a={{ characteristic_points.recoil_end.a|fmt5 }},
-                                                    idx={{ characteristic_points.recoil_end.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <th>Конец наката</th>
-                                            <td>
-                                                {% if characteristic_points.return_end %}
-                                                    t={{ characteristic_points.return_end.time|fmt5 }},
-                                                    x={{ characteristic_points.return_end.x|fmt5 }},
-                                                    v={{ characteristic_points.return_end.v|fmt5 }},
-                                                    a={{ characteristic_points.return_end.a|fmt5 }},
-                                                    idx={{ characteristic_points.return_end.index }}
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            {% else %}
-                                <div class="notice">Ключевые события отсутствуют.</div>
-                            {% endif %}
+                        <div id="submodule-charts-recoil" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Графики фазы отката</h3>
+                            </div>
+                            <div class="plot-grid">
+                                {% if chart_html.chart_x_t_recoil %}
+                                    <div class="plot-card">
+                                        <h3>Перемещение — откат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_x_t_recoil|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_v_a_t_recoil %}
+                                    <div class="plot-card">
+                                        <h3>Скорость и ускорение — откат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_v_a_t_recoil|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_forces_main_recoil %}
+                                    <div class="plot-card">
+                                        <h3>Движущая и общая сила — откат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_forces_main_recoil|safe }}</div>
+                                    </div>
+                                {% endif %}
+
+                                {% if chart_html.chart_forces_secondary_recoil %}
+                                    <div class="plot-card">
+                                        <h3>Распределение сил — откат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_forces_secondary_recoil|safe }}</div>
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </section>
 
-        <section id="module-charts-main" class="workspace-module-section">
-            <div class="section-block">
-                <div class="section-head">
-                    <h2>Общие графики</h2>
-                    <button type="button" class="section-toggle-btn" data-target="section-main-body">Свернуть</button>
-                </div>
-                <div id="section-main-body" class="section-body">
-                    <div class="plot-grid">
-                        {% if chart_html.chart_x_t %}
-                            <div class="plot-card">
-                                <h3>Перемещение от времени</h3>
-                                <div class="plot-embed">{{ chart_html.chart_x_t|safe }}</div>
+                        <div id="submodule-charts-return" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Графики фазы наката</h3>
                             </div>
-                        {% endif %}
+                            <div class="plot-grid">
+                                {% if chart_html.chart_x_t_return %}
+                                    <div class="plot-card">
+                                        <h3>Перемещение — накат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_x_t_return|safe }}</div>
+                                    </div>
+                                {% endif %}
 
-                        {% if chart_html.chart_v_a_t %}
-                            <div class="plot-card">
-                                <h3>Скорость и ускорение от времени</h3>
-                                <div class="plot-embed">{{ chart_html.chart_v_a_t|safe }}</div>
-                            </div>
-                        {% endif %}
+                                {% if chart_html.chart_v_a_t_return %}
+                                    <div class="plot-card">
+                                        <h3>Скорость и ускорение — накат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_v_a_t_return|safe }}</div>
+                                    </div>
+                                {% endif %}
 
-                        {% if chart_html.chart_v_x %}
-                            <div class="plot-card">
-                                <h3>Скорость от перемещения</h3>
-                                <div class="plot-embed">{{ chart_html.chart_v_x|safe }}</div>
+                                {% if chart_html.chart_forces_secondary_return %}
+                                    <div class="plot-card">
+                                        <h3>Распределение сил — накат</h3>
+                                        <div class="plot-embed">{{ chart_html.chart_forces_secondary_return|safe }}</div>
+                                    </div>
+                                {% endif %}
                             </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_forces_secondary %}
-                            <div class="plot-card">
-                                <h3>Распределение сил от времени</h3>
-                                <div class="plot-embed">{{ chart_html.chart_forces_secondary|safe }}</div>
-                            </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_fmag_v %}
-                            <div class="plot-card">
-                                <h3>Магнитные силы от скорости</h3>
-                                <div class="plot-embed">{{ chart_html.chart_fmag_v|safe }}</div>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="module-charts-recoil" class="workspace-module-section">
-            <div class="section-block">
-                <div class="section-head">
-                    <h2>Графики фазы отката</h2>
-                    <button type="button" class="section-toggle-btn" data-target="section-recoil-body">Свернуть</button>
-                </div>
-                <div id="section-recoil-body" class="section-body">
-                    <div class="plot-grid">
-                        {% if chart_html.chart_x_t_recoil %}
-                            <div class="plot-card">
-                                <h3>Перемещение — откат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_x_t_recoil|safe }}</div>
-                            </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_v_a_t_recoil %}
-                            <div class="plot-card">
-                                <h3>Скорость и ускорение — откат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_v_a_t_recoil|safe }}</div>
-                            </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_forces_main_recoil %}
-                            <div class="plot-card">
-                                <h3>Движущая и общая сила — откат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_forces_main_recoil|safe }}</div>
-                            </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_forces_secondary_recoil %}
-                            <div class="plot-card">
-                                <h3>Распределение сил — откат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_forces_secondary_recoil|safe }}</div>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="module-charts-return" class="workspace-module-section">
-            <div class="section-block">
-                <div class="section-head">
-                    <h2>Графики фазы наката</h2>
-                    <button type="button" class="section-toggle-btn" data-target="section-return-body">Свернуть</button>
-                </div>
-                <div id="section-return-body" class="section-body">
-                    <div class="plot-grid">
-                        {% if chart_html.chart_x_t_return %}
-                            <div class="plot-card">
-                                <h3>Перемещение — накат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_x_t_return|safe }}</div>
-                            </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_v_a_t_return %}
-                            <div class="plot-card">
-                                <h3>Скорость и ускорение — накат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_v_a_t_return|safe }}</div>
-                            </div>
-                        {% endif %}
-
-                        {% if chart_html.chart_forces_secondary_return %}
-                            <div class="plot-card">
-                                <h3>Распределение сил — накат</h3>
-                                <div class="plot-embed">{{ chart_html.chart_forces_secondary_return|safe }}</div>
-                            </div>
-                        {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -504,13 +570,18 @@
 
 <script>
 (function () {
-    const STORAGE_KEY = "recoillab_run_detail_modules";
-    const checkboxes = document.querySelectorAll(".workspace-module-checkbox");
+    const STORAGE_KEY = "recoillab_run_detail_modules_v2";
+    const moduleCheckboxes = document.querySelectorAll(".workspace-module-checkbox");
+    const submoduleCheckboxes = document.querySelectorAll(".workspace-submodule-checkbox");
     const enableAllBtn = document.getElementById("enable-all-modules-btn");
     const disableAllBtn = document.getElementById("disable-all-modules-btn");
 
     function getModuleSection(moduleName) {
         return document.getElementById(`module-${moduleName}`);
+    }
+
+    function getSubmoduleSection(submoduleName) {
+        return document.getElementById(`submodule-${submoduleName}`);
     }
 
     function applyModuleState(moduleName, isVisible) {
@@ -519,11 +590,49 @@
         section.style.display = isVisible ? "" : "none";
     }
 
-    function saveState() {
-        const state = {};
-        checkboxes.forEach((checkbox) => {
-            state[checkbox.dataset.module] = checkbox.checked;
+    function applySubmoduleState(submoduleName, isVisible) {
+        const section = getSubmoduleSection(submoduleName);
+        if (!section) return;
+        section.style.display = isVisible ? "" : "none";
+    }
+
+    function getSubCheckboxesByParent(parentName) {
+        return Array.from(document.querySelectorAll(`.workspace-submodule-checkbox[data-parent="${parentName}"]`));
+    }
+
+    function syncParentFromChildren(parentName) {
+        const parentCheckbox = document.querySelector(`.workspace-module-checkbox[data-module="${parentName}"]`);
+        const childCheckboxes = getSubCheckboxesByParent(parentName);
+        if (!parentCheckbox || !childCheckboxes.length) return;
+
+        const anyChecked = childCheckboxes.some((cb) => cb.checked);
+        parentCheckbox.checked = anyChecked;
+        applyModuleState(parentName, anyChecked);
+    }
+
+    function syncChildrenFromParent(parentName, checked) {
+        const childCheckboxes = getSubCheckboxesByParent(parentName);
+        childCheckboxes.forEach((cb) => {
+            cb.checked = checked;
+            applySubmoduleState(cb.dataset.submodule, checked);
         });
+        applyModuleState(parentName, checked);
+    }
+
+    function saveState() {
+        const state = {
+            modules: {},
+            submodules: {},
+        };
+
+        moduleCheckboxes.forEach((checkbox) => {
+            state.modules[checkbox.dataset.module] = checkbox.checked;
+        });
+
+        submoduleCheckboxes.forEach((checkbox) => {
+            state.submodules[checkbox.dataset.submodule] = checkbox.checked;
+        });
+
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
 
@@ -537,46 +646,91 @@
         }
     }
 
-    function syncFromCheckboxes() {
-        checkboxes.forEach((checkbox) => {
-            applyModuleState(checkbox.dataset.module, checkbox.checked);
+    function applyState() {
+        moduleCheckboxes.forEach((checkbox) => {
+            const moduleName = checkbox.dataset.module;
+            const hasChildren = getSubCheckboxesByParent(moduleName).length > 0;
+
+            if (!hasChildren) {
+                applyModuleState(moduleName, checkbox.checked);
+            }
         });
-        saveState();
+
+        submoduleCheckboxes.forEach((checkbox) => {
+            applySubmoduleState(checkbox.dataset.submodule, checkbox.checked);
+        });
+
+        ["engineering-analysis", "charts"].forEach(syncParentFromChildren);
     }
 
     const savedState = loadState();
     if (savedState) {
-        checkboxes.forEach((checkbox) => {
+        moduleCheckboxes.forEach((checkbox) => {
             const moduleName = checkbox.dataset.module;
-            if (Object.prototype.hasOwnProperty.call(savedState, moduleName)) {
-                checkbox.checked = !!savedState[moduleName];
+            if (savedState.modules && Object.prototype.hasOwnProperty.call(savedState.modules, moduleName)) {
+                checkbox.checked = !!savedState.modules[moduleName];
+            }
+        });
+
+        submoduleCheckboxes.forEach((checkbox) => {
+            const submoduleName = checkbox.dataset.submodule;
+            if (savedState.submodules && Object.prototype.hasOwnProperty.call(savedState.submodules, submoduleName)) {
+                checkbox.checked = !!savedState.submodules[submoduleName];
             }
         });
     }
 
-    checkboxes.forEach((checkbox) => {
-        checkbox.addEventListener("change", syncFromCheckboxes);
+    moduleCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", function () {
+            const moduleName = checkbox.dataset.module;
+            const hasChildren = getSubCheckboxesByParent(moduleName).length > 0;
+
+            if (hasChildren) {
+                syncChildrenFromParent(moduleName, checkbox.checked);
+            } else {
+                applyModuleState(moduleName, checkbox.checked);
+            }
+
+            saveState();
+        });
+    });
+
+    submoduleCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", function () {
+            applySubmoduleState(checkbox.dataset.submodule, checkbox.checked);
+            syncParentFromChildren(checkbox.dataset.parent);
+            saveState();
+        });
     });
 
     if (enableAllBtn) {
         enableAllBtn.addEventListener("click", function () {
-            checkboxes.forEach((checkbox) => {
+            moduleCheckboxes.forEach((checkbox) => {
                 checkbox.checked = true;
             });
-            syncFromCheckboxes();
+            submoduleCheckboxes.forEach((checkbox) => {
+                checkbox.checked = true;
+            });
+            applyState();
+            saveState();
         });
     }
 
     if (disableAllBtn) {
         disableAllBtn.addEventListener("click", function () {
-            checkboxes.forEach((checkbox) => {
+            moduleCheckboxes.forEach((checkbox) => {
                 checkbox.checked = false;
             });
-            syncFromCheckboxes();
+            submoduleCheckboxes.forEach((checkbox) => {
+                checkbox.checked = false;
+            });
+            applyState();
+            saveState();
         });
     }
 
-    syncFromCheckboxes();
+    applyState();
+    saveState();
 })();
 </script>
 {% endblock %}

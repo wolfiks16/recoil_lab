@@ -749,3 +749,35 @@ form.is-submitting {
         position: static;
     }
 }
+
+.workspace-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.workspace-submodules {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 16px;
+    border-left: 2px solid rgba(61, 115, 235, 0.12);
+    margin-left: 8px;
+}
+
+.workspace-module-toggle--sub {
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+}
+
+.analysis-subblocks {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.inner-card {
+    margin-bottom: 0;
+}
