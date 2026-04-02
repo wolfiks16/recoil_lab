@@ -824,3 +824,52 @@ form.is-submitting {
 .workspace-submodules.is-collapsed {
     display: none;
 }
+
+.compare-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+
+.compare-grid > * {
+    min-width: 0;
+}
+
+.compare-subsection {
+    margin-top: 16px;
+}
+
+.compare-subsection:first-child {
+    margin-top: 0;
+}
+
+.compare-subsection h4 {
+    margin-bottom: 10px;
+}
+
+.compare-chart-block {
+    margin-bottom: 18px;
+}
+
+.compare-runs-header {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+
+.compare-run-title {
+    min-width: 0;
+}
+
+.compare-run-title h2 {
+    margin-bottom: 6px;
+}
+
+@media (max-width: 1100px) {
+    .compare-grid,
+    .compare-runs-header {
+        grid-template-columns: 1fr;
+    }
+}

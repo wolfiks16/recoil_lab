@@ -134,17 +134,42 @@ def _build_compare_chart_blocks(run_a: CalculationRun | None, run_b: Calculation
     return blocks
 
 
+def _extract_snapshot_parts(run: CalculationRun) -> dict:
+    phase_analysis = {}
+    characteristic_points = {}
+    engineering_metrics = {}
+
+    try:
+        snapshot = run.snapshot
+        analysis_snapshot = snapshot.analysis_snapshot or {}
+        phase_analysis = analysis_snapshot.get("phase_analysis", {})
+        characteristic_points = analysis_snapshot.get("characteristic_points", {})
+        engineering_metrics = analysis_snapshot.get("engineering_metrics", {})
+    except CalculationSnapshot.DoesNotExist:
+        pass
+
+    return {
+        "phase_analysis": phase_analysis,
+        "characteristic_points": characteristic_points,
+        "engineering_metrics": engineering_metrics,
+    }
+
+
 def compare_view(request):
     form = CompareRunsForm(request.GET or None)
 
     run_a = None
     run_b = None
     compare_chart_blocks = []
+    compare_a = {}
+    compare_b = {}
 
     if form.is_valid():
         run_a = form.cleaned_data["run_a"]
         run_b = form.cleaned_data["run_b"]
         compare_chart_blocks = _build_compare_chart_blocks(run_a, run_b)
+        compare_a = _extract_snapshot_parts(run_a)
+        compare_b = _extract_snapshot_parts(run_b)
 
     return render(
         request,
@@ -154,6 +179,8 @@ def compare_view(request):
             "run_a": run_a,
             "run_b": run_b,
             "compare_chart_blocks": compare_chart_blocks,
+            "compare_a": compare_a,
+            "compare_b": compare_b,
         },
     )
 

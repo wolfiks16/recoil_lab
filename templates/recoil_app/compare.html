@@ -1,4 +1,5 @@
 {% extends "recoil_app/base.html" %}
+{% load recoil_extras %}
 
 {% block title %}Сравнение расчётов{% endblock %}
 
@@ -31,72 +32,864 @@
 </div>
 
 {% if run_a and run_b %}
-    <div class="card">
-        <h2>Сравниваемые расчёты</h2>
-        <table class="info-table">
-            <tbody>
-                <tr>
-                    <th>Расчёт A</th>
-                    <td>{{ run_a.name }}</td>
-                </tr>
-                <tr>
-                    <th>Расчёт B</th>
-                    <td>{{ run_b.name }}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+<div class="workspace-layout">
+    <aside class="workspace-sidebar card">
+        <div class="workspace-sidebar__head">
+            <h2>Модули сравнения</h2>
+            <p class="muted">Выберите модули и подмодули для сравнения.</p>
+        </div>
 
-    <div class="card">
-        <h2>Итоговые результаты</h2>
-        <table class="info-table">
-            <thead>
-                <tr>
-                    <th>Параметр</th>
-                    <th>{{ run_a.name }}</th>
-                    <th>{{ run_b.name }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><th>Максимальный путь отката</th><td>{{ run_a.x_max }}</td><td>{{ run_b.x_max }}</td></tr>
-                <tr><th>Максимальная скорость</th><td>{{ run_a.v_max }}</td><td>{{ run_b.v_max }}</td></tr>
-                <tr><th>Точка остановки</th><td>{{ run_a.x_final }}</td><td>{{ run_b.x_final }}</td></tr>
-                <tr><th>Конечная скорость</th><td>{{ run_a.v_final }}</td><td>{{ run_b.v_final }}</td></tr>
-                <tr><th>Конечное ускорение</th><td>{{ run_a.a_final }}</td><td>{{ run_b.a_final }}</td></tr>
-                <tr><th>Время отката</th><td>{{ run_a.recoil_end_time }}</td><td>{{ run_b.recoil_end_time }}</td></tr>
-                <tr><th>Возврат в x=0</th><td>{{ run_a.return_end_time }}</td><td>{{ run_b.return_end_time }}</td></tr>
-                <tr><th>Причина завершения</th><td>{{ run_a.termination_reason }}</td><td>{{ run_b.termination_reason }}</td></tr>
-                <tr><th>Выход по пружине</th><td>{% if run_a.spring_out_of_range %}Да{% else %}Нет{% endif %}</td><td>{% if run_b.spring_out_of_range %}Да{% else %}Нет{% endif %}</td></tr>
-            </tbody>
-        </table>
-    </div>
+        <div class="workspace-toolbar">
+            <button type="button" class="workspace-toolbar__btn" id="enable-all-modules-btn">Показать все</button>
+            <button type="button" class="workspace-toolbar__btn" id="disable-all-modules-btn">Скрыть все</button>
+        </div>
 
-    {% for block in compare_chart_blocks %}
-        <section class="section-block">
-            <div class="section-head">
-                <h2>{{ block.title }}</h2>
-            </div>
+        <div class="workspace-modules">
+            <label class="workspace-module-toggle">
+                <input type="checkbox" class="workspace-module-checkbox" data-module="summary" checked>
+                <span>Итоговые результаты</span>
+            </label>
 
-            <div class="compare-grid">
-                <div class="plot-card">
-                    <h3>{{ run_a.name }}</h3>
-                    {% if block.html_a %}
-                        <div class="plot-embed">{{ block.html_a|safe }}</div>
-                    {% else %}
-                        <div class="notice">График отсутствует для этого расчёта.</div>
-                    {% endif %}
+            <label class="workspace-module-toggle">
+                <input type="checkbox" class="workspace-module-checkbox" data-module="status" checked>
+                <span>Статус расчёта</span>
+            </label>
+
+            <div class="workspace-group">
+                <div class="workspace-group-head">
+                    <label class="workspace-module-toggle workspace-module-toggle--group">
+                        <input type="checkbox" class="workspace-module-checkbox" data-module="engineering-analysis" checked>
+                        <span>Инженерный анализ</span>
+                    </label>
+                    <button type="button" class="workspace-group-toggle-btn" data-target="group-engineering-analysis-submodules">Развернуть</button>
                 </div>
 
-                <div class="plot-card">
-                    <h3>{{ run_b.name }}</h3>
-                    {% if block.html_b %}
-                        <div class="plot-embed">{{ block.html_b|safe }}</div>
-                    {% else %}
-                        <div class="notice">График отсутствует для этого расчёта.</div>
-                    {% endif %}
+                <div id="group-engineering-analysis-submodules" class="workspace-submodules is-collapsed">
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="engineering-analysis" data-submodule="phase-analysis" checked>
+                        <span>Фазовый анализ</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="engineering-analysis" data-submodule="characteristic-points" checked>
+                        <span>Характерные точки</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="engineering-analysis" data-submodule="engineering-metrics" checked>
+                        <span>Инженерные показатели</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="workspace-group">
+                <div class="workspace-group-head">
+                    <label class="workspace-module-toggle workspace-module-toggle--group">
+                        <input type="checkbox" class="workspace-module-checkbox" data-module="charts" checked>
+                        <span>Графики</span>
+                    </label>
+                    <button type="button" class="workspace-group-toggle-btn" data-target="group-charts-submodules">Развернуть</button>
+                </div>
+
+                <div id="group-charts-submodules" class="workspace-submodules is-collapsed">
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="charts" data-submodule="charts-main" checked>
+                        <span>Общие графики</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="charts" data-submodule="charts-recoil" checked>
+                        <span>Графики отката</span>
+                    </label>
+                    <label class="workspace-module-toggle workspace-module-toggle--sub">
+                        <input type="checkbox" class="workspace-submodule-checkbox" data-parent="charts" data-submodule="charts-return" checked>
+                        <span>Графики наката</span>
+                    </label>
+                </div>
+            </div>
+
+            <label class="workspace-module-toggle">
+                <input type="checkbox" class="workspace-module-checkbox" data-module="source-data" checked>
+                <span>Исходные данные</span>
+            </label>
+        </div>
+    </aside>
+
+    <div class="workspace-main">
+        <div class="compare-runs-header card">
+            <div class="compare-run-title">
+                <h2>{{ run_a.name }}</h2>
+                <div class="muted">Расчёт A</div>
+            </div>
+            <div class="compare-run-title">
+                <h2>{{ run_b.name }}</h2>
+                <div class="muted">Расчёт B</div>
+            </div>
+        </div>
+
+        <section id="module-summary" class="workspace-module-section">
+            <div class="section-block">
+                <div class="section-head">
+                    <h2>Итоговые результаты</h2>
+                    <button type="button" class="section-toggle-btn" data-target="compare-summary-body">Свернуть</button>
+                </div>
+                <div id="compare-summary-body" class="section-body">
+                    <div class="compare-grid">
+                        <div class="card">
+                            <h3>{{ run_a.name }}</h3>
+                            <table class="info-table">
+                                <tbody>
+                                    <tr><th>Максимальный путь отката</th><td>{{ run_a.x_max|fmt5 }} м</td></tr>
+                                    <tr><th>Максимальная скорость</th><td>{{ run_a.v_max|fmt5 }} м/с</td></tr>
+                                    <tr><th>Точка остановки</th><td>{{ run_a.x_final|fmt5 }} м</td></tr>
+                                    <tr><th>Конечная скорость</th><td>{{ run_a.v_final|fmt5 }} м/с</td></tr>
+                                    <tr><th>Конечное ускорение</th><td>{{ run_a.a_final|fmt5 }} м/с²</td></tr>
+                                    <tr><th>Время отката</th><td>{{ run_a.recoil_end_time|fmt5 }} с</td></tr>
+                                    <tr><th>Возврат в x=0</th><td>{{ run_a.return_end_time|fmt5 }} с</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card">
+                            <h3>{{ run_b.name }}</h3>
+                            <table class="info-table">
+                                <tbody>
+                                    <tr><th>Максимальный путь отката</th><td>{{ run_b.x_max|fmt5 }} м</td></tr>
+                                    <tr><th>Максимальная скорость</th><td>{{ run_b.v_max|fmt5 }} м/с</td></tr>
+                                    <tr><th>Точка остановки</th><td>{{ run_b.x_final|fmt5 }} м</td></tr>
+                                    <tr><th>Конечная скорость</th><td>{{ run_b.v_final|fmt5 }} м/с</td></tr>
+                                    <tr><th>Конечное ускорение</th><td>{{ run_b.a_final|fmt5 }} м/с²</td></tr>
+                                    <tr><th>Время отката</th><td>{{ run_b.recoil_end_time|fmt5 }} с</td></tr>
+                                    <tr><th>Возврат в x=0</th><td>{{ run_b.return_end_time|fmt5 }} с</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
-    {% endfor %}
+
+        <section id="module-status" class="workspace-module-section">
+            <div class="section-block">
+                <div class="section-head">
+                    <h2>Статус расчёта</h2>
+                    <button type="button" class="section-toggle-btn" data-target="compare-status-body">Свернуть</button>
+                </div>
+                <div id="compare-status-body" class="section-body">
+                    <div class="compare-grid">
+                        <div class="card">
+                            <h3>{{ run_a.name }}</h3>
+                            <table class="info-table">
+                                <tbody>
+                                    <tr>
+                                        <th>Причина завершения</th>
+                                        <td>
+                                            {% if run_a.termination_reason == "returned_to_zero" %}
+                                                Возврат в x = 0
+                                            {% elif run_a.termination_reason == "time_limit" %}
+                                                Достигнуто заданное время расчёта
+                                            {% else %}
+                                                Не определена
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr><th>Выход за диапазон пружины</th><td>{% if run_a.spring_out_of_range %}Да{% else %}Нет{% endif %}</td></tr>
+                                </tbody>
+                            </table>
+                            {% if run_a.warnings_text %}
+                                <div class="notice" style="margin-top: 16px;">
+                                    <strong>Предупреждения:</strong>
+                                    <pre style="white-space: pre-wrap; margin: 10px 0 0;">{{ run_a.warnings_text }}</pre>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="card">
+                            <h3>{{ run_b.name }}</h3>
+                            <table class="info-table">
+                                <tbody>
+                                    <tr>
+                                        <th>Причина завершения</th>
+                                        <td>
+                                            {% if run_b.termination_reason == "returned_to_zero" %}
+                                                Возврат в x = 0
+                                            {% elif run_b.termination_reason == "time_limit" %}
+                                                Достигнуто заданное время расчёта
+                                            {% else %}
+                                                Не определена
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr><th>Выход за диапазон пружины</th><td>{% if run_b.spring_out_of_range %}Да{% else %}Нет{% endif %}</td></tr>
+                                </tbody>
+                            </table>
+                            {% if run_b.warnings_text %}
+                                <div class="notice" style="margin-top: 16px;">
+                                    <strong>Предупреждения:</strong>
+                                    <pre style="white-space: pre-wrap; margin: 10px 0 0;">{{ run_b.warnings_text }}</pre>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="module-engineering-analysis" class="workspace-module-section">
+            <div class="section-block">
+                <div class="section-head">
+                    <h2>Инженерный анализ</h2>
+                    <button type="button" class="section-toggle-btn" data-target="compare-engineering-body">Свернуть</button>
+                </div>
+                <div id="compare-engineering-body" class="section-body">
+                    <div class="analysis-subblocks">
+                        <div id="submodule-phase-analysis" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Фазовый анализ</h3>
+                                <button type="button" class="subblock-toggle-btn" data-target="compare-phase-analysis-body">Свернуть</button>
+                            </div>
+                            <div id="compare-phase-analysis-body" class="subblock-body">
+                                <div class="compare-grid">
+                                    <div class="card">
+                                        <h3>{{ run_a.name }}</h3>
+
+                                        <div class="compare-subsection">
+                                            <h4>Фаза отката</h4>
+                                            {% if compare_a.phase_analysis.recoil.available %}
+                                                <table class="info-table">
+                                                    <tbody>
+                                                        <tr><th>Начало, индекс</th><td>{{ compare_a.phase_analysis.recoil.start_index }}</td></tr>
+                                                        <tr><th>Конец, индекс</th><td>{{ compare_a.phase_analysis.recoil.end_index }}</td></tr>
+                                                        <tr><th>Начало, время</th><td>{{ compare_a.phase_analysis.recoil.start_time|fmt5 }}</td></tr>
+                                                        <tr><th>Конец, время</th><td>{{ compare_a.phase_analysis.recoil.end_time|fmt5 }}</td></tr>
+                                                        <tr><th>Длительность</th><td>{{ compare_a.phase_analysis.recoil.duration|fmt5 }}</td></tr>
+                                                        <tr><th>x_min</th><td>{{ compare_a.phase_analysis.recoil.x_min|fmt5 }}</td></tr>
+                                                        <tr><th>x_max</th><td>{{ compare_a.phase_analysis.recoil.x_max|fmt5 }}</td></tr>
+                                                        <tr><th>v_min</th><td>{{ compare_a.phase_analysis.recoil.v_min|fmt5 }}</td></tr>
+                                                        <tr><th>v_max</th><td>{{ compare_a.phase_analysis.recoil.v_max|fmt5 }}</td></tr>
+                                                        <tr><th>a_min</th><td>{{ compare_a.phase_analysis.recoil.a_min|fmt5 }}</td></tr>
+                                                        <tr><th>a_max</th><td>{{ compare_a.phase_analysis.recoil.a_max|fmt5 }}</td></tr>
+                                                        <tr><th>|v| max</th><td>{{ compare_a.phase_analysis.recoil.v_abs_max|fmt5 }}</td></tr>
+                                                        <tr><th>|a| max</th><td>{{ compare_a.phase_analysis.recoil.a_abs_max|fmt5 }}</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            {% else %}
+                                                <div class="notice">Нет данных.</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="compare-subsection">
+                                            <h4>Фаза наката</h4>
+                                            {% if compare_a.phase_analysis.return.available %}
+                                                <table class="info-table">
+                                                    <tbody>
+                                                        <tr><th>Начало, индекс</th><td>{{ compare_a.phase_analysis.return.start_index }}</td></tr>
+                                                        <tr><th>Конец, индекс</th><td>{{ compare_a.phase_analysis.return.end_index }}</td></tr>
+                                                        <tr><th>Начало, время</th><td>{{ compare_a.phase_analysis.return.start_time|fmt5 }}</td></tr>
+                                                        <tr><th>Конец, время</th><td>{{ compare_a.phase_analysis.return.end_time|fmt5 }}</td></tr>
+                                                        <tr><th>Длительность</th><td>{{ compare_a.phase_analysis.return.duration|fmt5 }}</td></tr>
+                                                        <tr><th>x_min</th><td>{{ compare_a.phase_analysis.return.x_min|fmt5 }}</td></tr>
+                                                        <tr><th>x_max</th><td>{{ compare_a.phase_analysis.return.x_max|fmt5 }}</td></tr>
+                                                        <tr><th>v_min</th><td>{{ compare_a.phase_analysis.return.v_min|fmt5 }}</td></tr>
+                                                        <tr><th>v_max</th><td>{{ compare_a.phase_analysis.return.v_max|fmt5 }}</td></tr>
+                                                        <tr><th>a_min</th><td>{{ compare_a.phase_analysis.return.a_min|fmt5 }}</td></tr>
+                                                        <tr><th>a_max</th><td>{{ compare_a.phase_analysis.return.a_max|fmt5 }}</td></tr>
+                                                        <tr><th>|v| max</th><td>{{ compare_a.phase_analysis.return.v_abs_max|fmt5 }}</td></tr>
+                                                        <tr><th>|a| max</th><td>{{ compare_a.phase_analysis.return.a_abs_max|fmt5 }}</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            {% else %}
+                                                <div class="notice">Нет данных.</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="card">
+                                        <h3>{{ run_b.name }}</h3>
+
+                                        <div class="compare-subsection">
+                                            <h4>Фаза отката</h4>
+                                            {% if compare_b.phase_analysis.recoil.available %}
+                                                <table class="info-table">
+                                                    <tbody>
+                                                        <tr><th>Начало, индекс</th><td>{{ compare_b.phase_analysis.recoil.start_index }}</td></tr>
+                                                        <tr><th>Конец, индекс</th><td>{{ compare_b.phase_analysis.recoil.end_index }}</td></tr>
+                                                        <tr><th>Начало, время</th><td>{{ compare_b.phase_analysis.recoil.start_time|fmt5 }}</td></tr>
+                                                        <tr><th>Конец, время</th><td>{{ compare_b.phase_analysis.recoil.end_time|fmt5 }}</td></tr>
+                                                        <tr><th>Длительность</th><td>{{ compare_b.phase_analysis.recoil.duration|fmt5 }}</td></tr>
+                                                        <tr><th>x_min</th><td>{{ compare_b.phase_analysis.recoil.x_min|fmt5 }}</td></tr>
+                                                        <tr><th>x_max</th><td>{{ compare_b.phase_analysis.recoil.x_max|fmt5 }}</td></tr>
+                                                        <tr><th>v_min</th><td>{{ compare_b.phase_analysis.recoil.v_min|fmt5 }}</td></tr>
+                                                        <tr><th>v_max</th><td>{{ compare_b.phase_analysis.recoil.v_max|fmt5 }}</td></tr>
+                                                        <tr><th>a_min</th><td>{{ compare_b.phase_analysis.recoil.a_min|fmt5 }}</td></tr>
+                                                        <tr><th>a_max</th><td>{{ compare_b.phase_analysis.recoil.a_max|fmt5 }}</td></tr>
+                                                        <tr><th>|v| max</th><td>{{ compare_b.phase_analysis.recoil.v_abs_max|fmt5 }}</td></tr>
+                                                        <tr><th>|a| max</th><td>{{ compare_b.phase_analysis.recoil.a_abs_max|fmt5 }}</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            {% else %}
+                                                <div class="notice">Нет данных.</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="compare-subsection">
+                                            <h4>Фаза наката</h4>
+                                            {% if compare_b.phase_analysis.return.available %}
+                                                <table class="info-table">
+                                                    <tbody>
+                                                        <tr><th>Начало, индекс</th><td>{{ compare_b.phase_analysis.return.start_index }}</td></tr>
+                                                        <tr><th>Конец, индекс</th><td>{{ compare_b.phase_analysis.return.end_index }}</td></tr>
+                                                        <tr><th>Начало, время</th><td>{{ compare_b.phase_analysis.return.start_time|fmt5 }}</td></tr>
+                                                        <tr><th>Конец, время</th><td>{{ compare_b.phase_analysis.return.end_time|fmt5 }}</td></tr>
+                                                        <tr><th>Длительность</th><td>{{ compare_b.phase_analysis.return.duration|fmt5 }}</td></tr>
+                                                        <tr><th>x_min</th><td>{{ compare_b.phase_analysis.return.x_min|fmt5 }}</td></tr>
+                                                        <tr><th>x_max</th><td>{{ compare_b.phase_analysis.return.x_max|fmt5 }}</td></tr>
+                                                        <tr><th>v_min</th><td>{{ compare_b.phase_analysis.return.v_min|fmt5 }}</td></tr>
+                                                        <tr><th>v_max</th><td>{{ compare_b.phase_analysis.return.v_max|fmt5 }}</td></tr>
+                                                        <tr><th>a_min</th><td>{{ compare_b.phase_analysis.return.a_min|fmt5 }}</td></tr>
+                                                        <tr><th>a_max</th><td>{{ compare_b.phase_analysis.return.a_max|fmt5 }}</td></tr>
+                                                        <tr><th>|v| max</th><td>{{ compare_b.phase_analysis.return.v_abs_max|fmt5 }}</td></tr>
+                                                        <tr><th>|a| max</th><td>{{ compare_b.phase_analysis.return.a_abs_max|fmt5 }}</td></tr>
+                                                    </tbody>
+                                                </table>
+                                            {% else %}
+                                                <div class="notice">Нет данных.</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="submodule-characteristic-points" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Характерные точки</h3>
+                                <button type="button" class="subblock-toggle-btn" data-target="compare-characteristic-body">Свернуть</button>
+                            </div>
+                            <div id="compare-characteristic-body" class="subblock-body">
+                                <div class="compare-grid">
+                                    <div class="card">
+                                        <h3>{{ run_a.name }}</h3>
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>x_max</th><td>{% if compare_a.characteristic_points.x_max %}value={{ compare_a.characteristic_points.x_max.value|fmt5 }}, t={{ compare_a.characteristic_points.x_max.time|fmt5 }}, idx={{ compare_a.characteristic_points.x_max.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>v_max</th><td>{% if compare_a.characteristic_points.v_max %}value={{ compare_a.characteristic_points.v_max.value|fmt5 }}, t={{ compare_a.characteristic_points.v_max.time|fmt5 }}, idx={{ compare_a.characteristic_points.v_max.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>v_min</th><td>{% if compare_a.characteristic_points.v_min %}value={{ compare_a.characteristic_points.v_min.value|fmt5 }}, t={{ compare_a.characteristic_points.v_min.time|fmt5 }}, idx={{ compare_a.characteristic_points.v_min.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>a_max</th><td>{% if compare_a.characteristic_points.a_max %}value={{ compare_a.characteristic_points.a_max.value|fmt5 }}, t={{ compare_a.characteristic_points.a_max.time|fmt5 }}, idx={{ compare_a.characteristic_points.a_max.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>a_min</th><td>{% if compare_a.characteristic_points.a_min %}value={{ compare_a.characteristic_points.a_min.value|fmt5 }}, t={{ compare_a.characteristic_points.a_min.time|fmt5 }}, idx={{ compare_a.characteristic_points.a_min.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>Конец отката</th><td>{% if compare_a.characteristic_points.recoil_end %}t={{ compare_a.characteristic_points.recoil_end.time|fmt5 }}, x={{ compare_a.characteristic_points.recoil_end.x|fmt5 }}, v={{ compare_a.characteristic_points.recoil_end.v|fmt5 }}, a={{ compare_a.characteristic_points.recoil_end.a|fmt5 }}, idx={{ compare_a.characteristic_points.recoil_end.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>Конец наката</th><td>{% if compare_a.characteristic_points.return_end %}t={{ compare_a.characteristic_points.return_end.time|fmt5 }}, x={{ compare_a.characteristic_points.return_end.x|fmt5 }}, v={{ compare_a.characteristic_points.return_end.v|fmt5 }}, a={{ compare_a.characteristic_points.return_end.a|fmt5 }}, idx={{ compare_a.characteristic_points.return_end.index }}{% else %}—{% endif %}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="card">
+                                        <h3>{{ run_b.name }}</h3>
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>x_max</th><td>{% if compare_b.characteristic_points.x_max %}value={{ compare_b.characteristic_points.x_max.value|fmt5 }}, t={{ compare_b.characteristic_points.x_max.time|fmt5 }}, idx={{ compare_b.characteristic_points.x_max.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>v_max</th><td>{% if compare_b.characteristic_points.v_max %}value={{ compare_b.characteristic_points.v_max.value|fmt5 }}, t={{ compare_b.characteristic_points.v_max.time|fmt5 }}, idx={{ compare_b.characteristic_points.v_max.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>v_min</th><td>{% if compare_b.characteristic_points.v_min %}value={{ compare_b.characteristic_points.v_min.value|fmt5 }}, t={{ compare_b.characteristic_points.v_min.time|fmt5 }}, idx={{ compare_b.characteristic_points.v_min.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>a_max</th><td>{% if compare_b.characteristic_points.a_max %}value={{ compare_b.characteristic_points.a_max.value|fmt5 }}, t={{ compare_b.characteristic_points.a_max.time|fmt5 }}, idx={{ compare_b.characteristic_points.a_max.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>a_min</th><td>{% if compare_b.characteristic_points.a_min %}value={{ compare_b.characteristic_points.a_min.value|fmt5 }}, t={{ compare_b.characteristic_points.a_min.time|fmt5 }}, idx={{ compare_b.characteristic_points.a_min.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>Конец отката</th><td>{% if compare_b.characteristic_points.recoil_end %}t={{ compare_b.characteristic_points.recoil_end.time|fmt5 }}, x={{ compare_b.characteristic_points.recoil_end.x|fmt5 }}, v={{ compare_b.characteristic_points.recoil_end.v|fmt5 }}, a={{ compare_b.characteristic_points.recoil_end.a|fmt5 }}, idx={{ compare_b.characteristic_points.recoil_end.index }}{% else %}—{% endif %}</td></tr>
+                                                <tr><th>Конец наката</th><td>{% if compare_b.characteristic_points.return_end %}t={{ compare_b.characteristic_points.return_end.time|fmt5 }}, x={{ compare_b.characteristic_points.return_end.x|fmt5 }}, v={{ compare_b.characteristic_points.return_end.v|fmt5 }}, a={{ compare_b.characteristic_points.return_end.a|fmt5 }}, idx={{ compare_b.characteristic_points.return_end.index }}{% else %}—{% endif %}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="submodule-engineering-metrics" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Инженерные показатели</h3>
+                                <button type="button" class="subblock-toggle-btn" data-target="compare-metrics-body">Свернуть</button>
+                            </div>
+                            <div id="compare-metrics-body" class="subblock-body">
+                                <div class="compare-grid">
+                                    <div class="card">
+                                        <h3>{{ run_a.name }}</h3>
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>Общая длительность</th><td>{{ compare_a.engineering_metrics.total_duration|fmt5 }}</td></tr>
+                                                <tr><th>x_min</th><td>{{ compare_a.engineering_metrics.x_range.min|fmt5 }}</td></tr>
+                                                <tr><th>x_max</th><td>{{ compare_a.engineering_metrics.x_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах x</th><td>{{ compare_a.engineering_metrics.x_range.span|fmt5 }}</td></tr>
+                                                <tr><th>v_min</th><td>{{ compare_a.engineering_metrics.v_range.min|fmt5 }}</td></tr>
+                                                <tr><th>v_max</th><td>{{ compare_a.engineering_metrics.v_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах v</th><td>{{ compare_a.engineering_metrics.v_range.span|fmt5 }}</td></tr>
+                                                <tr><th>|v| max</th><td>{{ compare_a.engineering_metrics.v_range.abs_max|fmt5 }}</td></tr>
+                                                <tr><th>a_min</th><td>{{ compare_a.engineering_metrics.a_range.min|fmt5 }}</td></tr>
+                                                <tr><th>a_max</th><td>{{ compare_a.engineering_metrics.a_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах a</th><td>{{ compare_a.engineering_metrics.a_range.span|fmt5 }}</td></tr>
+                                                <tr><th>|a| max</th><td>{{ compare_a.engineering_metrics.a_range.abs_max|fmt5 }}</td></tr>
+                                                <tr><th>Фаза отката доступна</th><td>{% if compare_a.phase_analysis.recoil.available %}Да{% else %}Нет{% endif %}</td></tr>
+                                                <tr><th>Фаза наката доступна</th><td>{% if compare_a.phase_analysis.return.available %}Да{% else %}Нет{% endif %}</td></tr>
+                                                <tr><th>Количество фаз отката</th><td>{{ compare_a.engineering_metrics.phase_count.recoil }}</td></tr>
+                                                <tr><th>Количество фаз наката</th><td>{{ compare_a.engineering_metrics.phase_count.return }}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="card">
+                                        <h3>{{ run_b.name }}</h3>
+                                        <table class="info-table">
+                                            <tbody>
+                                                <tr><th>Общая длительность</th><td>{{ compare_b.engineering_metrics.total_duration|fmt5 }}</td></tr>
+                                                <tr><th>x_min</th><td>{{ compare_b.engineering_metrics.x_range.min|fmt5 }}</td></tr>
+                                                <tr><th>x_max</th><td>{{ compare_b.engineering_metrics.x_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах x</th><td>{{ compare_b.engineering_metrics.x_range.span|fmt5 }}</td></tr>
+                                                <tr><th>v_min</th><td>{{ compare_b.engineering_metrics.v_range.min|fmt5 }}</td></tr>
+                                                <tr><th>v_max</th><td>{{ compare_b.engineering_metrics.v_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах v</th><td>{{ compare_b.engineering_metrics.v_range.span|fmt5 }}</td></tr>
+                                                <tr><th>|v| max</th><td>{{ compare_b.engineering_metrics.v_range.abs_max|fmt5 }}</td></tr>
+                                                <tr><th>a_min</th><td>{{ compare_b.engineering_metrics.a_range.min|fmt5 }}</td></tr>
+                                                <tr><th>a_max</th><td>{{ compare_b.engineering_metrics.a_range.max|fmt5 }}</td></tr>
+                                                <tr><th>Размах a</th><td>{{ compare_b.engineering_metrics.a_range.span|fmt5 }}</td></tr>
+                                                <tr><th>|a| max</th><td>{{ compare_b.engineering_metrics.a_range.abs_max|fmt5 }}</td></tr>
+                                                <tr><th>Фаза отката доступна</th><td>{% if compare_b.phase_analysis.recoil.available %}Да{% else %}Нет{% endif %}</td></tr>
+                                                <tr><th>Фаза наката доступна</th><td>{% if compare_b.phase_analysis.return.available %}Да{% else %}Нет{% endif %}</td></tr>
+                                                <tr><th>Количество фаз отката</th><td>{{ compare_b.engineering_metrics.phase_count.recoil }}</td></tr>
+                                                <tr><th>Количество фаз наката</th><td>{{ compare_b.engineering_metrics.phase_count.return }}</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="module-charts" class="workspace-module-section">
+            <div class="section-block">
+                <div class="section-head">
+                    <h2>Графики</h2>
+                    <button type="button" class="section-toggle-btn" data-target="compare-charts-body">Свернуть</button>
+                </div>
+                <div id="compare-charts-body" class="section-body">
+                    <div class="analysis-subblocks">
+                        <div id="submodule-charts-main" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Общие графики</h3>
+                                <button type="button" class="subblock-toggle-btn" data-target="compare-charts-main-body">Свернуть</button>
+                            </div>
+                            <div id="compare-charts-main-body" class="subblock-body">
+                                {% for block in compare_chart_blocks %}
+                                    {% if block.field_name == "chart_x_t" or block.field_name == "chart_v_a_t" or block.field_name == "chart_v_x" or block.field_name == "chart_fmag_v" or block.field_name == "chart_forces_secondary" %}
+                                        <div class="card compare-chart-block">
+                                            <h4>{{ block.title }}</h4>
+                                            <div class="compare-grid">
+                                                <div class="plot-card">
+                                                    <h3>{{ run_a.name }}</h3>
+                                                    {% if block.html_a %}
+                                                        <div class="plot-embed">{{ block.html_a|safe }}</div>
+                                                    {% else %}
+                                                        <div class="notice">График отсутствует.</div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="plot-card">
+                                                    <h3>{{ run_b.name }}</h3>
+                                                    {% if block.html_b %}
+                                                        <div class="plot-embed">{{ block.html_b|safe }}</div>
+                                                    {% else %}
+                                                        <div class="notice">График отсутствует.</div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div id="submodule-charts-recoil" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Графики отката</h3>
+                                <button type="button" class="subblock-toggle-btn" data-target="compare-charts-recoil-body">Свернуть</button>
+                            </div>
+                            <div id="compare-charts-recoil-body" class="subblock-body">
+                                {% for block in compare_chart_blocks %}
+                                    {% if block.field_name == "chart_x_t_recoil" or block.field_name == "chart_v_a_t_recoil" or block.field_name == "chart_forces_main_recoil" or block.field_name == "chart_forces_secondary_recoil" %}
+                                        <div class="card compare-chart-block">
+                                            <h4>{{ block.title }}</h4>
+                                            <div class="compare-grid">
+                                                <div class="plot-card">
+                                                    <h3>{{ run_a.name }}</h3>
+                                                    {% if block.html_a %}
+                                                        <div class="plot-embed">{{ block.html_a|safe }}</div>
+                                                    {% else %}
+                                                        <div class="notice">График отсутствует.</div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="plot-card">
+                                                    <h3>{{ run_b.name }}</h3>
+                                                    {% if block.html_b %}
+                                                        <div class="plot-embed">{{ block.html_b|safe }}</div>
+                                                    {% else %}
+                                                        <div class="notice">График отсутствует.</div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div id="submodule-charts-return" class="analysis-subblock card">
+                            <div class="subblock-head">
+                                <h3>Графики наката</h3>
+                                <button type="button" class="subblock-toggle-btn" data-target="compare-charts-return-body">Свернуть</button>
+                            </div>
+                            <div id="compare-charts-return-body" class="subblock-body">
+                                {% for block in compare_chart_blocks %}
+                                    {% if block.field_name == "chart_x_t_return" or block.field_name == "chart_v_a_t_return" or block.field_name == "chart_forces_secondary_return" %}
+                                        <div class="card compare-chart-block">
+                                            <h4>{{ block.title }}</h4>
+                                            <div class="compare-grid">
+                                                <div class="plot-card">
+                                                    <h3>{{ run_a.name }}</h3>
+                                                    {% if block.html_a %}
+                                                        <div class="plot-embed">{{ block.html_a|safe }}</div>
+                                                    {% else %}
+                                                        <div class="notice">График отсутствует.</div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="plot-card">
+                                                    <h3>{{ run_b.name }}</h3>
+                                                    {% if block.html_b %}
+                                                        <div class="plot-embed">{{ block.html_b|safe }}</div>
+                                                    {% else %}
+                                                        <div class="notice">График отсутствует.</div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="module-source-data" class="workspace-module-section">
+            <div class="section-block">
+                <div class="section-head">
+                    <h2>Исходные данные</h2>
+                    <button type="button" class="section-toggle-btn" data-target="compare-source-body">Свернуть</button>
+                </div>
+                <div id="compare-source-body" class="section-body">
+                    <div class="compare-grid">
+                        <div class="card">
+                            <h3>{{ run_a.name }}</h3>
+
+                            <div class="compare-subsection">
+                                <h4>Общие параметры</h4>
+                                <table class="info-table">
+                                    <tbody>
+                                        <tr><th>Масса</th><td>{{ run_a.mass|fmt5 }}</td></tr>
+                                        <tr><th>Угол</th><td>{{ run_a.angle_deg|fmt5 }}</td></tr>
+                                        <tr><th>Начальная скорость</th><td>{{ run_a.v0|fmt5 }}</td></tr>
+                                        <tr><th>Начальное перемещение</th><td>{{ run_a.x0|fmt5 }}</td></tr>
+                                        <tr><th>Время расчёта</th><td>{{ run_a.t_max|fmt5 }}</td></tr>
+                                        <tr><th>Шаг dt</th><td>{{ run_a.dt|fmt5 }}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {% for brake in run_a.brakes.all %}
+                                <div class="compare-subsection">
+                                    <h4>Магнитный тормоз {{ brake.index }}</h4>
+                                    <table class="info-table">
+                                        <tbody>
+                                            <tr><th>gamma</th><td>{{ brake.gamma|fmt5 }}</td></tr>
+                                            <tr><th>delta</th><td>{{ brake.delta|fmt5 }}</td></tr>
+                                            <tr><th>xm</th><td>{{ brake.xm|fmt5 }}</td></tr>
+                                            <tr><th>ym</th><td>{{ brake.ym|fmt5 }}</td></tr>
+                                            <tr><th>dh1</th><td>{{ brake.dh1|fmt5 }}</td></tr>
+                                            <tr><th>dh2</th><td>{{ brake.dh2|fmt5 }}</td></tr>
+                                            <tr><th>dm</th><td>{{ brake.dm|fmt5 }}</td></tr>
+                                            <tr><th>n</th><td>{{ brake.n }}</td></tr>
+                                            <tr><th>mu</th><td>{{ brake.mu|fmt5 }}</td></tr>
+                                            <tr><th>bz</th><td>{{ brake.bz|fmt5 }}</td></tr>
+                                            <tr><th>lya</th><td>{{ brake.lya|fmt5 }}</td></tr>
+                                            <tr><th>wn0</th><td>{{ brake.wn0|fmt5 }}</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% empty %}
+                                <div class="notice" style="margin-top: 16px;">Тормоза отсутствуют.</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="card">
+                            <h3>{{ run_b.name }}</h3>
+
+                            <div class="compare-subsection">
+                                <h4>Общие параметры</h4>
+                                <table class="info-table">
+                                    <tbody>
+                                        <tr><th>Масса</th><td>{{ run_b.mass|fmt5 }}</td></tr>
+                                        <tr><th>Угол</th><td>{{ run_b.angle_deg|fmt5 }}</td></tr>
+                                        <tr><th>Начальная скорость</th><td>{{ run_b.v0|fmt5 }}</td></tr>
+                                        <tr><th>Начальное перемещение</th><td>{{ run_b.x0|fmt5 }}</td></tr>
+                                        <tr><th>Время расчёта</th><td>{{ run_b.t_max|fmt5 }}</td></tr>
+                                        <tr><th>Шаг dt</th><td>{{ run_b.dt|fmt5 }}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {% for brake in run_b.brakes.all %}
+                                <div class="compare-subsection">
+                                    <h4>Магнитный тормоз {{ brake.index }}</h4>
+                                    <table class="info-table">
+                                        <tbody>
+                                            <tr><th>gamma</th><td>{{ brake.gamma|fmt5 }}</td></tr>
+                                            <tr><th>delta</th><td>{{ brake.delta|fmt5 }}</td></tr>
+                                            <tr><th>xm</th><td>{{ brake.xm|fmt5 }}</td></tr>
+                                            <tr><th>ym</th><td>{{ brake.ym|fmt5 }}</td></tr>
+                                            <tr><th>dh1</th><td>{{ brake.dh1|fmt5 }}</td></tr>
+                                            <tr><th>dh2</th><td>{{ brake.dh2|fmt5 }}</td></tr>
+                                            <tr><th>dm</th><td>{{ brake.dm|fmt5 }}</td></tr>
+                                            <tr><th>n</th><td>{{ brake.n }}</td></tr>
+                                            <tr><th>mu</th><td>{{ brake.mu|fmt5 }}</td></tr>
+                                            <tr><th>bz</th><td>{{ brake.bz|fmt5 }}</td></tr>
+                                            <tr><th>lya</th><td>{{ brake.lya|fmt5 }}</td></tr>
+                                            <tr><th>wn0</th><td>{{ brake.wn0|fmt5 }}</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% empty %}
+                                <div class="notice" style="margin-top: 16px;">Тормоза отсутствуют.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+(function () {
+    const buttons = document.querySelectorAll(".section-toggle-btn");
+    buttons.forEach((btn) => {
+        btn.addEventListener("click", function () {
+            const target = document.getElementById(btn.dataset.target);
+            if (!target) return;
+            const collapsed = target.classList.toggle("is-collapsed");
+            btn.textContent = collapsed ? "Развернуть" : "Свернуть";
+        });
+    });
+})();
+</script>
+
+<script>
+(function () {
+    const subblockButtons = document.querySelectorAll(".subblock-toggle-btn");
+    subblockButtons.forEach((btn) => {
+        btn.addEventListener("click", function () {
+            const target = document.getElementById(btn.dataset.target);
+            if (!target) return;
+            const collapsed = target.classList.toggle("is-collapsed");
+            btn.textContent = collapsed ? "Развернуть" : "Свернуть";
+        });
+    });
+})();
+</script>
+
+<script>
+(function () {
+    const STORAGE_KEY = "recoillab_compare_modules_v1";
+    const moduleCheckboxes = document.querySelectorAll(".workspace-module-checkbox");
+    const submoduleCheckboxes = document.querySelectorAll(".workspace-submodule-checkbox");
+    const groupToggleButtons = document.querySelectorAll(".workspace-group-toggle-btn");
+    const enableAllBtn = document.getElementById("enable-all-modules-btn");
+    const disableAllBtn = document.getElementById("disable-all-modules-btn");
+
+    function getModuleSection(moduleName) {
+        return document.getElementById(`module-${moduleName}`);
+    }
+
+    function getSubmoduleSection(submoduleName) {
+        return document.getElementById(`submodule-${submoduleName}`);
+    }
+
+    function getGroupPanel(groupId) {
+        return document.getElementById(groupId);
+    }
+
+    function applyModuleState(moduleName, isVisible) {
+        const section = getModuleSection(moduleName);
+        if (!section) return;
+        section.style.display = isVisible ? "" : "none";
+    }
+
+    function applySubmoduleState(submoduleName, isVisible) {
+        const section = getSubmoduleSection(submoduleName);
+        if (!section) return;
+        section.style.display = isVisible ? "" : "none";
+    }
+
+    function getSubCheckboxesByParent(parentName) {
+        return Array.from(document.querySelectorAll(`.workspace-submodule-checkbox[data-parent="${parentName}"]`));
+    }
+
+    function syncParentFromChildren(parentName) {
+        const parentCheckbox = document.querySelector(`.workspace-module-checkbox[data-module="${parentName}"]`);
+        const childCheckboxes = getSubCheckboxesByParent(parentName);
+        if (!parentCheckbox || !childCheckboxes.length) return;
+
+        const anyChecked = childCheckboxes.some((cb) => cb.checked);
+        parentCheckbox.checked = anyChecked;
+        applyModuleState(parentName, anyChecked);
+    }
+
+    function syncChildrenFromParent(parentName, checked) {
+        const childCheckboxes = getSubCheckboxesByParent(parentName);
+        childCheckboxes.forEach((cb) => {
+            cb.checked = checked;
+            applySubmoduleState(cb.dataset.submodule, checked);
+        });
+        applyModuleState(parentName, checked);
+    }
+
+    function saveState() {
+        const state = { modules: {}, submodules: {}, groups: {} };
+
+        moduleCheckboxes.forEach((checkbox) => {
+            state.modules[checkbox.dataset.module] = checkbox.checked;
+        });
+
+        submoduleCheckboxes.forEach((checkbox) => {
+            state.submodules[checkbox.dataset.submodule] = checkbox.checked;
+        });
+
+        groupToggleButtons.forEach((btn) => {
+            const panel = getGroupPanel(btn.dataset.target);
+            state.groups[btn.dataset.target] = panel ? !panel.classList.contains("is-collapsed") : false;
+        });
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function applyState() {
+        moduleCheckboxes.forEach((checkbox) => {
+            const moduleName = checkbox.dataset.module;
+            const hasChildren = getSubCheckboxesByParent(moduleName).length > 0;
+
+            if (!hasChildren) {
+                applyModuleState(moduleName, checkbox.checked);
+            }
+        });
+
+        submoduleCheckboxes.forEach((checkbox) => {
+            applySubmoduleState(checkbox.dataset.submodule, checkbox.checked);
+        });
+
+        ["engineering-analysis", "charts"].forEach(syncParentFromChildren);
+    }
+
+    function setGroupExpanded(button, expanded) {
+        const panel = getGroupPanel(button.dataset.target);
+        if (!panel) return;
+        panel.classList.toggle("is-collapsed", !expanded);
+        button.textContent = expanded ? "Свернуть" : "Развернуть";
+    }
+
+    const savedState = loadState();
+    if (savedState) {
+        moduleCheckboxes.forEach((checkbox) => {
+            const moduleName = checkbox.dataset.module;
+            if (savedState.modules && Object.prototype.hasOwnProperty.call(savedState.modules, moduleName)) {
+                checkbox.checked = !!savedState.modules[moduleName];
+            }
+        });
+
+        submoduleCheckboxes.forEach((checkbox) => {
+            const submoduleName = checkbox.dataset.submodule;
+            if (savedState.submodules && Object.prototype.hasOwnProperty.call(savedState.submodules, submoduleName)) {
+                checkbox.checked = !!savedState.submodules[submoduleName];
+            }
+        });
+
+        groupToggleButtons.forEach((btn) => {
+            if (savedState.groups && Object.prototype.hasOwnProperty.call(savedState.groups, btn.dataset.target)) {
+                setGroupExpanded(btn, !!savedState.groups[btn.dataset.target]);
+            } else {
+                setGroupExpanded(btn, false);
+            }
+        });
+    } else {
+        groupToggleButtons.forEach((btn) => setGroupExpanded(btn, false));
+    }
+
+    moduleCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", function () {
+            const moduleName = checkbox.dataset.module;
+            const hasChildren = getSubCheckboxesByParent(moduleName).length > 0;
+
+            if (hasChildren) {
+                syncChildrenFromParent(moduleName, checkbox.checked);
+            } else {
+                applyModuleState(moduleName, checkbox.checked);
+            }
+
+            saveState();
+        });
+    });
+
+    submoduleCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", function () {
+            applySubmoduleState(checkbox.dataset.submodule, checkbox.checked);
+            syncParentFromChildren(checkbox.dataset.parent);
+            saveState();
+        });
+    });
+
+    groupToggleButtons.forEach((btn) => {
+        btn.addEventListener("click", function () {
+            const panel = getGroupPanel(btn.dataset.target);
+            if (!panel) return;
+            const expanded = panel.classList.contains("is-collapsed");
+            setGroupExpanded(btn, expanded);
+            saveState();
+        });
+    });
+
+    if (enableAllBtn) {
+        enableAllBtn.addEventListener("click", function () {
+            moduleCheckboxes.forEach((checkbox) => { checkbox.checked = true; });
+            submoduleCheckboxes.forEach((checkbox) => { checkbox.checked = true; });
+            applyState();
+            saveState();
+        });
+    }
+
+    if (disableAllBtn) {
+        disableAllBtn.addEventListener("click", function () {
+            moduleCheckboxes.forEach((checkbox) => { checkbox.checked = false; });
+            submoduleCheckboxes.forEach((checkbox) => { checkbox.checked = false; });
+            applyState();
+            saveState();
+        });
+    }
+
+    applyState();
+    saveState();
+})();
+</script>
 {% endif %}
 {% endblock %}
