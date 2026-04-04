@@ -1,0 +1,76 @@
+{% load recoil_extras l10n %}
+
+<div class="compare-subsection">
+    <h4>{{ brake.display_name }}</h4>
+
+    <table class="info-table" style="margin-bottom: 16px;">
+        <tbody>
+            <tr><th>Номер тормоза</th><td>{{ brake.index }}</td></tr>
+            <tr><th>Имя</th><td>{% if brake.name %}{{ brake.name }}{% else %}—{% endif %}</td></tr>
+            <tr>
+                <th>Тип задания</th>
+                <td>
+                    {% if brake.model_type == "curve" %}
+                        По графику F(v)
+                    {% else %}
+                        Параметрический
+                    {% endif %}
+                </td>
+            </tr>
+            {% if brake.model_type == "curve" %}
+                <tr>
+                    <th>Исходный Excel-файл</th>
+                    <td>
+                        {% if brake.curve_file %}
+                            <a href="{{ brake.curve_file.url }}" target="_blank" rel="noopener">
+                                Скачать исходный Excel-файл
+                            </a>
+                        {% else %}
+                            Файл не сохранён
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {% if brake.model_type == "curve" %}
+        <div class="notice" style="margin-bottom: 16px;">
+            Характеристика тормоза импортирована из Excel и приведена к внутренней таблице F(v).
+        </div>
+
+        {% with points=brake.force_points.all %}
+            {% if points %}
+                <div style="margin-bottom: 18px;">
+                    <h5 style="margin: 0 0 10px 0;">График F(v)</h5>
+                    <div
+                        class="curve-chart-runtime plot-embed"
+                        data-velocities="{% localize off %}{% for point in points %}{{ point.velocity }}{% if not forloop.last %};{% endif %}{% endfor %}{% endlocalize %}"
+                        data-forces="{% localize off %}{% for point in points %}{{ point.force }}{% if not forloop.last %};{% endif %}{% endfor %}{% endlocalize %}"
+                        style="height: 520px;"
+                    ></div>
+                </div>
+                             
+            {% else %}
+                <div class="notice">Точки curve-характеристики отсутствуют.</div>
+            {% endif %}
+        {% endwith %}
+    {% else %}
+        <table class="info-table">
+            <tbody>
+                <tr><th>gamma</th><td>{{ brake.gamma|fmt5 }}</td></tr>
+                <tr><th>delta</th><td>{{ brake.delta|fmt5 }}</td></tr>
+                <tr><th>xm</th><td>{{ brake.xm|fmt5 }}</td></tr>
+                <tr><th>ym</th><td>{{ brake.ym|fmt5 }}</td></tr>
+                <tr><th>dh1</th><td>{{ brake.dh1|fmt5 }}</td></tr>
+                <tr><th>dh2</th><td>{{ brake.dh2|fmt5 }}</td></tr>
+                <tr><th>dm</th><td>{{ brake.dm|fmt5 }}</td></tr>
+                <tr><th>n</th><td>{{ brake.n }}</td></tr>
+                <tr><th>mu</th><td>{{ brake.mu|fmt5 }}</td></tr>
+                <tr><th>bz</th><td>{{ brake.bz|fmt5 }}</td></tr>
+                <tr><th>lya</th><td>{{ brake.lya|fmt5 }}</td></tr>
+                <tr><th>wn0</th><td>{{ brake.wn0|fmt5 }}</td></tr>
+            </tbody>
+        </table>
+    {% endif %}
+</div>

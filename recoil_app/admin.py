@@ -1,12 +1,30 @@
 from django.contrib import admin
 
-from .models import CalculationRun, CalculationSnapshot, MagneticBrakeConfig
+from .models import BrakeForcePoint, CalculationRun, CalculationSnapshot, MagneticBrakeConfig
 
 
-class MagneticBrakeConfigInline(admin.TabularInline):
+class BrakeForcePointInline(admin.TabularInline):
+    model = BrakeForcePoint
+    extra = 0
+    fields = ("order", "velocity", "force")
+    ordering = ("order",)
+
+
+class MagneticBrakeConfigInline(admin.StackedInline):
     model = MagneticBrakeConfig
     extra = 0
     ordering = ("index",)
+    show_change_link = True
+    fields = (
+        ("index", "name", "model_type"),
+        "curve_file",
+        ("gamma", "delta"),
+        ("xm", "ym"),
+        ("dh1", "dh2"),
+        ("dm", "n"),
+        ("mu", "bz"),
+        ("lya", "wn0"),
+    )
 
 
 class CalculationSnapshotInline(admin.StackedInline):
@@ -190,6 +208,9 @@ class MagneticBrakeConfigAdmin(admin.ModelAdmin):
         "id",
         "run",
         "index",
+        "display_name",
+        "model_type",
+        "curve_file",
         "gamma",
         "delta",
         "xm",
@@ -197,5 +218,43 @@ class MagneticBrakeConfigAdmin(admin.ModelAdmin):
         "bz",
         "wn0",
     )
-    list_filter = ("index",)
+    list_filter = ("model_type", "index")
+    search_fields = ("run__name", "name")
     ordering = ("run", "index")
+    inlines = [BrakeForcePointInline]
+
+    fieldsets = (
+        (
+            "Основные данные",
+            {
+                "fields": (
+                    "run",
+                    "index",
+                    "name",
+                    "model_type",
+                    "curve_file",
+                )
+            },
+        ),
+        (
+            "Параметрическая модель",
+            {
+                "fields": (
+                    ("gamma", "delta"),
+                    ("xm", "ym"),
+                    ("dh1", "dh2"),
+                    ("dm", "n"),
+                    ("mu", "bz"),
+                    ("lya", "wn0"),
+                )
+            },
+        ),
+    )
+
+
+@admin.register(BrakeForcePoint)
+class BrakeForcePointAdmin(admin.ModelAdmin):
+    list_display = ("id", "brake", "order", "velocity", "force")
+    list_filter = ("brake__model_type",)
+    search_fields = ("brake__run__name", "brake__name")
+    ordering = ("brake", "order")

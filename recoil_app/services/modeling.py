@@ -8,20 +8,33 @@ MODEL_VERSION = "2.0"
 
 
 @dataclass
+class BrakeForcePointData:
+    order: int
+    velocity: float
+    force: float
+
+
+@dataclass
 class BrakeInputData:
     index: int
-    gamma: float
-    delta: float
-    xm: float
-    ym: float
-    dh1: float
-    dh2: float
-    dm: float
-    n: int
-    mu: float
-    bz: float
-    lya: float
-    wn0: float
+    name: str
+    model_type: str
+    curve_file_name: str | None = None
+
+    gamma: float | None = None
+    delta: float | None = None
+    xm: float | None = None
+    ym: float | None = None
+    dh1: float | None = None
+    dh2: float | None = None
+    dm: float | None = None
+    n: int | None = None
+    mu: float | None = None
+    bz: float | None = None
+    lya: float | None = None
+    wn0: float | None = None
+
+    force_curve_points: list[BrakeForcePointData] = field(default_factory=list)
 
 
 @dataclass
@@ -149,6 +162,35 @@ def _to_matrix(values) -> list[list[float]]:
     return [[float(v) for v in row] for row in values]
 
 
+def _build_brake_input_data(brake) -> BrakeInputData:
+    return BrakeInputData(
+        index=int(brake.index),
+        name=str(brake.name or ""),
+        model_type=str(brake.model_type),
+        curve_file_name=(str(brake.curve_file.name) if brake.curve_file else None),
+        gamma=float(brake.gamma) if brake.gamma is not None else None,
+        delta=float(brake.delta) if brake.delta is not None else None,
+        xm=float(brake.xm) if brake.xm is not None else None,
+        ym=float(brake.ym) if brake.ym is not None else None,
+        dh1=float(brake.dh1) if brake.dh1 is not None else None,
+        dh2=float(brake.dh2) if brake.dh2 is not None else None,
+        dm=float(brake.dm) if brake.dm is not None else None,
+        n=int(brake.n) if brake.n is not None else None,
+        mu=float(brake.mu) if brake.mu is not None else None,
+        bz=float(brake.bz) if brake.bz is not None else None,
+        lya=float(brake.lya) if brake.lya is not None else None,
+        wn0=float(brake.wn0) if brake.wn0 is not None else None,
+        force_curve_points=[
+            BrakeForcePointData(
+                order=int(point.order),
+                velocity=float(point.velocity),
+                force=float(point.force),
+            )
+            for point in brake.force_points.order_by("order", "id")
+        ],
+    )
+
+
 def build_calculation_model(run, brakes, result) -> CalculationModel:
     recoil_available = result.recoil_end_index is not None and result.recoil_end_time is not None
     return_available = result.return_end_index is not None and result.return_end_time is not None
@@ -188,24 +230,7 @@ def build_calculation_model(run, brakes, result) -> CalculationModel:
         t_max=float(run.t_max),
         dt=float(run.dt),
         input_file_name=getattr(run.input_file, "name", "") or "",
-        brakes=[
-            BrakeInputData(
-                index=int(brake.index),
-                gamma=float(brake.gamma),
-                delta=float(brake.delta),
-                xm=float(brake.xm),
-                ym=float(brake.ym),
-                dh1=float(brake.dh1),
-                dh2=float(brake.dh2),
-                dm=float(brake.dm),
-                n=int(brake.n),
-                mu=float(brake.mu),
-                bz=float(brake.bz),
-                lya=float(brake.lya),
-                wn0=float(brake.wn0),
-            )
-            for brake in brakes
-        ],
+        brakes=[_build_brake_input_data(brake) for brake in brakes],
     )
 
     forces = ForceSeries(

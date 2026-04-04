@@ -1,0 +1,46 @@
+{% load recoil_extras %}
+
+<div class="two-col">
+    <div class="card inner-card">
+        <h4>Общие диапазоны</h4>
+        {% if engineering_metrics %}
+            <table class="info-table">
+                <tbody>
+                    <tr><th>Общая длительность</th><td>{{ engineering_metrics.total_duration|fmt5 }}</td></tr>
+
+                    <tr><th>x_min</th><td>{{ engineering_metrics.x_range.min|fmt5 }}</td></tr>
+                    <tr><th>x_max</th><td>{{ engineering_metrics.x_range.max|fmt5 }}</td></tr>
+                    <tr><th>Размах x</th><td>{{ engineering_metrics.x_range.span|fmt5 }}</td></tr>
+
+                    <tr><th>v_min</th><td>{{ engineering_metrics.v_range.min|fmt5 }}</td></tr>
+                    <tr><th>v_max</th><td>{{ engineering_metrics.v_range.max|fmt5 }}</td></tr>
+                    <tr><th>Размах v</th><td>{{ engineering_metrics.v_range.span|fmt5 }}</td></tr>
+                    <tr><th>|v| max</th><td>{{ engineering_metrics.v_range.abs_max|fmt5 }}</td></tr>
+
+                    <tr><th>a_min</th><td>{{ engineering_metrics.a_range.min|fmt5 }}</td></tr>
+                    <tr><th>a_max</th><td>{{ engineering_metrics.a_range.max|fmt5 }}</td></tr>
+                    <tr><th>Размах a</th><td>{{ engineering_metrics.a_range.span|fmt5 }}</td></tr>
+                    <tr><th>|a| max</th><td>{{ engineering_metrics.a_range.abs_max|fmt5 }}</td></tr>
+                </tbody>
+            </table>
+        {% else %}
+            <div class="notice">Инженерные показатели отсутствуют.</div>
+        {% endif %}
+    </div>
+
+    <div class="card inner-card">
+        <h4>Структура процесса</h4>
+        {% if engineering_metrics %}
+            <table class="info-table">
+                <tbody>
+                    <tr><th>Фаза отката доступна</th><td>{% if phase_analysis.recoil.available %}Да{% else %}Нет{% endif %}</td></tr>
+                    <tr><th>Фаза наката доступна</th><td>{% if phase_analysis.return.available %}Да{% else %}Нет{% endif %}</td></tr>
+                    <tr><th>Количество фаз отката</th><td>{{ engineering_metrics.phase_count.recoil }}</td></tr>
+                    <tr><th>Количество фаз наката</th><td>{{ engineering_metrics.phase_count.return }}</td></tr>
+                </tbody>
+            </table>
+        {% else %}
+            <div class="notice">Структура процесса отсутствует.</div>
+        {% endif %}
+    </div>
+</div>
