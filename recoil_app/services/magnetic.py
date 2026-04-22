@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
+from typing import TypeAlias
+
 
 G = 9.81
 DEFAULT_V_EPS = 1e-6
+
 
 @dataclass(slots=True)
 class MagneticParams:
@@ -19,14 +24,63 @@ class MagneticParams:
     lya: float = 2.5
     wn0: float = 1.0
 
+
+@dataclass(frozen=True, slots=True)
+class ForceCurvePoint:
+    velocity: float
+    force: float
+
+
+@dataclass(slots=True)
+class CurveBrakeParams:
+    points: tuple[ForceCurvePoint, ...]
+
+    def __post_init__(self):
+        points = tuple(self.points)
+        self.points = points
+
+        if len(points) < 2:
+            raise ValueError("Для curve-тормоза необходимо минимум 2 точки.")
+
+        prev_velocity = None
+        for point in points:
+            if point.velocity < 0:
+                raise ValueError("Скорость в curve-характеристике не может быть отрицательной.")
+            if point.force < 0:
+                raise ValueError("Сила в curve-характеристике не может быть отрицательной.")
+
+            if prev_velocity is not None and point.velocity <= prev_velocity:
+                raise ValueError(
+                    "Скорости в curve-характеристике должны быть строго возрастающими."
+                )
+            prev_velocity = point.velocity
+
+
+class CurveRangeError(Exception):
+    def __init__(self, velocity: float, v_min: float, v_max: float):
+        self.velocity = velocity
+        self.v_min = v_min
+        self.v_max = v_max
+        super().__init__(self.__str__())
+
+    def __str__(self) -> str:
+        return (
+            f"Скорость {self.velocity:.5f} м/с вышла за диапазон "
+            f"curve-характеристики [{self.v_min:.5f}, {self.v_max:.5f}] м/с."
+        )
+
+
+BrakeModel: TypeAlias = MagneticParams | CurveBrakeParams
+
+
 def magnetic_force_si(
     v: float,
     wn: float,
     params: MagneticParams,
 ) -> tuple[float, float]:
     """
-    Возвращает модуль силы одного магнитного тормоза в Н и обновлённое wn.
-    Сила возвращается без знака направления.
+    Возвращает модуль силы одного параметрического магнитного тормоза в Н
+    и обновлённое wn. Сила возвращается без знака направления.
     """
     v_abs = abs(v)
     if v_abs < DEFAULT_V_EPS:
@@ -62,55 +116,166 @@ def magnetic_force_si(
     w1 = nu1 if nu1 - 1 > 0 else 1 / nu1 if nu1 - 1 != 0 else 1
     w2 = nu2 if nu2 - 1 > 0 else 1 / nu2 if nu2 - 1 != 0 else 1
 
-    rk = (((((w1 - 1 + math.pi / 2) ** 2) / (4 * w1 - 4 + math.pi))
-          + (((w2 - 1 + math.pi / 2) ** 2) / (4 * w2 - 4 + math.pi)))
-          + math.pi / 2) / (gamma * delta)
+    rk = (
+        (
+            (((w1 - 1 + math.pi / 2) ** 2) / (4 * w1 - 4 + math.pi))
+            + (((w2 - 1 + math.pi / 2) ** 2) / (4 * w2 - 4 + math.pi))
+            + math.pi / 2
+        )
+        / (gamma * delta)
+    )
 
     yh = dh1 + dh2 + ym
     yp = yh / 2
 
-    l1 = xm / 4 - (a1 / 2 * (1 - math.pi / 2)) if a1 / 2 < xm / 4 else a1 / 2 - (xm / 4 * (1 - math.pi / 2))
-    l2 = xm / 4 - (a2 / 2 * (1 - math.pi / 2)) if a2 / 2 < xm / 4 else a2 / 2 - (xm / 4 * (1 - math.pi / 2))
+    l1 = (
+        xm / 4 - (a1 / 2 * (1 - math.pi / 2))
+        if a1 / 2 < xm / 4
+        else a1 / 2 - (xm / 4 * (1 - math.pi / 2))
+    )
+    l2 = (
+        xm / 4 - (a2 / 2 * (1 - math.pi / 2))
+        if a2 / 2 < xm / 4
+        else a2 / 2 - (xm / 4 * (1 - math.pi / 2))
+    )
 
     lcpk = l1 + l2 + math.pi * yh / 4
     rek = math.sqrt(lcpk / (gamma * rk))
     xpk = (lcpk - yh) / 2
 
-    lbhxk = 2e-7 * xpk * (math.asinh(xpk / rek) + rek / xpk - math.sqrt((rek / xpk) ** 2 + 1))
-    lbhyk = 2e-7 * yp * (math.asinh(yp / rek) + rek / yp - math.sqrt((rek / yp) ** 2 + 1))
+    lbhxk = 2e-7 * xpk * (
+        math.asinh(xpk / rek) + rek / xpk - math.sqrt((rek / xpk) ** 2 + 1)
+    )
+    lbhyk = 2e-7 * yp * (
+        math.asinh(yp / rek) + rek / yp - math.sqrt((rek / yp) ** 2 + 1)
+    )
     lbtxk = 0.5e-7 * mu * xpk
     lbtyk = 0.5e-7 * mu * yp
-    mxxk = 2e-7 * xpk * (math.asinh(xpk / yp) + yp / xpk - math.sqrt((yp / xpk) ** 2 + 1))
-    myyk = 2e-7 * yp * (math.asinh(yp / xpk) + xpk / yp - math.sqrt((xpk / yp) ** 2 + 1))
+    mxxk = 2e-7 * xpk * (
+        math.asinh(xpk / yp) + yp / xpk - math.sqrt((yp / xpk) ** 2 + 1)
+    )
+    myyk = 2e-7 * yp * (
+        math.asinh(yp / xpk) + xpk / yp - math.sqrt((xpk / yp) ** 2 + 1)
+    )
 
     lk = 2 * (lbhxk + lbhyk + lbtxk + lbtyk - mxxk - myyk)
     tk = lk / rk if rk != 0 else 0.0
     tettak = 1 + tk / tj * (math.exp((-tj / tk)) - 1) if tk != 0 else 0.0
 
-    rc = ((((w1 - 1 + math.pi / 2) ** 2) / (4 * w1 - 4 + math.pi))
-         + (((w2 - 1 + math.pi / 2) ** 2) / (4 * w2 - 4 + math.pi))
-         + (dm * (1 / a1 + 1 / a2)) / 2) * 2 / (gamma * delta)
+    rc = (
+        (
+            (((w1 - 1 + math.pi / 2) ** 2) / (4 * w1 - 4 + math.pi))
+            + (((w2 - 1 + math.pi / 2) ** 2) / (4 * w2 - 4 + math.pi))
+            + (dm * (1 / a1 + 1 / a2)) / 2
+        )
+        * 2
+        / (gamma * delta)
+    )
 
     lcpc = 2 * (l1 + l2 + dm)
     rec = math.sqrt(lcpc / (gamma * rc))
     xpc = (lcpc - yh) / 2
 
-    lbhxc = 2e-7 * xpc * (math.asinh(xpc / rec) + rec / xpc - math.sqrt((rec / xpc) ** 2 + 1))
-    lbhyc = 2e-7 * yp * (math.asinh(yp / rec) + rec / yp - math.sqrt((rec / yp) ** 2 + 1))
+    lbhxc = 2e-7 * xpc * (
+        math.asinh(xpc / rec) + rec / xpc - math.sqrt((rec / xpc) ** 2 + 1)
+    )
+    lbhyc = 2e-7 * yp * (
+        math.asinh(yp / rec) + rec / yp - math.sqrt((rec / yp) ** 2 + 1)
+    )
     lbtxc = 0.5e-7 * mu * xpc
     lbtyc = 0.5e-7 * mu * yp
-    mxxc = 2e-7 * xpc * (math.asinh(xpc / yp) + yp / xpc - math.sqrt((yp / xpc) ** 2 + 1))
-    myyc = 2e-7 * yp * (math.asinh(yp / xpc) + xpc / yp - math.sqrt((xpc / yp) ** 2 + 1))
+    mxxc = 2e-7 * xpc * (
+        math.asinh(xpc / yp) + yp / xpc - math.sqrt((yp / xpc) ** 2 + 1)
+    )
+    myyc = 2e-7 * yp * (
+        math.asinh(yp / xpc) + xpc / yp - math.sqrt((xpc / yp) ** 2 + 1)
+    )
 
     lc = 2 * (lbhxc + lbhyc + lbtxc + lbtyc - mxxc - myyc)
     tc = lc / rc if rc != 0 else 0.0
     tettac = 1 + tc / tj * (math.exp((-tj / tc)) - 1) if tc != 0 else 0.0
 
     tp = (delta / math.pi) ** 2 * gamma * 4 * math.pi * 1e-7 * mu * lya
-    ex = (8 / math.pi ** 2) * math.exp(-xm / (v_abs * tp)) if tp != 0 else 0.0
-    ed = (8 / math.pi ** 2) * math.exp(-dm / (v_abs * tp)) if tp != 0 else 0.0
-    wn_next = ed ** 2 * ex * (wn * ex + 1 - ex) + ed * (ex - 1)
+    ex = (8 / math.pi**2) * math.exp(-xm / (v_abs * tp)) if tp != 0 else 0.0
+    ed = (8 / math.pi**2) * math.exp(-dm / (v_abs * tp)) if tp != 0 else 0.0
+    wn_next = ed**2 * ex * (wn * ex + 1 - ex) + ed * (ex - 1)
 
-    kb = 1 + (v_abs * tp / (2 * xm)) * (8 / math.pi ** 2 - ex) * (wn_next * (1 - ex * ed) - 2 + ed * (ex - 1))
-    ft = bz ** 2 * (ya1 + ya2) ** 2 * v_abs * (2 * tettak / rk + 4 * (2 * n - 1) * tettac / rc) * kb ** 2
+    kb = 1 + (v_abs * tp / (2 * xm)) * (8 / math.pi**2 - ex) * (
+        wn_next * (1 - ex * ed) - 2 + ed * (ex - 1)
+    )
+    ft = (
+        bz**2
+        * (ya1 + ya2) ** 2
+        * v_abs
+        * (2 * tettak / rk + 4 * (2 * n - 1) * tettac / rc)
+        * kb**2
+    )
     return ft, wn_next
+
+
+def _curve_force_abs_from_speed(v_abs: float, params: CurveBrakeParams) -> float:
+    """
+    Кусочно-линейная интерполяция F(|v|) строго внутри табличного диапазона.
+    Выход за диапазон является ошибкой расчёта.
+    """
+    points = params.points
+    v_min = points[0].velocity
+    v_max = points[-1].velocity
+
+    if v_abs < v_min or v_abs > v_max:
+        raise CurveRangeError(
+            velocity=v_abs,
+            v_min=v_min,
+            v_max=v_max,
+        )
+
+    for idx in range(1, len(points)):
+        left = points[idx - 1]
+        right = points[idx]
+
+        if v_abs <= right.velocity:
+            dv = right.velocity - left.velocity
+            if dv <= DEFAULT_V_EPS:
+                return right.force
+
+            alpha = (v_abs - left.velocity) / dv
+            return left.force + alpha * (right.force - left.force)
+
+    raise CurveRangeError(
+        velocity=v_abs,
+        v_min=v_min,
+        v_max=v_max,
+    )
+
+
+def curve_brake_force_si(
+    v: float,
+    state: float,
+    params: CurveBrakeParams,
+) -> tuple[float, float]:
+    """
+    Возвращает модуль силы curve-тормоза в Н и состояние.
+    Для curve-тормоза состояние не используется и возвращается без изменения.
+    """
+    v_abs = abs(v)
+    if v_abs < DEFAULT_V_EPS:
+        return 0.0, state
+
+    force_abs = _curve_force_abs_from_speed(v_abs, params)
+    return force_abs, state
+
+
+def initial_brake_state(params: BrakeModel) -> float:
+    if isinstance(params, MagneticParams):
+        return params.wn0
+    return 0.0
+
+
+def evaluate_brake_force_si(
+    v: float,
+    state: float,
+    params: BrakeModel,
+) -> tuple[float, float]:
+    if isinstance(params, MagneticParams):
+        return magnetic_force_si(v, state, params)
+    return curve_brake_force_si(v, state, params)

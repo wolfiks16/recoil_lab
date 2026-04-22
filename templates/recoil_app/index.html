@@ -102,6 +102,8 @@
                     </div>
 
                     <div class="brake-card__body">
+                        {{ brake_form.curve_source_brake_id }}
+
                         {% if brake_form.non_field_errors %}
                             <div class="notice">
                                 {{ brake_form.non_field_errors }}
@@ -110,75 +112,122 @@
 
                         <div class="form-grid">
                             <div class="form-field">
-                                <label for="{{ brake_form.gamma.id_for_label }}">{{ brake_form.gamma.label }}</label>
-                                {{ brake_form.gamma }}
-                                {% if brake_form.gamma.errors %}<div class="field-error">{{ brake_form.gamma.errors }}</div>{% endif %}
+                                <label for="{{ brake_form.name.id_for_label }}">{{ brake_form.name.label }}</label>
+                                {{ brake_form.name }}
+                                {% if brake_form.name.errors %}<div class="field-error">{{ brake_form.name.errors }}</div>{% endif %}
                             </div>
 
                             <div class="form-field">
-                                <label for="{{ brake_form.delta.id_for_label }}">{{ brake_form.delta.label }}</label>
-                                {{ brake_form.delta }}
-                                {% if brake_form.delta.errors %}<div class="field-error">{{ brake_form.delta.errors }}</div>{% endif %}
+                                <label for="{{ brake_form.model_type.id_for_label }}">{{ brake_form.model_type.label }}</label>
+                                {{ brake_form.model_type }}
+                                {% if brake_form.model_type.errors %}<div class="field-error">{{ brake_form.model_type.errors }}</div>{% endif %}
                             </div>
+                        </div>
+
+                        <div class="brake-parametric-fields">
+                            <h5>Параметрическая модель</h5>
+
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label for="{{ brake_form.gamma.id_for_label }}">{{ brake_form.gamma.label }}</label>
+                                    {{ brake_form.gamma }}
+                                    {% if brake_form.gamma.errors %}<div class="field-error">{{ brake_form.gamma.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.delta.id_for_label }}">{{ brake_form.delta.label }}</label>
+                                    {{ brake_form.delta }}
+                                    {% if brake_form.delta.errors %}<div class="field-error">{{ brake_form.delta.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.xm.id_for_label }}">{{ brake_form.xm.label }}</label>
+                                    {{ brake_form.xm }}
+                                    {% if brake_form.xm.errors %}<div class="field-error">{{ brake_form.xm.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.ym.id_for_label }}">{{ brake_form.ym.label }}</label>
+                                    {{ brake_form.ym }}
+                                    {% if brake_form.ym.errors %}<div class="field-error">{{ brake_form.ym.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.dh1.id_for_label }}">{{ brake_form.dh1.label }}</label>
+                                    {{ brake_form.dh1 }}
+                                    {% if brake_form.dh1.errors %}<div class="field-error">{{ brake_form.dh1.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.dh2.id_for_label }}">{{ brake_form.dh2.label }}</label>
+                                    {{ brake_form.dh2 }}
+                                    {% if brake_form.dh2.errors %}<div class="field-error">{{ brake_form.dh2.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.dm.id_for_label }}">{{ brake_form.dm.label }}</label>
+                                    {{ brake_form.dm }}
+                                    {% if brake_form.dm.errors %}<div class="field-error">{{ brake_form.dm.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.n.id_for_label }}">{{ brake_form.n.label }}</label>
+                                    {{ brake_form.n }}
+                                    {% if brake_form.n.errors %}<div class="field-error">{{ brake_form.n.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.mu.id_for_label }}">{{ brake_form.mu.label }}</label>
+                                    {{ brake_form.mu }}
+                                    {% if brake_form.mu.errors %}<div class="field-error">{{ brake_form.mu.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.bz.id_for_label }}">{{ brake_form.bz.label }}</label>
+                                    {{ brake_form.bz }}
+                                    {% if brake_form.bz.errors %}<div class="field-error">{{ brake_form.bz.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.lya.id_for_label }}">{{ brake_form.lya.label }}</label>
+                                    {{ brake_form.lya }}
+                                    {% if brake_form.lya.errors %}<div class="field-error">{{ brake_form.lya.errors }}</div>{% endif %}
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="{{ brake_form.wn0.id_for_label }}">{{ brake_form.wn0.label }}</label>
+                                    {{ brake_form.wn0 }}
+                                    {% if brake_form.wn0.errors %}<div class="field-error">{{ brake_form.wn0.errors }}</div>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="brake-curve-fields">
+                            <h5>Характеристика по Excel-файлу F(v)</h5>
 
                             <div class="form-field">
-                                <label for="{{ brake_form.xm.id_for_label }}">{{ brake_form.xm.label }}</label>
-                                {{ brake_form.xm }}
-                                {% if brake_form.xm.errors %}<div class="field-error">{{ brake_form.xm.errors }}</div>{% endif %}
+                                <label for="{{ brake_form.force_curve_file.id_for_label }}">
+                                    {{ brake_form.force_curve_file.label }}
+                                </label>
+                                {{ brake_form.force_curve_file }}
+                                {% if brake_form.force_curve_file.help_text %}
+                                    <div class="muted">{{ brake_form.force_curve_file.help_text }}</div>
+                                {% endif %}
+                                {% if brake_form.force_curve_file.errors %}
+                                    <div class="field-error">{{ brake_form.force_curve_file.errors }}</div>
+                                {% endif %}
                             </div>
 
-                            <div class="form-field">
-                                <label for="{{ brake_form.ym.id_for_label }}">{{ brake_form.ym.label }}</label>
-                                {{ brake_form.ym }}
-                                {% if brake_form.ym.errors %}<div class="field-error">{{ brake_form.ym.errors }}</div>{% endif %}
+                            <div class="curve-preview-block" style="display:none; margin-top:16px;">
+                                <h6 style="margin:0 0 10px 0;">Предварительный график F(v)</h6>
+                                <div class="curve-preview-plot" style="width:100%; min-height:320px;"></div>
                             </div>
 
-                            <div class="form-field">
-                                <label for="{{ brake_form.dh1.id_for_label }}">{{ brake_form.dh1.label }}</label>
-                                {{ brake_form.dh1 }}
-                                {% if brake_form.dh1.errors %}<div class="field-error">{{ brake_form.dh1.errors }}</div>{% endif %}
-                            </div>
+                            <div class="curve-preview-error notice" style="display:none; margin-top:12px;"></div>
 
-                            <div class="form-field">
-                                <label for="{{ brake_form.dh2.id_for_label }}">{{ brake_form.dh2.label }}</label>
-                                {{ brake_form.dh2 }}
-                                {% if brake_form.dh2.errors %}<div class="field-error">{{ brake_form.dh2.errors }}</div>{% endif %}
-                            </div>
-
-                            <div class="form-field">
-                                <label for="{{ brake_form.dm.id_for_label }}">{{ brake_form.dm.label }}</label>
-                                {{ brake_form.dm }}
-                                {% if brake_form.dm.errors %}<div class="field-error">{{ brake_form.dm.errors }}</div>{% endif %}
-                            </div>
-
-                            <div class="form-field">
-                                <label for="{{ brake_form.n.id_for_label }}">{{ brake_form.n.label }}</label>
-                                {{ brake_form.n }}
-                                {% if brake_form.n.errors %}<div class="field-error">{{ brake_form.n.errors }}</div>{% endif %}
-                            </div>
-
-                            <div class="form-field">
-                                <label for="{{ brake_form.mu.id_for_label }}">{{ brake_form.mu.label }}</label>
-                                {{ brake_form.mu }}
-                                {% if brake_form.mu.errors %}<div class="field-error">{{ brake_form.mu.errors }}</div>{% endif %}
-                            </div>
-
-                            <div class="form-field">
-                                <label for="{{ brake_form.bz.id_for_label }}">{{ brake_form.bz.label }}</label>
-                                {{ brake_form.bz }}
-                                {% if brake_form.bz.errors %}<div class="field-error">{{ brake_form.bz.errors }}</div>{% endif %}
-                            </div>
-
-                            <div class="form-field">
-                                <label for="{{ brake_form.lya.id_for_label }}">{{ brake_form.lya.label }}</label>
-                                {{ brake_form.lya }}
-                                {% if brake_form.lya.errors %}<div class="field-error">{{ brake_form.lya.errors }}</div>{% endif %}
-                            </div>
-
-                            <div class="form-field">
-                                <label for="{{ brake_form.wn0.id_for_label }}">{{ brake_form.wn0.label }}</label>
-                                {{ brake_form.wn0 }}
-                                {% if brake_form.wn0.errors %}<div class="field-error">{{ brake_form.wn0.errors }}</div>{% endif %}
+                            <div class="muted" style="margin-top: 8px;">
+                                Браузер не сохраняет выбранный файл после ошибки валидации.
+                                Если форма вернулась с ошибками, Excel-файл может потребоваться выбрать повторно.
                             </div>
                         </div>
                     </div>
@@ -197,54 +246,96 @@
                 </div>
 
                 <div class="brake-card__body">
+                    {{ brake_formset.empty_form.curve_source_brake_id }}
+
                     <div class="form-grid">
                         <div class="form-field">
-                            <label for="id_brakes-__prefix__-gamma">gamma</label>
-                            {{ brake_formset.empty_form.gamma }}
+                            <label for="id_brakes-__prefix__-name">Имя тормоза</label>
+                            {{ brake_formset.empty_form.name }}
                         </div>
+
                         <div class="form-field">
-                            <label for="id_brakes-__prefix__-delta">delta</label>
-                            {{ brake_formset.empty_form.delta }}
+                            <label for="id_brakes-__prefix__-model_type">Тип задания тормоза</label>
+                            {{ brake_formset.empty_form.model_type }}
                         </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-xm">xm</label>
-                            {{ brake_formset.empty_form.xm }}
+                    </div>
+
+                    <div class="brake-parametric-fields">
+                        <h5>Параметрическая модель</h5>
+
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-gamma">gamma</label>
+                                {{ brake_formset.empty_form.gamma }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-delta">delta</label>
+                                {{ brake_formset.empty_form.delta }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-xm">xm</label>
+                                {{ brake_formset.empty_form.xm }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-ym">ym</label>
+                                {{ brake_formset.empty_form.ym }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-dh1">dh1</label>
+                                {{ brake_formset.empty_form.dh1 }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-dh2">dh2</label>
+                                {{ brake_formset.empty_form.dh2 }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-dm">dm</label>
+                                {{ brake_formset.empty_form.dm }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-n">n</label>
+                                {{ brake_formset.empty_form.n }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-mu">mu</label>
+                                {{ brake_formset.empty_form.mu }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-bz">bz</label>
+                                {{ brake_formset.empty_form.bz }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-lya">lya</label>
+                                {{ brake_formset.empty_form.lya }}
+                            </div>
+                            <div class="form-field">
+                                <label for="id_brakes-__prefix__-wn0">wn0</label>
+                                {{ brake_formset.empty_form.wn0 }}
+                            </div>
                         </div>
+                    </div>
+
+                    <div class="brake-curve-fields">
+                        <h5>Характеристика по Excel-файлу F(v)</h5>
+
                         <div class="form-field">
-                            <label for="id_brakes-__prefix__-ym">ym</label>
-                            {{ brake_formset.empty_form.ym }}
+                            <label for="id_brakes-__prefix__-force_curve_file">Excel-файл характеристики F(v)</label>
+                            {{ brake_formset.empty_form.force_curve_file }}
+                            <div class="muted">
+                                Первый лист: колонка A — скорость, колонка B — сила.
+                                Первая строка может быть заголовком.
+                            </div>
                         </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-dh1">dh1</label>
-                            {{ brake_formset.empty_form.dh1 }}
+
+                        <div class="curve-preview-block" style="display:none; margin-top:16px;">
+                            <h6 style="margin:0 0 10px 0;">Предварительный график F(v)</h6>
+                            <div class="curve-preview-plot" style="width:100%; min-height:320px;"></div>
                         </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-dh2">dh2</label>
-                            {{ brake_formset.empty_form.dh2 }}
-                        </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-dm">dm</label>
-                            {{ brake_formset.empty_form.dm }}
-                        </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-n">n</label>
-                            {{ brake_formset.empty_form.n }}
-                        </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-mu">mu</label>
-                            {{ brake_formset.empty_form.mu }}
-                        </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-bz">bz</label>
-                            {{ brake_formset.empty_form.bz }}
-                        </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-lya">lya</label>
-                            {{ brake_formset.empty_form.lya }}
-                        </div>
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-wn0">wn0</label>
-                            {{ brake_formset.empty_form.wn0 }}
+
+                        <div class="curve-preview-error notice" style="display:none; margin-top:12px;"></div>
+
+                        <div class="muted" style="margin-top: 8px;">
+                            При копировании карточки выбранный файл браузером не копируется.
                         </div>
                     </div>
                 </div>
@@ -279,6 +370,8 @@
     </ul>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <script>
 (function () {
     const formsContainer = document.getElementById("brake-forms");
@@ -296,13 +389,202 @@
         });
     }
 
+    function hideCurvePreview(card) {
+        const previewBlock = card.querySelector(".curve-preview-block");
+        const previewError = card.querySelector(".curve-preview-error");
+        const previewPlot = card.querySelector(".curve-preview-plot");
+
+        if (previewBlock) previewBlock.style.display = "none";
+        if (previewError) {
+            previewError.style.display = "none";
+            previewError.textContent = "";
+        }
+        if (previewPlot) previewPlot.innerHTML = "";
+    }
+
+    function showCurvePreviewError(card, message) {
+        const previewBlock = card.querySelector(".curve-preview-block");
+        const previewError = card.querySelector(".curve-preview-error");
+        const previewPlot = card.querySelector(".curve-preview-plot");
+
+        if (previewBlock) previewBlock.style.display = "none";
+        if (previewPlot) previewPlot.innerHTML = "";
+        if (previewError) {
+            previewError.textContent = message;
+            previewError.style.display = "";
+        }
+    }
+
+    function renderCurvePreview(card, points) {
+        const previewBlock = card.querySelector(".curve-preview-block");
+        const previewError = card.querySelector(".curve-preview-error");
+        const previewPlot = card.querySelector(".curve-preview-plot");
+
+        if (!previewBlock || !previewPlot) return;
+
+        if (previewError) {
+            previewError.style.display = "none";
+            previewError.textContent = "";
+        }
+
+        const velocities = points.map((p) => p.velocity);
+        const forces = points.map((p) => p.force);
+
+        previewBlock.style.display = "";
+
+        Plotly.newPlot(
+            previewPlot,
+            [
+                {
+                    x: velocities,
+                    y: forces,
+                    type: "scatter",
+                    mode: "lines+markers",
+                    name: "F(v)",
+                },
+            ],
+            {
+                margin: { l: 60, r: 20, t: 20, b: 60 },
+                xaxis: { title: "Скорость, м/с" },
+                yaxis: { title: "Сила торможения, Н" },
+                showlegend: false,
+            },
+            {
+                responsive: true,
+                displayModeBar: false,
+            }
+        );
+    }
+
+    function isEmptyCell(value) {
+        return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+    }
+
+    function coerceNumber(value) {
+        if (typeof value === "number") return value;
+        if (typeof value === "string") {
+            const normalized = value.trim().replace(",", ".");
+            if (!normalized) return null;
+            const parsed = Number(normalized);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+    }
+
+    function parseCurveRows(rows) {
+        const points = [];
+        let headerSkipped = false;
+
+        rows.forEach((row, idx) => {
+            const rowNo = idx + 1;
+            const velocityRaw = Array.isArray(row) && row.length > 0 ? row[0] : null;
+            const forceRaw = Array.isArray(row) && row.length > 1 ? row[1] : null;
+
+            if (isEmptyCell(velocityRaw) && isEmptyCell(forceRaw)) {
+                return;
+            }
+
+            if (isEmptyCell(velocityRaw) || isEmptyCell(forceRaw)) {
+                throw new Error(`Строка ${rowNo}: должны быть заполнены и скорость, и сила.`);
+            }
+
+            const velocity = coerceNumber(velocityRaw);
+            const force = coerceNumber(forceRaw);
+
+            if (velocity === null || force === null) {
+                if (!headerSkipped && points.length === 0) {
+                    headerSkipped = true;
+                    return;
+                }
+                throw new Error(`Строка ${rowNo}: значения скорости и силы должны быть числами.`);
+            }
+
+            if (velocity < 0) {
+                throw new Error(`Строка ${rowNo}: скорость не может быть отрицательной.`);
+            }
+
+            if (force < 0) {
+                throw new Error(`Строка ${rowNo}: сила торможения не может быть отрицательной.`);
+            }
+
+            points.push({ velocity, force });
+        });
+
+        if (points.length < 2) {
+            throw new Error("Для графического тормоза необходимо минимум 2 точки.");
+        }
+
+        for (let i = 1; i < points.length; i += 1) {
+            if (points[i].velocity <= points[i - 1].velocity) {
+                throw new Error("Скорости в характеристике тормоза должны быть строго возрастающими.");
+            }
+        }
+
+        return points;
+    }
+
+    function parseCurveFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = function (event) {
+                try {
+                    const data = event.target.result;
+                    const workbook = XLSX.read(data, { type: "array" });
+                    const firstSheetName = workbook.SheetNames[0];
+                    if (!firstSheetName) {
+                        reject(new Error("Excel-файл не содержит листов."));
+                        return;
+                    }
+
+                    const sheet = workbook.Sheets[firstSheetName];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+                    const points = parseCurveRows(rows);
+                    resolve(points);
+                } catch (error) {
+                    reject(error);
+                }
+            };
+
+            reader.onerror = function () {
+                reject(new Error("Не удалось прочитать файл."));
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    function updateBrakeMode(card) {
+        if (!card) return;
+
+        const modelTypeSelect = card.querySelector('select[name$="-model_type"]');
+        const parametricBlock = card.querySelector(".brake-parametric-fields");
+        const curveBlock = card.querySelector(".brake-curve-fields");
+
+        if (!modelTypeSelect || !parametricBlock || !curveBlock) return;
+
+        const isCurve = modelTypeSelect.value === "curve";
+        parametricBlock.style.display = isCurve ? "none" : "";
+        curveBlock.style.display = isCurve ? "" : "none";
+
+        if (!isCurve) {
+            hideCurvePreview(card);
+        }
+    }
+
     function reindexForms() {
         const items = formsContainer.querySelectorAll(".brake-form-item");
         items.forEach((item, index) => {
             item.querySelectorAll("input, select, textarea, label").forEach((el) => {
                 ["name", "id", "for"].forEach((attr) => {
                     if (el.hasAttribute && el.hasAttribute(attr)) {
-                        el.setAttribute(attr, el.getAttribute(attr).replace(/brakes-\d+-/g, `brakes-${index}-`));
+                        const value = el.getAttribute(attr);
+                        if (value) {
+                            el.setAttribute(
+                                attr,
+                                value.replace(/brakes-\d+-/g, `brakes-${index}-`)
+                            );
+                        }
                     }
                 });
             });
@@ -318,12 +600,20 @@
         sourceInputs.forEach((src, index) => {
             const dst = newInputs[index];
             if (!dst) return;
+
+            if (src.type === "file") {
+                return;
+            }
+
             if (src.type === "checkbox" || src.type === "radio") {
                 dst.checked = src.checked;
             } else {
                 dst.value = src.value;
             }
         });
+
+        hideCurvePreview(newCard);
+        updateBrakeMode(newCard);
     }
 
     function createBrakeForm() {
@@ -339,6 +629,7 @@
         formsContainer.appendChild(newForm);
         totalFormsInput.value = formIndex + 1;
         bindCardActions(newForm);
+        updateBrakeMode(newForm);
         renumberBrakeTitles();
         return newForm;
     }
@@ -346,6 +637,8 @@
     function bindCardActions(card) {
         const deleteBtn = card.querySelector(".delete-brake-btn");
         const copyBtn = card.querySelector(".copy-brake-btn");
+        const modelTypeSelect = card.querySelector('select[name$="-model_type"]');
+        const curveFileInput = card.querySelector('input[name$="-force_curve_file"]');
 
         if (deleteBtn) {
             deleteBtn.addEventListener("click", function () {
@@ -362,6 +655,32 @@
                 fillNewCardFromSource(card, newCard);
             });
         }
+
+        if (modelTypeSelect) {
+            modelTypeSelect.addEventListener("change", function () {
+                updateBrakeMode(card);
+            });
+        }
+
+        if (curveFileInput) {
+            curveFileInput.addEventListener("change", async function () {
+                if (!curveFileInput.files || curveFileInput.files.length === 0) {
+                    hideCurvePreview(card);
+                    return;
+                }
+
+                const file = curveFileInput.files[0];
+
+                try {
+                    const points = await parseCurveFile(file);
+                    renderCurvePreview(card, points);
+                } catch (error) {
+                    showCurvePreviewError(card, error.message || "Не удалось построить предварительный график.");
+                }
+            });
+        }
+
+        updateBrakeMode(card);
     }
 
     addBtn.addEventListener("click", createBrakeForm);

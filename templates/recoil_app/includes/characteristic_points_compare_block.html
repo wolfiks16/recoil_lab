@@ -1,0 +1,113 @@
+{% load recoil_extras %}
+
+<div class="compare-subsection">
+    <h4>Экстремумы</h4>
+    {% if characteristic_points %}
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th>x_max</th>
+                    <td>
+                        {% if characteristic_points.x_max %}
+                            value={{ characteristic_points.x_max.value|fmt5 }},
+                            t={{ characteristic_points.x_max.time|fmt5 }},
+                            idx={{ characteristic_points.x_max.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>v_max</th>
+                    <td>
+                        {% if characteristic_points.v_max %}
+                            value={{ characteristic_points.v_max.value|fmt5 }},
+                            t={{ characteristic_points.v_max.time|fmt5 }},
+                            idx={{ characteristic_points.v_max.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>v_min</th>
+                    <td>
+                        {% if characteristic_points.v_min %}
+                            value={{ characteristic_points.v_min.value|fmt5 }},
+                            t={{ characteristic_points.v_min.time|fmt5 }},
+                            idx={{ characteristic_points.v_min.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>a_max</th>
+                    <td>
+                        {% if characteristic_points.a_max %}
+                            value={{ characteristic_points.a_max.value|fmt5 }},
+                            t={{ characteristic_points.a_max.time|fmt5 }},
+                            idx={{ characteristic_points.a_max.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>a_min</th>
+                    <td>
+                        {% if characteristic_points.a_min %}
+                            value={{ characteristic_points.a_min.value|fmt5 }},
+                            t={{ characteristic_points.a_min.time|fmt5 }},
+                            idx={{ characteristic_points.a_min.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    {% else %}
+        <div class="notice">Характерные точки отсутствуют.</div>
+    {% endif %}
+</div>
+
+<div class="compare-subsection">
+    <h4>Ключевые события</h4>
+    {% if characteristic_points %}
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th>Конец отката</th>
+                    <td>
+                        {% if characteristic_points.recoil_end %}
+                            t={{ characteristic_points.recoil_end.time|fmt5 }},
+                            x={{ characteristic_points.recoil_end.x|fmt5 }},
+                            v={{ characteristic_points.recoil_end.v|fmt5 }},
+                            a={{ characteristic_points.recoil_end.a|fmt5 }},
+                            idx={{ characteristic_points.recoil_end.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Конец наката</th>
+                    <td>
+                        {% if characteristic_points.return_end %}
+                            t={{ characteristic_points.return_end.time|fmt5 }},
+                            x={{ characteristic_points.return_end.x|fmt5 }},
+                            v={{ characteristic_points.return_end.v|fmt5 }},
+                            a={{ characteristic_points.return_end.a|fmt5 }},
+                            idx={{ characteristic_points.return_end.index }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    {% else %}
+        <div class="notice">Ключевые события отсутствуют.</div>
+    {% endif %}
+</div>
