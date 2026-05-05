@@ -1,0 +1,348 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load static %}
+
+{% block title %}
+    {% if is_edit %}{{ object.name }} — каталог · RecoilLab{% else %}Новый тормоз · Каталог · RecoilLab{% endif %}
+{% endblock %}
+
+{% block shell_active %}catalog{% endblock %}
+{% block shell_crumb %}
+    {% if is_edit %}{{ object.name }}{% else %}Новый тормоз{% endif %}
+{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<style>
+    .rb-content { max-width: 960px; margin: 0 auto; }
+
+    .rb-form-section {
+        background: var(--rb-panel-bg-white);
+        border: 1px solid var(--rb-panel-border);
+        border-radius: var(--rb-radius-lg);
+        padding: 22px 24px;
+        margin-bottom: 16px;
+    }
+
+    .rb-form-section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--rb-text-muted);
+        margin: 0 0 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--rb-panel-border);
+        line-height: 1.5;
+    }
+    .rb-form-section-title sub { text-transform: none; font-size: 9px; }
+
+    .rb-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+
+    .rb-form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .rb-form-field label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--rb-text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .rb-form-field-symbol {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--rb-blue);
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .rb-form-field input[type="text"],
+    .rb-form-field input[type="number"],
+    .rb-form-field input[type="file"],
+    .rb-form-field select,
+    .rb-form-field textarea {
+        padding: 9px 12px;
+        border: 1px solid var(--rb-panel-border-strong);
+        border-radius: var(--rb-radius-sm);
+        background: var(--rb-panel-bg-white);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 13px;
+        color: var(--rb-text);
+        transition: all .15s;
+        width: 100%;
+    }
+
+    .rb-form-field textarea {
+        font-family: inherit;
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .rb-form-field input:focus,
+    .rb-form-field select:focus,
+    .rb-form-field textarea:focus {
+        outline: none;
+        border-color: var(--rb-blue);
+        box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.12);
+    }
+
+    .rb-form-help {
+        font-size: 11px;
+        color: var(--rb-text-muted);
+    }
+
+    .rb-form-error {
+        background: var(--rb-danger-soft);
+        color: var(--rb-danger-dark);
+        font-size: 12px;
+        padding: 6px 10px;
+        border-radius: var(--rb-radius-sm);
+    }
+
+    .rb-form-error-list {
+        background: var(--rb-danger-soft);
+        color: var(--rb-danger-dark);
+        padding: 12px 16px;
+        border-radius: var(--rb-radius);
+        margin-bottom: 16px;
+        font-size: 13px;
+    }
+    .rb-form-error-list ul { margin: 0; padding-left: 18px; }
+
+    .rb-form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 18px;
+    }
+
+    /* Скрытие/показ блоков по типу модели */
+    .rb-form-section[data-show-when]:not(.is-visible) {
+        display: none;
+    }
+
+    /* Полная ширина для description */
+    .rb-form-field-full {
+        grid-column: 1 / -1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>{% if is_edit %}{{ object.name }}{% else %}Новый тормоз в каталоге{% endif %}</h1>
+                {% if is_edit %}
+                    {% if object.is_parametric %}
+                        <span class="rb-badge rb-badge-blue">парам.</span>
+                    {% else %}
+                        <span class="rb-badge rb-badge-accent">curve</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+            <div class="rb-hero-sub">
+                {% if is_edit %}
+                    Запись каталога #{{ object.pk }} · обновлена {{ object.updated_at|date:"d.m.Y · H:i" }}
+                {% else %}
+                    Заполните параметры — тормоз появится в общем каталоге
+                {% endif %}
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            {% if is_edit %}
+            <a class="rb-btn" href="{% url 'catalog_detail' object.pk %}">↗ Просмотр</a>
+            {% endif %}
+            <a class="rb-btn" href="{% url 'catalog_list' %}">← К списку каталога</a>
+        </div>
+    </div>
+</section>
+
+{% if form.non_field_errors %}
+<div class="rb-form-error-list">
+    {{ form.non_field_errors }}
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" id="catalog-form">
+    {% csrf_token %}
+
+    {# === ОБЩИЕ ПАРАМЕТРЫ === #}
+    <div class="rb-form-section">
+        <div class="rb-form-section-title">Общие параметры</div>
+        <div class="rb-form-grid">
+            <div class="rb-form-field">
+                <label for="{{ form.name.id_for_label }}">Имя тормоза *</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="rb-form-error">{{ form.name.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Уникальное имя, по которому тормоз будет виден в форме расчёта</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.model_type.id_for_label }}">Тип характеристики *</label>
+                {{ form.model_type }}
+                {% if form.model_type.errors %}<div class="rb-form-error">{{ form.model_type.errors|join:"; " }}</div>{% endif %}
+            </div>
+            <div class="rb-form-field rb-form-field-full">
+                <label for="{{ form.description.id_for_label }}">Описание</label>
+                {{ form.description }}
+                {% if form.description.errors %}<div class="rb-form-error">{{ form.description.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Произвольный текст: материал, габариты, источник данных…</div>
+            </div>
+        </div>
+    </div>
+
+    {# === ПАРАМЕТРИЧЕСКАЯ === #}
+    <div class="rb-form-section" data-show-when="parametric" id="section-parametric">
+        <div class="rb-form-section-title">
+            Параметрическая модель — F<sub>T</sub> = (B̄<sub>3</sub>·k̄<sub>B</sub>·Ȳ<sub>a</sub>)²·V·[2θ<sub>κ</sub>/R<sub>κ</sub> + 4(2N-1)θ<sub>y</sub>/R<sub>y</sub>]
+            · все параметры обязательные
+        </div>
+        <div class="rb-form-grid">
+            <div class="rb-form-field">
+                <label for="{{ form.gamma.id_for_label }}"><span class="rb-form-field-symbol">γ*</span></label>
+                {{ form.gamma }}
+                {% if form.gamma.errors %}<div class="rb-form-error">{{ form.gamma.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Удельная проводимость материала шины</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.delta.id_for_label }}"><span class="rb-form-field-symbol">δ*</span></label>
+                {{ form.delta }}
+                {% if form.delta.errors %}<div class="rb-form-error">{{ form.delta.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Толщина шины</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.n.id_for_label }}"><span class="rb-form-field-symbol">N*</span></label>
+                {{ form.n }}
+                {% if form.n.errors %}<div class="rb-form-error">{{ form.n.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Число секций тормоза</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.xm.id_for_label }}"><span class="rb-form-field-symbol">X<sub>m</sub>*</span></label>
+                {{ form.xm }}
+                {% if form.xm.errors %}<div class="rb-form-error">{{ form.xm.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Размер магнита по оси X</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.ym.id_for_label }}"><span class="rb-form-field-symbol">Y<sub>m</sub>*</span></label>
+                {{ form.ym }}
+                {% if form.ym.errors %}<div class="rb-form-error">{{ form.ym.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Размер магнита по оси Y</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.dh1.id_for_label }}"><span class="rb-form-field-symbol">Δh<sub>1</sub>*</span></label>
+                {{ form.dh1 }}
+                {% if form.dh1.errors %}<div class="rb-form-error">{{ form.dh1.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Выступ 1-го края шины</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.dh2.id_for_label }}"><span class="rb-form-field-symbol">Δh<sub>2</sub>*</span></label>
+                {{ form.dh2 }}
+                {% if form.dh2.errors %}<div class="rb-form-error">{{ form.dh2.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Выступ 2-го края шины</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.dm.id_for_label }}"><span class="rb-form-field-symbol">d<sub>m</sub>*</span></label>
+                {{ form.dm }}
+                {% if form.dm.errors %}<div class="rb-form-error">{{ form.dm.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Промежутки между магнитами</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.mu.id_for_label }}"><span class="rb-form-field-symbol">μ*</span></label>
+                {{ form.mu }}
+                {% if form.mu.errors %}<div class="rb-form-error">{{ form.mu.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Магнитная проницаемость шины</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.bz.id_for_label }}"><span class="rb-form-field-symbol">B̄<sub>3</sub>*</span></label>
+                {{ form.bz }}
+                {% if form.bz.errors %}<div class="rb-form-error">{{ form.bz.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Индукция в рабочем зазоре</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.lya.id_for_label }}"><span class="rb-form-field-symbol">λ<sub>a</sub>*</span></label>
+                {{ form.lya }}
+                {% if form.lya.errors %}<div class="rb-form-error">{{ form.lya.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Лямбда - коэффициент 2.5</div>
+            </div>
+            <div class="rb-form-field">
+                <label for="{{ form.wn0.id_for_label }}"><span class="rb-form-field-symbol">w<sub>n0</sub>*</span></label>
+                {{ form.wn0 }}
+                {% if form.wn0.errors %}<div class="rb-form-error">{{ form.wn0.errors|join:"; " }}</div>{% endif %}
+                <div class="rb-form-help">Начальное значение рекурсивного параметра</div>
+            </div>
+        </div>
+    </div>
+
+    {# === ТАБЛИЧНАЯ === #}
+    <div class="rb-form-section" data-show-when="curve" id="section-curve">
+        <div class="rb-form-section-title">Табличная модель — F(v) по точкам</div>
+        <div class="rb-form-grid">
+            <div class="rb-form-field rb-form-field-full">
+                <label for="{{ form.curve_file.id_for_label }}">Файл F(v) (CSV или XLSX) *</label>
+                {{ form.curve_file }}
+                {% if form.curve_file.errors %}<div class="rb-form-error">{{ form.curve_file.errors|join:"; " }}</div>{% endif %}
+                {% if object.curve_file %}
+                <div class="rb-form-help">
+                    Текущий файл: <a href="{{ object.curve_file.url }}" download>{{ object.curve_file.name }}</a>.
+                    Загрузите новый, чтобы заменить.
+                </div>
+                {% else %}
+                <div class="rb-form-help">Две колонки без заголовка: скорость v (м/с) и сила F (Н)</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="rb-form-actions">
+        <button type="submit" class="rb-btn rb-btn-grad">
+            {% if is_edit %}Сохранить изменения{% else %}Создать тормоз{% endif %}
+        </button>
+        <a class="rb-btn" href="{% url 'catalog_list' %}">Отмена</a>
+        {% if is_edit %}
+        <form method="post" action="{% url 'catalog_delete' object.pk %}" style="display:inline-block; margin-left:auto;"
+              onsubmit="return confirm('Удалить тормоз «{{ object.name|escapejs }}» из каталога?');">
+            {% csrf_token %}
+            <button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
+        </form>
+        {% endif %}
+    </div>
+</form>
+
+{% endblock %}
+
+{% block body_extra %}
+<script>
+(function () {
+    const select = document.getElementById('{{ form.model_type.id_for_label }}');
+    const sections = document.querySelectorAll('.rb-form-section[data-show-when]');
+
+    function update() {
+        const v = select.value;
+        sections.forEach(s => {
+            const show = s.dataset.showWhen === v;
+            s.classList.toggle('is-visible', show);
+        });
+    }
+
+    if (select) {
+        select.addEventListener('change', update);
+        update();
+    }
+})();
+</script>
+{% endblock %}

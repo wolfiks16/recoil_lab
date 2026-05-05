@@ -54,6 +54,14 @@ class SimulationResult:
     spring_out_of_range: bool
     warnings: list[str]
 
+    # --- Энергобаланс (вычисляется в compute_energy_balance) ---
+    energy_kinetic: np.ndarray | None = None      # m * v^2 / 2,  [Дж]
+    energy_spring: np.ndarray | None = None       # ∫ F_spring(x) dx от 0 до x(t),  [Дж]
+    energy_brake_cum: np.ndarray | None = None    # накопленное рассеяние тормозами: -∫ F_mag * v dt,  [Дж]
+    energy_input_cum: np.ndarray | None = None    # накопленная работа выстрела + гравитации: ∫ (F_ext + F_angle) * v dt
+    energy_total: np.ndarray | None = None        # E_kin + E_spring + E_brake_cum,  [Дж]
+    energy_residual_pct: float | None = None      # макс относительная невязка баланса в % к энергии-входу
+
 
 def angle_force_si(mass: float, angle_deg: float) -> float:
     return mass * G * math.sin(math.radians(angle_deg))
@@ -378,7 +386,7 @@ def simulate_recoil(
             f"[{x_min_tab:.6f}, {x_max_tab:.6f}] м."
         )
 
-    return SimulationResult(
+    sim_result = SimulationResult(
         t=t,
         x=x,
         v=v,
@@ -398,3 +406,89 @@ def simulate_recoil(
         spring_out_of_range=spring_out_of_range,
         warnings=warnings,
     )
+
+    compute_energy_balance(sim_result, mass=recoil.mass)
+
+    return sim_result
+
+
+def compute_energy_balance(result: SimulationResult, mass: float) -> None:
+    """
+    Заполняет поля энергобаланса прямо в SimulationResult.
+
+    Уравнение баланса:
+        E_kin(t) + E_spring(t) + E_brake_cum(t) - E_input_cum(t) = const
+
+    где
+        E_kin(t)        = m * v(t)^2 / 2
+        E_spring(t)     = ∫_0^x(t) |F_spring(s)| ds — потенциальная энергия пружины
+        E_brake_cum(t)  = ∫_0^t (-F_mag(τ)) * v(τ) dτ  — рассеяно тормозами
+                          (тормоз противодействует движению; -F_mag*v ≥ 0)
+        E_input_cum(t)  = ∫_0^t (F_ext(τ) + F_angle(τ)) * v(τ) dτ — внешняя подведённая энергия
+
+    Невязка баланса отнесена к максимуму подведённой энергии (или к сумме E_kin+E_brake,
+    если входная мала — например, при свободных колебаниях).
+    """
+    t = np.asarray(result.t, dtype=float)
+    x = np.asarray(result.x, dtype=float)
+    v = np.asarray(result.v, dtype=float)
+    f_ext = np.asarray(result.f_ext, dtype=float)
+    f_angle = np.asarray(result.f_angle, dtype=float)
+    f_spring = np.asarray(result.f_spring, dtype=float)
+    f_magnetic = np.asarray(result.f_magnetic, dtype=float)
+
+    n = len(t)
+    if n < 2:
+        result.energy_kinetic = np.zeros(n)
+        result.energy_spring = np.zeros(n)
+        result.energy_brake_cum = np.zeros(n)
+        result.energy_input_cum = np.zeros(n)
+        result.energy_total = np.zeros(n)
+        result.energy_residual_pct = 0.0
+        return
+
+    # Кинетическая энергия
+    e_kin = 0.5 * mass * v * v
+
+    # Потенциальная энергия пружины: ∫_0^x |F_spring(s)| ds
+    # f_spring уже sign-corrected (направлена к 0). Возвращающая работа = ∫ F_spring(x) dx по знаку x.
+    # Чтобы получить положительную потенциальную энергию, интегрируем |F_spring(x)| по dx по модулю смещения.
+    # Простой способ: e_spring(t) = cumulative_trapezoid(|f_spring|, |x|), но x монотонно растёт-падает.
+    # Корректнее: dE_spring = - F_spring_signed * dx  (т.к. F_spring = -dU/dx)
+    dx = np.diff(x)
+    # f_spring уже знаковая: на x>0 она отрицательная (тянет к 0). dU = -F·dx = |F|·dx при dx>0, x>0
+    de_spring = -0.5 * (f_spring[:-1] + f_spring[1:]) * dx  # средняя сила × dx
+    e_spring = np.concatenate(([0.0], np.cumsum(de_spring)))
+    # На случай численных дрейфов в отрицательную область
+    e_spring = np.maximum(e_spring, 0.0)
+
+    # Накопленная мощность тормоза: P_brake = -F_mag * v ≥ 0 (тормоз противодействует движению)
+    p_brake = -f_magnetic * v
+    dt_arr = np.diff(t)
+    de_brake = 0.5 * (p_brake[:-1] + p_brake[1:]) * dt_arr
+    e_brake_cum = np.concatenate(([0.0], np.cumsum(de_brake)))
+
+    # Накопленная подведённая энергия: ∫ (F_ext + F_angle) v dt
+    p_input = (f_ext + f_angle) * v
+    de_input = 0.5 * (p_input[:-1] + p_input[1:]) * dt_arr
+    e_input_cum = np.concatenate(([0.0], np.cumsum(de_input)))
+
+    # Полная "сохраняемая" сумма
+    e_total = e_kin + e_spring + e_brake_cum
+
+    # Невязка: E_kin + E_spring + E_brake = E_input + E_kin(0) + E_spring(0)
+    # Начальные условия: E_kin(0) = m*v0²/2, E_spring(0) = 0
+    e_kin_0 = e_kin[0]
+    e_spring_0 = 0.0
+    residual = e_total - e_input_cum - e_kin_0 - e_spring_0
+
+    # Относим невязку к характерной энергии цикла
+    e_scale = float(max(np.max(np.abs(e_input_cum)), np.max(e_kin), np.max(e_brake_cum), 1e-9))
+    residual_pct = float(np.max(np.abs(residual)) / e_scale * 100.0)
+
+    result.energy_kinetic = e_kin
+    result.energy_spring = e_spring
+    result.energy_brake_cum = e_brake_cum
+    result.energy_input_cum = e_input_cum
+    result.energy_total = e_total
+    result.energy_residual_pct = residual_pct

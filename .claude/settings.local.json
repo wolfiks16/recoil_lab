@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python manage.py check)",
+      "Bash(python -c ' *)",
+      "Bash(node -e 'new Function\\(require\\('\\\\''fs'\\\\''\\).readFileSync\\('\\\\''C:/Users/arena/AppData/Local/Temp/_js_block_'\\\\''+'\\\\''__TRACKED_VAR__'\\\\''+'\\\\''.js'\\\\'','\\\\''utf-8'\\\\''\\)\\);')",
+      "Bash(python \"C:\\\\Users\\\\arena\\\\AppData\\\\Local\\\\Temp\\\\check_js.py\")",
+      "Bash(.venv/Scripts/python -m pip install django-environ)",
+      "Bash(.venv/Scripts/python -m pip freeze)",
+      "Bash(.venv/Scripts/python manage.py check)",
+      "Bash(DJANGO_SETTINGS_MODULE=recoil_project.settings.prod .venv/Scripts/python manage.py check --deploy)",
+      "Bash(.venv/Scripts/python -m pip install gunicorn)",
+      "Bash(.venv/Scripts/python -m pip show gunicorn)"
+    ]
+  }
+}

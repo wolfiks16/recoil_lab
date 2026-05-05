@@ -1,0 +1,42 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}RecoilLab{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{% static 'recoil_app/css/design_system.css' %}">
+
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="rb-app">
+
+<div class="rb-shell">
+    <!-- Shell mount: топбар и rail рендерятся через shell.js.
+         display:contents — чтобы дети попали в grid .rb-shell как прямые потомки. -->
+    <div id="rb-shell-mount"
+         style="display: contents;"
+         data-active="{% block shell_active %}workspace{% endblock %}"
+         data-crumb="{% block shell_crumb %}{% endblock %}"
+         data-index-url="{% url 'index' %}"
+         data-dashboard-url="{% url 'dashboard' %}"
+         data-compare-url="{% url 'compare' %}"
+         data-catalog-url="{% url 'catalog_list' %}"
+         data-user-initials="{% block user_initials %}—{% endblock %}">
+    </div>
+
+    <main class="rb-content">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<script src="{% static 'recoil_app/js/shell.js' %}"></script>
+{% block body_extra %}{% endblock %}
+</body>
+</html>

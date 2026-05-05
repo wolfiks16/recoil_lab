@@ -7,6 +7,7 @@
 <h1>Результат расчёта</h1>
 
 <div class="actions">
+    <a href="{% url 'run_detail_v2' run.id %}" style="background: linear-gradient(135deg, #3D73EB, #B44D7A); color: white; font-weight: 700;">★ Новый дизайн</a>
     <a href="{% url 'index' %}?from_run={{ run.id }}">Подставить в новый расчёт</a>
     <a href="{% url 'index' %}">Назад</a>
     {% if run.report_file %}

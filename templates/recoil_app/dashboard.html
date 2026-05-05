@@ -1,0 +1,460 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+{% load static %}
+
+{% block title %}Дашборд · RecoilLab{% endblock %}
+{% block shell_active %}dashboard{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<style>
+    .rb-content { max-width: none; }
+
+    /* === Чекбокс выбора расчёта для сравнения === */
+    .rb-run-card-pick {
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        margin-right: 6px;
+    }
+    .rb-run-card-pick input { display: none; }
+    .rb-run-card-pick span {
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid var(--rb-panel-border-strong);
+        border-radius: 4px;
+        background: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all .15s;
+    }
+    .rb-run-card-pick:hover span {
+        border-color: var(--rb-blue);
+    }
+    .rb-run-card-pick input:checked + span {
+        background: var(--rb-blue);
+        border-color: var(--rb-blue);
+    }
+    .rb-run-card-pick input:checked + span::after {
+        content: '✓';
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .rb-run-card.is-picked {
+        border-color: var(--rb-blue);
+        box-shadow: 0 0 0 2px rgba(61, 115, 235, 0.20);
+    }
+
+    /* === Плавающий бар сравнения === */
+    .rb-cmp-floatbar {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(120px);
+        background: var(--rb-text);
+        color: white;
+        padding: 14px 22px;
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.30);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 1000;
+        opacity: 0;
+        transition: all .25s cubic-bezier(0.34, 1.4, 0.64, 1);
+        max-width: calc(100% - 32px);
+        flex-wrap: wrap;
+    }
+    .rb-cmp-floatbar.is-visible {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+
+    .rb-cmp-floatbar-status {
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .rb-cmp-floatbar-runs {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rb-cmp-floatbar .rb-btn {
+        background: var(--rb-grad);
+        color: white;
+        border-color: transparent;
+        font-weight: 700;
+    }
+    .rb-cmp-floatbar .rb-btn-clear {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.20);
+        font-weight: 500;
+    }
+    .rb-cmp-floatbar .rb-btn-clear:hover {
+        color: white;
+        border-color: rgba(255, 255, 255, 0.40);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# === HERO === #}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>Дашборд</h1>
+            </div>
+            <div class="rb-hero-sub">
+                Обзор расчётов и быстрый доступ к свежим работам
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn rb-btn-grad" href="{% url 'index' %}">+ Новый расчёт</a>
+            <a class="rb-btn" href="{% url 'catalog_list' %}">⊟ Каталог тормозов</a>
+            <a class="rb-btn" href="{% url 'compare' %}">≡ Сравнить расчёты</a>
+        </div>
+    </div>
+</section>
+
+{% if messages %}
+{% for message in messages %}
+<div class="rb-status-banner rb-status-banner-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warn{% else %}ok{% endif %}" style="margin-bottom: 16px;">
+    <div class="rb-status-banner-icon">{% if message.tags == 'error' %}!{% elif message.tags == 'warning' %}⚠{% else %}✓{% endif %}</div>
+    <div>
+        <div class="rb-status-banner-sub">{{ message }}</div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{# === STAT CARDS === #}
+<div class="rb-stats-row">
+    <div class="rb-stat rb-stat-blue">
+        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M3 9h18M9 21V9"/>
+        </svg>
+        <div class="rb-stat-label">Всего расчётов</div>
+        <div class="rb-stat-value">{{ stats.total }}</div>
+        <div class="rb-stat-hint">в базе</div>
+    </div>
+
+    <div class="rb-stat rb-stat-purple">
+        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <div class="rb-stat-label">За неделю</div>
+        <div class="rb-stat-value">{{ stats.last_week }}</div>
+        <div class="rb-stat-hint">последние 7 дней</div>
+    </div>
+
+    <div class="rb-stat rb-stat-green">
+        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <div class="rb-stat-label">Успешных</div>
+        <div class="rb-stat-value">{{ stats.success }}</div>
+        <div class="rb-stat-hint">вернулись к нулю</div>
+    </div>
+
+    <div class="rb-stat rb-stat-amber">
+        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <div class="rb-stat-label">С предупреждениями</div>
+        <div class="rb-stat-value">{{ stats.warnings }}</div>
+        <div class="rb-stat-hint">требуют внимания</div>
+    </div>
+
+    <div class="rb-stat rb-stat-red">
+        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>
+        </svg>
+        <div class="rb-stat-label">В каталоге</div>
+        <div class="rb-stat-value">{{ stats.catalog }}</div>
+        <div class="rb-stat-hint"><a href="{% url 'catalog_list' %}" style="color: inherit;">тормоза →</a></div>
+    </div>
+</div>
+
+{# === ФИЛЬТР-БАР === #}
+<form method="get" action="{% url 'dashboard' %}" id="rb-filter-form">
+<div class="rb-filter-bar">
+    <div class="rb-search">
+        <svg class="rb-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+            type="text"
+            name="q"
+            value="{{ q }}"
+            placeholder="Поиск по имени расчёта..."
+            autocomplete="off"
+        >
+    </div>
+
+    {# Фильтр-pills как ссылки — сохраняют другие параметры через JS submit #}
+    <div class="rb-filter-pills" role="tablist">
+        <button type="submit" name="filter" value="all"      class="rb-filter-pill {% if filter_value == 'all' %}is-active{% endif %}">Все</button>
+        <button type="submit" name="filter" value="recent"   class="rb-filter-pill {% if filter_value == 'recent' %}is-active{% endif %}">Свежие</button>
+        <button type="submit" name="filter" value="success"  class="rb-filter-pill {% if filter_value == 'success' %}is-active{% endif %}">Успешные</button>
+        <button type="submit" name="filter" value="warnings" class="rb-filter-pill {% if filter_value == 'warnings' %}is-active{% endif %}">С warning</button>
+    </div>
+
+    <select name="sort" class="rb-sort-select" onchange="this.form.submit()">
+        <option value="-created_at"     {% if sort_value == '-created_at' %}selected{% endif %}>Сначала новые</option>
+        <option value="created_at"      {% if sort_value == 'created_at' %}selected{% endif %}>Сначала старые</option>
+        <option value="name"            {% if sort_value == 'name' %}selected{% endif %}>По имени (A→Я)</option>
+        <option value="-name"           {% if sort_value == '-name' %}selected{% endif %}>По имени (Я→A)</option>
+        <option value="-x_max"          {% if sort_value == '-x_max' %}selected{% endif %}>По откату (макс)</option>
+        <option value="return_end_time" {% if sort_value == 'return_end_time' %}selected{% endif %}>По времени цикла</option>
+    </select>
+</div>
+</form>
+
+{# === RUN CARDS === #}
+{% if cards %}
+<div class="rb-runs-grid">
+    {% for c in cards %}
+    {% with run=c.run %}
+    <div class="rb-run-card {% if c.status == 'ok' %}is-success{% elif c.status == 'warn' or c.has_warnings %}is-warn{% endif %}">
+
+        <div class="rb-run-card-head">
+            <label class="rb-run-card-pick" title="Отметить для сравнения">
+                <input type="checkbox" class="rb-cmp-pick-cb" data-run-id="{{ run.id }}" data-run-name="{{ run.name|escapejs }}">
+                <span></span>
+            </label>
+            <a class="rb-run-card-name" href="{% url 'run_detail_v2' run.id %}">{{ run.name }}</a>
+            <div class="rb-run-card-badges">
+                {% if c.status == 'ok' %}
+                    <span class="rb-badge rb-badge-ok">{{ c.status_label }}</span>
+                {% elif c.status == 'warn' %}
+                    <span class="rb-badge rb-badge-warn">{{ c.status_label }}</span>
+                {% endif %}
+                {% if c.has_warnings %}
+                    <span class="rb-badge rb-badge-warn" title="Есть предупреждения">!</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="rb-run-card-meta">
+            #{{ run.id }} · {{ run.created_at|date:"d.m.Y · H:i" }}
+        </div>
+
+        <div class="rb-run-card-metrics">
+            <div>
+                <div class="rb-run-card-metric-label">Макс. откат</div>
+                <div class="rb-run-card-metric-value">
+                    {% if run.x_max is not None %}
+                        {{ run.x_max|floatformat:3 }}<span class="rb-run-card-metric-unit">м</span>
+                    {% else %}—{% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="rb-run-card-metric-label">Время цикла</div>
+                <div class="rb-run-card-metric-value">
+                    {% if run.return_end_time is not None %}
+                        {{ run.return_end_time|floatformat:3 }}<span class="rb-run-card-metric-unit">с</span>
+                    {% elif run.recoil_end_time is not None %}
+                        {{ run.recoil_end_time|floatformat:3 }}<span class="rb-run-card-metric-unit">с (откат)</span>
+                    {% else %}—{% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="rb-run-card-metric-label">Невязка энерг.</div>
+                <div class="rb-run-card-metric-value">
+                    {% if run.energy_residual_pct is not None %}
+                        {{ run.energy_residual_pct|smart_num }}<span class="rb-run-card-metric-unit">%</span>
+                    {% else %}—{% endif %}
+                </div>
+            </div>
+            <div>
+                <div class="rb-run-card-metric-label">Тормозов</div>
+                <div class="rb-run-card-metric-value">{{ run.brakes.count }}</div>
+            </div>
+        </div>
+
+        <div class="rb-run-card-actions">
+            <a class="rb-btn rb-btn-primary rb-btn-sm" href="{% url 'run_detail_v2' run.id %}">Открыть</a>
+            <a class="rb-btn rb-btn-sm" href="{% url 'index' %}?from_run={{ run.id }}">↗ Копия</a>
+            <form method="post" action="{% url 'delete_run' run.id %}" onsubmit="return confirm('Удалить расчёт «{{ run.name|escapejs }}» и все его файлы?');">
+                {% csrf_token %}
+                <button type="submit" class="rb-btn rb-btn-danger rb-btn-sm">×</button>
+            </form>
+        </div>
+    </div>
+    {% endwith %}
+    {% endfor %}
+</div>
+
+{# === ПАГИНАЦИЯ === #}
+{% if paginator.num_pages > 1 %}
+<nav class="rb-pagination">
+    {% if page.has_previous %}
+        <a href="?page={{ page.previous_page_number }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}" title="Предыдущая">‹</a>
+    {% else %}
+        <span class="is-disabled">‹</span>
+    {% endif %}
+
+    {% for n in paginator.page_range %}
+        {% if n == page.number %}
+            <span class="is-current">{{ n }}</span>
+        {% elif n == 1 or n == paginator.num_pages or n >= page.number|add:'-2' and n <= page.number|add:'2' %}
+            <a href="?page={{ n }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}">{{ n }}</a>
+        {% elif n == page.number|add:'-3' or n == page.number|add:'3' %}
+            <span class="is-disabled">…</span>
+        {% endif %}
+    {% endfor %}
+
+    {% if page.has_next %}
+        <a href="?page={{ page.next_page_number }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}" title="Следующая">›</a>
+    {% else %}
+        <span class="is-disabled">›</span>
+    {% endif %}
+
+    <span class="rb-pagination-info">
+        стр. {{ page.number }} из {{ paginator.num_pages }} · всего {{ paginator.count }}
+    </span>
+</nav>
+{% endif %}
+
+{% else %}
+
+{# === EMPTY STATE === #}
+<div class="rb-empty">
+    <svg class="rb-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M3 9h18"/>
+        <path d="M9 21V9"/>
+    </svg>
+    {% if q or filter_value != 'all' %}
+        <div class="rb-empty-title">Ничего не найдено</div>
+        <div class="rb-empty-sub">Попробуйте изменить фильтры или поисковый запрос</div>
+        <a class="rb-btn" href="{% url 'dashboard' %}">Сбросить фильтры</a>
+    {% else %}
+        <div class="rb-empty-title">Расчётов пока нет</div>
+        <div class="rb-empty-sub">Создайте первый расчёт, чтобы увидеть его здесь</div>
+        <a class="rb-btn rb-btn-grad" href="{% url 'index' %}">+ Новый расчёт</a>
+    {% endif %}
+</div>
+
+{% endif %}
+
+{# === Плавающий бар сравнения (Срез 5) === #}
+<div class="rb-cmp-floatbar" id="rb-cmp-floatbar">
+    <div>
+        <div class="rb-cmp-floatbar-status" id="rb-cmp-floatbar-status">Выбрано: 0 / 2</div>
+        <div class="rb-cmp-floatbar-runs" id="rb-cmp-floatbar-runs"></div>
+    </div>
+    <a class="rb-btn" id="rb-cmp-go-btn" href="#">Сравнить →</a>
+    <button type="button" class="rb-btn rb-btn-clear" id="rb-cmp-clear-btn">Очистить</button>
+</div>
+
+{% endblock %}
+
+{% block body_extra %}
+<script>
+/* === Срез 5: чекбоксы выбора расчётов для сравнения === */
+(function () {
+    "use strict";
+    const STORAGE_KEY = "rb-cmp-picked";
+    const compareUrl = "{% url 'compare' %}";
+
+    const floatbar = document.getElementById("rb-cmp-floatbar");
+    const status = document.getElementById("rb-cmp-floatbar-status");
+    const runsEl = document.getElementById("rb-cmp-floatbar-runs");
+    const goBtn = document.getElementById("rb-cmp-go-btn");
+    const clearBtn = document.getElementById("rb-cmp-clear-btn");
+
+    if (!floatbar || !status || !goBtn) return;
+
+    // picked = массив объектов {id, name}, не более 2-х
+    let picked = [];
+    try {
+        const raw = sessionStorage.getItem(STORAGE_KEY);
+        if (raw) picked = JSON.parse(raw) || [];
+        if (!Array.isArray(picked)) picked = [];
+    } catch (e) { picked = []; }
+
+    function save() {
+        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(picked)); } catch (e) {}
+    }
+
+    function refreshUI() {
+        // Подсветка выбранных карточек + чекбоксов
+        const pickedIds = new Set(picked.map(p => String(p.id)));
+        document.querySelectorAll(".rb-cmp-pick-cb").forEach(cb => {
+            const id = String(cb.dataset.runId);
+            cb.checked = pickedIds.has(id);
+            const card = cb.closest(".rb-run-card");
+            if (card) card.classList.toggle("is-picked", pickedIds.has(id));
+        });
+
+        // Плавающий бар
+        if (picked.length > 0) {
+            floatbar.classList.add("is-visible");
+            status.textContent = `Выбрано: ${picked.length} / 2`;
+            runsEl.textContent = picked.map(p => p.name).join("  vs  ");
+
+            if (picked.length === 2) {
+                goBtn.href = `${compareUrl}?run_a=${picked[0].id}&run_b=${picked[1].id}`;
+                goBtn.style.pointerEvents = "auto";
+                goBtn.style.opacity = "1";
+            } else {
+                goBtn.href = "#";
+                goBtn.style.pointerEvents = "none";
+                goBtn.style.opacity = "0.5";
+            }
+        } else {
+            floatbar.classList.remove("is-visible");
+        }
+    }
+
+    document.querySelectorAll(".rb-cmp-pick-cb").forEach(cb => {
+        cb.addEventListener("change", function (e) {
+            const id = parseInt(this.dataset.runId, 10);
+            const name = this.dataset.runName || `#${id}`;
+
+            if (this.checked) {
+                // Лимит — 2. Если уже 2, снимаем самый ранний.
+                if (picked.length >= 2) {
+                    picked.shift();
+                }
+                if (!picked.some(p => p.id === id)) {
+                    picked.push({ id, name });
+                }
+            } else {
+                picked = picked.filter(p => p.id !== id);
+            }
+
+            save();
+            refreshUI();
+        });
+    });
+
+    clearBtn.addEventListener("click", function () {
+        picked = [];
+        save();
+        refreshUI();
+    });
+
+    refreshUI();
+})();
+</script>
+{% endblock %}

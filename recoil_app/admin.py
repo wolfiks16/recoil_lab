@@ -258,3 +258,40 @@ class BrakeForcePointAdmin(admin.ModelAdmin):
     list_filter = ("brake__model_type",)
     search_fields = ("brake__run__name", "brake__name")
     ordering = ("brake", "order")
+
+from .models import BrakeCatalog  # noqa: E402
+
+
+@admin.register(BrakeCatalog)
+class BrakeCatalogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "name",
+        "model_type",
+        "gamma",
+        "delta",
+        "n",
+        "updated_at",
+    )
+    list_filter = ("model_type",)
+    search_fields = ("name", "description")
+    ordering = ("name",)
+    readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        ("Общее", {"fields": ("name", "description", "model_type")}),
+        ("Параметрическая модель", {"fields": (("gamma", "delta", "n"),)}),
+        ("Табличная модель", {"fields": ("curve_file",)}),
+        (
+            "Дополнительные параметры",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    ("xm", "ym"),
+                    ("dh1", "dh2"),
+                    ("dm", "mu", "bz"),
+                    ("lya", "wn0"),
+                ),
+            },
+        ),
+        ("Метаданные", {"fields": ("created_at", "updated_at")}),
+    )

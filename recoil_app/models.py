@@ -56,6 +56,15 @@ class CalculationRun(models.Model):
     chart_v_a_t_return = models.FileField(upload_to="reports/", null=True, blank=True)
     chart_forces_secondary_return = models.FileField(upload_to="reports/", null=True, blank=True)
 
+    # --- v2: новые графики для современного дизайна страницы результата ---
+    chart_x_t_annotated = models.FileField(upload_to="reports/", null=True, blank=True)
+    chart_energy = models.FileField(upload_to="reports/", null=True, blank=True)
+
+    # --- v2: метрики энергобаланса (вытаскиваем из result для отображения в UI) ---
+    energy_residual_pct = models.FloatField(null=True, blank=True)
+    energy_input_total = models.FloatField(null=True, blank=True, help_text="Полная подведённая энергия, Дж")
+    energy_brake_total = models.FloatField(null=True, blank=True, help_text="Полная рассеянная тормозами энергия, Дж")
+
     class Meta:
         verbose_name = "Запуск расчёта"
         verbose_name_plural = "Запуски расчёта"
@@ -161,3 +170,99 @@ class BrakeForcePoint(models.Model):
 
     def __str__(self):
         return f"{self.brake.display_name}: v={self.velocity}, F={self.force}"
+
+
+# ============================================================================
+# СРЕЗ 3: Каталог тормозов
+# ============================================================================
+
+def catalog_curve_upload_to(instance, filename: str) -> str:
+    """Путь для CSV/XLSX файла тормоза в каталоге."""
+    safe = Path(filename)
+    stem = safe.stem or "curve"
+    suffix = safe.suffix or ".xlsx"
+    return f"brake_catalog/curves/cat_{instance.pk or 'new'}/{stem}{suffix}"
+
+
+class BrakeCatalog(models.Model):
+    """Глобальная библиотека тормозов.
+
+    Каждая запись — самостоятельная единица в каталоге, независимая от расчётов.
+    При использовании в расчёте параметры КОПИРУЮТСЯ в MagneticBrakeConfig
+    (copy-on-use), чтобы расчёт оставался воспроизводимым даже после редактирования
+    исходной записи каталога.
+    """
+
+    MODEL_TYPE_PARAMETRIC = "parametric"
+    MODEL_TYPE_CURVE = "curve"
+
+    MODEL_TYPE_CHOICES = [
+        (MODEL_TYPE_PARAMETRIC, "Параметрический"),
+        (MODEL_TYPE_CURVE, "По графику F(v)"),
+    ]
+
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True, default="")
+
+    model_type = models.CharField(
+        max_length=16,
+        choices=MODEL_TYPE_CHOICES,
+        default=MODEL_TYPE_PARAMETRIC,
+    )
+
+    # Параметрическая модель
+    gamma = models.FloatField(null=True, blank=True, help_text="Линейный коэффициент γ")
+    delta = models.FloatField(null=True, blank=True, help_text="Квадратичный коэффициент δ")
+    n = models.IntegerField(null=True, blank=True, help_text="Число секций")
+
+    # Кривая F(v) — файл с табличной характеристикой
+    curve_file = models.FileField(
+        upload_to=catalog_curve_upload_to,
+        null=True,
+        blank=True,
+        help_text="CSV/XLSX с двумя колонками: v, F",
+    )
+
+    # Дополнительные параметры — необязательные, для будущей расширенной формы
+    xm = models.FloatField(null=True, blank=True)
+    ym = models.FloatField(null=True, blank=True)
+    dh1 = models.FloatField(null=True, blank=True)
+    dh2 = models.FloatField(null=True, blank=True)
+    dm = models.FloatField(null=True, blank=True)
+    mu = models.FloatField(null=True, blank=True)
+    bz = models.FloatField(null=True, blank=True)
+    lya = models.FloatField(null=True, blank=True, default=2.5)
+    wn0 = models.FloatField(null=True, blank=True, default=1.0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Тормоз в каталоге"
+        verbose_name_plural = "Каталог тормозов"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_parametric(self) -> bool:
+        return self.model_type == self.MODEL_TYPE_PARAMETRIC
+
+    @property
+    def is_curve(self) -> bool:
+        return self.model_type == self.MODEL_TYPE_CURVE
+
+    @property
+    def short_summary(self) -> str:
+        """Короткое описание для отображения в списках."""
+        if self.is_parametric:
+            parts = []
+            if self.gamma is not None:
+                parts.append(f"γ={self.gamma:g}")
+            if self.delta is not None:
+                parts.append(f"δ={self.delta:g}")
+            if self.n is not None:
+                parts.append(f"n={self.n}")
+            return " · ".join(parts) if parts else "параметрический"
+        return "F(v) — табличная характеристика"

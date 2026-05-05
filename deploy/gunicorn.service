@@ -1,0 +1,30 @@
+[Unit]
+Description=RecoilLab gunicorn daemon
+After=network.target
+
+[Service]
+# Пользователь recoil — выделенный, без shell. См. deploy/README.md.
+User=recoil
+# Группа www-data нужна, чтобы nginx мог писать в Unix socket gunicorn'а.
+Group=www-data
+
+WorkingDirectory=/srv/recoil/recoil_web
+
+# settings.prod подхватит .env через django-environ.
+Environment="DJANGO_SETTINGS_MODULE=recoil_project.settings.prod"
+
+ExecStart=/srv/recoil/recoil_web/.venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/run/recoil.sock \
+    --timeout 300 \
+    --access-logfile - \
+    --error-logfile - \
+    recoil_project.wsgi:application
+
+Restart=on-failure
+RestartSec=5s
+
+# Логи через stderr → systemd journal (см. journalctl -u gunicorn).
+
+[Install]
+WantedBy=multi-user.target

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.forms import BaseFormSet, formset_factory
 from openpyxl import load_workbook
 
@@ -12,14 +13,51 @@ from .models import CalculationRun, MagneticBrakeConfig
 
 
 class CalculationForm(forms.Form):
-    name = forms.CharField(required=True, label="Название расчёта")
+    name = forms.CharField(
+        required=True,
+        label="Название расчёта",
+        widget=forms.TextInput(attrs={
+            "pattern": "[A-Za-z0-9_-]+",
+            "title": "Только английские буквы, цифры, дефис и подчёркивание",
+        }),
+    )
     input_file = forms.FileField(label="Файл характеристик Excel")
 
-    mass = forms.FloatField(label="Масса")
-    angle_deg = forms.FloatField(initial=70.0, label="Угол, град")
-    v0 = forms.FloatField(initial=0.0, label="Начальная скорость")
-    x0 = forms.FloatField(initial=0.0, label="Начальное перемещение")
-    t_max = forms.FloatField(initial=0.15, label="Время расчёта")
+    mass = forms.FloatField(
+        label="Масса",
+        validators=[MinValueValidator(1e-6, "Масса должна быть положительной.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    angle_deg = forms.FloatField(
+        initial=70.0,
+        label="Угол, град",
+        validators=[
+            MinValueValidator(0.0, "Угол должен быть неотрицательным."),
+            MaxValueValidator(90.0, "Угол не должен превышать 90°."),
+        ],
+        widget=forms.NumberInput(attrs={"min": "0", "max": "90", "step": "any"}),
+    )
+    v0 = forms.FloatField(
+        initial=0.0,
+        label="Начальная скорость",
+        validators=[MinValueValidator(0.0, "Начальная скорость должна быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    x0 = forms.FloatField(
+        initial=0.0,
+        label="Начальное перемещение",
+        validators=[MinValueValidator(0.0, "Начальное перемещение должно быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    t_max = forms.FloatField(
+        initial=0.15,
+        label="Время расчёта",
+        validators=[
+            MinValueValidator(1e-6, "Время расчёта должно быть положительным."),
+            MaxValueValidator(10.0, "Время расчёта не должно превышать 10 с."),
+        ],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "max": "10", "step": "any"}),
+    )
     dt = forms.FloatField(initial=1e-4, label="Шаг dt")
 
     def clean_name(self):
@@ -52,7 +90,11 @@ class MagneticBrakeForm(forms.Form):
     dh1 = forms.FloatField(label="dh1", required=False)
     dh2 = forms.FloatField(label="dh2", required=False)
     dm = forms.FloatField(label="dm", required=False)
-    n = forms.IntegerField(label="n", required=False)
+    n = forms.IntegerField(
+        label="n",
+        required=False,
+        widget=forms.NumberInput(attrs={"min": "1", "step": "1"}),
+    )
     mu = forms.FloatField(label="mu", required=False)
     bz = forms.FloatField(label="bz", required=False)
     lya = forms.FloatField(initial=2.5, label="lya", required=False)
@@ -70,6 +112,14 @@ class MagneticBrakeForm(forms.Form):
 
     # Для сценария 'Подставить в новый расчёт' — reuse уже сохранённой curve-характеристики
     curve_source_brake_id = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+
+    # Срез 3b: ID выбранного тормоза из каталога (если пользователь выбрал «Из каталога»).
+    # Параметры всё равно копируются из формы (юзер мог их откорректировать),
+    # но для curve — copy-on-use файла F(v) из каталога идёт через этот ID в view'хе.
+    catalog_source_id = forms.IntegerField(
         required=False,
         widget=forms.HiddenInput(),
     )
@@ -111,13 +161,16 @@ class MagneticBrakeForm(forms.Form):
         elif model_type == MagneticBrakeConfig.MODEL_TYPE_CURVE:
             uploaded_file = cleaned_data.get("force_curve_file")
             source_brake_id = (cleaned_data.get("curve_source_brake_id") or "").strip()
+            catalog_source_id = cleaned_data.get("catalog_source_id")
 
             if uploaded_file:
+                # Файл загружен прямо в форму
                 parsed_points = self._parse_force_curve_file(uploaded_file)
                 cleaned_data["parsed_force_curve_points"] = parsed_points
                 cleaned_data["curve_file_provided"] = True
                 cleaned_data["curve_source_brake_id"] = ""
             elif source_brake_id:
+                # Reuse характеристики из ранее запущенного расчёта
                 try:
                     int(source_brake_id)
                 except ValueError as exc:
@@ -128,9 +181,16 @@ class MagneticBrakeForm(forms.Form):
                 cleaned_data["parsed_force_curve_points"] = None
                 cleaned_data["curve_file_provided"] = False
                 cleaned_data["curve_source_brake_id"] = source_brake_id
+            elif catalog_source_id:
+                # Будет copy-on-use из каталога — фактическое чтение файла в view.
+                # Здесь просто разрешаем сохранение без uploaded_file.
+                cleaned_data["parsed_force_curve_points"] = None
+                cleaned_data["curve_file_provided"] = False
+                cleaned_data["curve_source_brake_id"] = ""
             else:
                 raise ValidationError(
-                    "Для тормоза, заданного графиком, необходимо загрузить Excel-файл характеристики F(v)."
+                    "Для тормоза, заданного графиком, необходимо загрузить Excel-файл "
+                    "характеристики F(v) или выбрать тормоз из каталога."
                 )
 
         return cleaned_data
@@ -304,3 +364,85 @@ class CompareRunsForm(forms.Form):
             raise ValidationError("Для сравнения нужно выбрать два разных расчёта.")
 
         return cleaned_data
+
+# ============================================================================
+# СРЕЗ 3a: Каталог тормозов
+# ============================================================================
+
+from .models import BrakeCatalog  # noqa: E402  (импорт здесь, чтобы не ломать сверху)
+
+
+class BrakeCatalogForm(forms.ModelForm):
+    """Форма создания/редактирования записи в каталоге тормозов."""
+
+    class Meta:
+        model = BrakeCatalog
+        fields = [
+            "name",
+            "description",
+            "model_type",
+            "gamma", "delta", "n",
+            "curve_file",
+            # доп. параметры
+            "xm", "ym", "dh1", "dh2", "dm", "mu", "bz", "lya", "wn0",
+        ]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        model_type = cleaned.get("model_type")
+
+        if model_type == BrakeCatalog.MODEL_TYPE_PARAMETRIC:
+            # Для параметрической модели все параметры обязательные.
+            required_fields = [
+                "gamma", "delta", "n",
+                "xm", "ym", "dh1", "dh2", "dm",
+                "mu", "bz", "lya", "wn0",
+            ]
+            missing: list[str] = []
+            for field_name in required_fields:
+                value = cleaned.get(field_name)
+                if value is None or value == "":
+                    missing.append(field_name)
+                    # Отметим конкретное поле, чтобы рамка ошибки появилась рядом
+                    self.add_error(
+                        field_name,
+                        "Обязательное поле для параметрической модели."
+                    )
+            if missing:
+                # Общее сообщение наверх формы — какие поля не заполнены
+                raise ValidationError(
+                    "Для параметрической модели заполните все параметры. "
+                    f"Не заполнены: {', '.join(missing)}."
+                )
+
+        elif model_type == BrakeCatalog.MODEL_TYPE_CURVE:
+            # Для табличной модели нужен только файл F(v).
+            curve_file = cleaned.get("curve_file")
+            instance = getattr(self, "instance", None)
+            already_has_file = bool(instance and instance.pk and instance.curve_file)
+            if not curve_file and not already_has_file:
+                self.add_error(
+                    "curve_file",
+                    "Обязательно загрузите файл F(v) для табличной модели."
+                )
+                raise ValidationError(
+                    "Для табличной модели загрузите файл F(v)."
+                )
+
+        return cleaned
+
+    def clean_name(self):
+        """Имя должно быть уникальным (с учётом редактирования существующей записи)."""
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise ValidationError("Имя обязательно.")
+
+        qs = BrakeCatalog.objects.filter(name=name)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError("Запись с таким именем уже существует в каталоге.")
+        return name

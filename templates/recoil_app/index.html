@@ -1,111 +1,469 @@
-{% extends "recoil_app/base.html" %}
+{% extends "recoil_app/base_v2.html" %}
+{% load static %}
 
-{% block title %}Расчёт откатной системы{% endblock %}
+{% block title %}Новый расчёт · RecoilLab{% endblock %}
+{% block shell_active %}workspace{% endblock %}
+{% block shell_crumb %}Новый расчёт{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+    .rb-content { max-width: none; }
+
+    /* === Brake-card стили внутри центральной панели — переопределение
+           старых стилей из base.html === */
+
+    .brake-card { background: transparent; border: none; padding: 0; margin: 0; }
+    .brake-card__body { padding: 0; }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .form-field label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--rb-text-muted);
+    }
+
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+        padding: 7px 10px;
+        border: 1px solid var(--rb-panel-border-strong);
+        border-radius: var(--rb-radius-sm);
+        background: var(--rb-panel-bg-white);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 12px;
+        color: var(--rb-text);
+        transition: all .15s;
+    }
+
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+        outline: none;
+        border-color: var(--rb-blue);
+        box-shadow: 0 0 0 2px rgba(61, 115, 235, 0.12);
+    }
+
+    .field-error {
+        font-size: 11px;
+        color: var(--rb-danger-dark);
+        background: var(--rb-danger-soft);
+        padding: 3px 7px;
+        border-radius: var(--rb-radius-sm);
+    }
+
+    .notice {
+        background: rgba(61, 115, 235, 0.08);
+        border: 1px solid rgba(61, 115, 235, 0.2);
+        color: var(--rb-blue-dark);
+        padding: 10px 14px;
+        border-radius: var(--rb-radius-sm);
+        margin-bottom: 12px;
+        font-size: 12px;
+    }
+
+    .brake-parametric-fields,
+    .brake-curve-fields {
+        margin-top: 14px;
+    }
+
+    .brake-parametric-fields h5,
+    .brake-curve-fields h5 {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--rb-text-muted);
+        margin: 0 0 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--rb-panel-border);
+    }
+
+    /* Скрываем оригинальную h4 заголовка тормоза — мы показываем имя в шапке CAD */
+    .brake-card__head { display: none; }
+
+    /* Превью кривой */
+    .curve-preview-block {
+        background: var(--rb-panel-bg-alt);
+        border: 1px solid var(--rb-panel-border);
+        border-radius: var(--rb-radius);
+        padding: 12px;
+        margin-top: 12px;
+    }
+
+    .curve-preview-plot {
+        width: 100%;
+        height: 240px;
+    }
+
+    .curve-preview-error {
+        background: var(--rb-danger-soft);
+        color: var(--rb-danger-dark);
+        padding: 8px 12px;
+        border-radius: var(--rb-radius-sm);
+        font-size: 12px;
+        margin-top: 8px;
+    }
+
+    /* Loader-overlay при сабмите */
+    #calculation-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 36, 0.85);
+        color: white;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 5000;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    #calculation-overlay.active { display: flex; }
+    .is-submitting { pointer-events: none; opacity: 0.7; }
+
+    /* Срез 3b: переключатель источника параметров — переопределение */
+    .rb-source-toggle {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        margin-bottom: 14px;
+        padding: 4px;
+        background: var(--rb-panel-bg-alt);
+        border-radius: var(--rb-radius-sm);
+        flex-wrap: wrap;
+        width: fit-content;
+    }
+
+    .rb-source-tab {
+        padding: 6px 12px;
+        border: none;
+        background: transparent;
+        color: var(--rb-text-soft);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: var(--rb-radius-sm);
+        transition: all .15s;
+        font-family: inherit;
+    }
+    .rb-source-tab:hover:not(:disabled) { color: var(--rb-blue); }
+    .rb-source-tab.is-active {
+        background: var(--rb-panel-bg-white);
+        color: var(--rb-blue);
+        box-shadow: 0 1px 2px rgba(23, 43, 77, 0.06);
+    }
+    .rb-source-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .rb-source-add-link {
+        font-size: 11px;
+        color: var(--rb-blue);
+        text-decoration: none;
+        margin-left: auto;
+    }
+    .rb-source-add-link:hover { text-decoration: underline; }
+
+    .rb-catalog-picker {
+        background: rgba(61, 115, 235, 0.04);
+        border: 1px solid rgba(61, 115, 235, 0.18);
+        border-radius: var(--rb-radius-sm);
+        padding: 10px 12px;
+        margin-bottom: 14px;
+    }
+    .rb-catalog-picker label {
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--rb-text-muted);
+        margin-bottom: 5px;
+    }
+    .rb-catalog-select {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid var(--rb-panel-border-strong);
+        border-radius: var(--rb-radius-sm);
+        background: var(--rb-panel-bg-white);
+        font-family: inherit;
+        font-size: 12px;
+    }
+    .rb-catalog-picker-info {
+        font-size: 11px;
+        color: var(--rb-text-soft);
+        margin-top: 6px;
+        font-family: "JetBrains Mono", Consolas, monospace;
+    }
+    .rb-from-catalog {
+        background: rgba(61, 115, 235, 0.06) !important;
+    }
+
+    /* Список расчётов снизу — удалён в Срезе 4 (есть на дашборде) */
+
+    /* === Срез 6a: индикатор заполненности тормоза в sidebar === */
+    .rb-cad-brake-item-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        flex-shrink: 0;
+        margin-left: 6px;
+    }
+    .rb-cad-brake-item-status.is-complete {
+        background: var(--rb-success-soft);
+        color: var(--rb-success-dark);
+    }
+    .rb-cad-brake-item-status.is-partial {
+        background: var(--rb-warn-soft);
+        color: var(--rb-warn-dark);
+    }
+    .rb-cad-brake-item-status.is-empty {
+        background: var(--rb-panel-bg-alt);
+        color: var(--rb-text-muted);
+    }
+    .rb-cad-brake-item-status.is-error {
+        background: var(--rb-danger-soft);
+        color: var(--rb-danger-dark);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<h1>Расчёт откатной системы</h1>
+
+{# === HERO === #}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>Новый расчёт</h1>
+            </div>
+            <div class="rb-hero-sub">
+                Параметры откатной системы и тормозов · после сабмита запустится численное моделирование
+            </div>
+        </div>
+        <div class="rb-cad-hero-actions">
+            <a class="rb-btn" href="{% url 'dashboard' %}">← На дашборд</a>
+            <a class="rb-btn" href="{% url 'catalog_list' %}">⊟ Каталог тормозов</a>
+            <button type="button" id="submit-calc-btn" class="rb-btn rb-cad-submit">
+                ⏵ Запустить расчёт
+            </button>
+        </div>
+    </div>
+</section>
 
 {% if request.GET.from_run %}
-    <div class="notice">
-        <strong>Форма заполнена данными из предыдущего расчёта.</strong>
-    </div>
+<div class="notice"><strong>Форма заполнена данными из предыдущего расчёта.</strong></div>
 {% endif %}
 
-<div class="card">
-    <h2>Новый расчёт</h2>
+{% if form.non_field_errors %}
+<div class="notice" style="background: var(--rb-danger-soft); color: var(--rb-danger-dark); border-color: rgba(180,77,122,0.3);">
+    {{ form.non_field_errors }}
+</div>
+{% endif %}
 
-    <form method="post" enctype="multipart/form-data" id="calculation-form">
-        {% csrf_token %}
+{% if brake_formset.non_form_errors %}
+<div class="notice" style="background: var(--rb-danger-soft); color: var(--rb-danger-dark); border-color: rgba(180,77,122,0.3);">
+    {{ brake_formset.non_form_errors }}
+</div>
+{% endif %}
 
-        {% if form.non_field_errors %}
-            <div class="notice">
-                {{ form.non_field_errors }}
+{# === Главная форма === #}
+<form method="post" enctype="multipart/form-data" id="calculation-form">
+    {% csrf_token %}
+    {{ brake_formset.management_form }}
+
+    <div class="rb-cad">
+
+        {# === ЛЕВАЯ ПАНЕЛЬ === #}
+        <aside class="rb-cad-sidebar">
+
+            {# Параметры откатной системы #}
+            <div class="rb-cad-sidebar-section">
+                <div class="rb-cad-sidebar-section-title">Параметры откатной системы</div>
+                <div class="rb-cad-params">
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.name.id_for_label }}" class="rb-cad-field-label">
+                            Имя расчёта
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<div class="rb-cad-field-error">{{ form.name.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.input_file.id_for_label }}" class="rb-cad-field-label">
+                            Файл характеристик (Excel)
+                        </label>
+                        {{ form.input_file }}
+                        {% if form.input_file.errors %}<div class="rb-cad-field-error">{{ form.input_file.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.mass.id_for_label }}" class="rb-cad-field-label">
+                            <span>Масса</span><span class="rb-cad-field-symbol">m, кг</span>
+                        </label>
+                        {{ form.mass }}
+                        {% if form.mass.errors %}<div class="rb-cad-field-error">{{ form.mass.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.angle_deg.id_for_label }}" class="rb-cad-field-label">
+                            <span>Угол</span><span class="rb-cad-field-symbol">α, °</span>
+                        </label>
+                        {{ form.angle_deg }}
+                        {% if form.angle_deg.errors %}<div class="rb-cad-field-error">{{ form.angle_deg.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.v0.id_for_label }}" class="rb-cad-field-label">
+                            <span>Начальная скорость</span><span class="rb-cad-field-symbol">v₀, м/с</span>
+                        </label>
+                        {{ form.v0 }}
+                        {% if form.v0.errors %}<div class="rb-cad-field-error">{{ form.v0.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.x0.id_for_label }}" class="rb-cad-field-label">
+                            <span>Начальное перемещение</span><span class="rb-cad-field-symbol">x₀, м</span>
+                        </label>
+                        {{ form.x0 }}
+                        {% if form.x0.errors %}<div class="rb-cad-field-error">{{ form.x0.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.t_max.id_for_label }}" class="rb-cad-field-label">
+                            <span>Время расчёта</span><span class="rb-cad-field-symbol">t_max, с</span>
+                        </label>
+                        {{ form.t_max }}
+                        {% if form.t_max.errors %}<div class="rb-cad-field-error">{{ form.t_max.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.dt.id_for_label }}" class="rb-cad-field-label">
+                            <span>Шаг интегрирования</span><span class="rb-cad-field-symbol">dt, с</span>
+                        </label>
+                        {{ form.dt }}
+                        {% if form.dt.errors %}<div class="rb-cad-field-error">{{ form.dt.errors|join:"; " }}</div>{% endif %}
+                    </div>
+                </div>
             </div>
-        {% endif %}
 
-        <h3>Общие параметры</h3>
+            {# Список тормозов #}
+            <div class="rb-cad-sidebar-section">
+                <div class="rb-cad-sidebar-section-title" id="brake-list-title">
+                    Тормоза (<span id="brake-count">0</span>)
+                </div>
+                <div class="rb-cad-brake-list" id="brake-list">
+                    {# Заполняется JS-ом из brake_formset #}
+                </div>
+                <div style="padding: 0 8px 12px;">
+                    <button type="button" id="add-brake-btn" class="rb-cad-add-brake">
+                        + Добавить тормоз
+                    </button>
+                </div>
+            </div>
+        </aside>
 
-        <div class="form-grid">
-            <div class="form-field">
-                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
-                {{ form.name }}
-                {% if form.name.errors %}<div class="field-error">{{ form.name.errors }}</div>{% endif %}
+        {# === ЦЕНТРАЛЬНАЯ ПАНЕЛЬ === #}
+        <div class="rb-cad-main">
+
+            {# Placeholder когда нет тормозов #}
+            <div class="rb-cad-main-empty" id="brake-empty-state" style="display: none;">
+                <svg class="rb-cad-main-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="12" y1="8" x2="12" y2="16"/>
+                    <line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+                <div style="font-size: 15px; font-weight: 600; color: var(--rb-text); margin-bottom: 6px;">
+                    Нет тормозов
+                </div>
+                <div style="font-size: 13px; color: var(--rb-text-muted);">
+                    Добавьте первый тормоз через панель слева
+                </div>
             </div>
 
-            <div class="form-field">
-                <label for="{{ form.input_file.id_for_label }}">{{ form.input_file.label }}</label>
-                {{ form.input_file }}
-                {% if form.input_file.errors %}<div class="field-error">{{ form.input_file.errors }}</div>{% endif %}
-            </div>
-
-            <div class="form-field">
-                <label for="{{ form.mass.id_for_label }}">{{ form.mass.label }}</label>
-                {{ form.mass }}
-                {% if form.mass.errors %}<div class="field-error">{{ form.mass.errors }}</div>{% endif %}
-            </div>
-
-            <div class="form-field">
-                <label for="{{ form.angle_deg.id_for_label }}">{{ form.angle_deg.label }}</label>
-                {{ form.angle_deg }}
-                {% if form.angle_deg.errors %}<div class="field-error">{{ form.angle_deg.errors }}</div>{% endif %}
-            </div>
-
-            <div class="form-field">
-                <label for="{{ form.v0.id_for_label }}">{{ form.v0.label }}</label>
-                {{ form.v0 }}
-                {% if form.v0.errors %}<div class="field-error">{{ form.v0.errors }}</div>{% endif %}
-            </div>
-
-            <div class="form-field">
-                <label for="{{ form.x0.id_for_label }}">{{ form.x0.label }}</label>
-                {{ form.x0 }}
-                {% if form.x0.errors %}<div class="field-error">{{ form.x0.errors }}</div>{% endif %}
-            </div>
-
-            <div class="form-field">
-                <label for="{{ form.t_max.id_for_label }}">{{ form.t_max.label }}</label>
-                {{ form.t_max }}
-                {% if form.t_max.errors %}<div class="field-error">{{ form.t_max.errors }}</div>{% endif %}
-            </div>
-
-            <div class="form-field">
-                <label for="{{ form.dt.id_for_label }}">{{ form.dt.label }}</label>
-                {{ form.dt }}
-                {% if form.dt.errors %}<div class="field-error">{{ form.dt.errors }}</div>{% endif %}
-            </div>
-        </div>
-
-        <h3>Магнитные тормоза</h3>
-
-        <div class="brake-controls">
-            <button type="button" id="add-brake-btn">Добавить тормоз</button>
-            <span class="muted">Минимум 1 тормоз</span>
-        </div>
-
-        {{ brake_formset.management_form }}
-
-        {% if brake_formset.non_form_errors %}
-            <div class="notice">
-                {{ brake_formset.non_form_errors }}
-            </div>
-        {% endif %}
-
-        <div id="brake-forms" class="brake-grid">
-            {% for brake_form in brake_formset %}
-                <div class="brake-card brake-form-item">
-                    <div class="brake-card__head">
-                        <h4>Тормоз {{ forloop.counter }}</h4>
-                        <div class="brake-card__actions">
-                            <button type="button" class="copy-brake-btn">Копировать</button>
-                            <button type="button" class="delete-brake-btn">Удалить</button>
+            {# Контейнер blocks тормозов — все рендерятся, активный показан, остальные скрыты #}
+            <div id="brake-forms">
+                {% for brake_form in brake_formset %}
+                <div class="brake-card brake-form-item" data-brake-index="{{ forloop.counter0 }}">
+                    {# CAD-шапка активной brake-card — единственная (старая удалена в Срезе 4 fix1) #}
+                    <div class="rb-cad-brake-head">
+                        <div class="rb-cad-brake-head-title">
+                            <span class="rb-cad-brake-head-prefix">Тормоз {{ forloop.counter }}</span>
+                            <span class="rb-cad-brake-head-divider"> · </span>
+                            <span class="rb-cad-brake-head-name" data-brake-display-name></span>
+                        </div>
+                        <div class="rb-cad-brake-head-actions">
+                            <button type="button" class="rb-btn rb-btn-sm rb-cad-save-to-catalog-btn">
+                                ⊕ В каталог
+                            </button>
+                            <button type="button" class="rb-btn rb-btn-sm copy-brake-btn">
+                                ⎘ Копировать
+                            </button>
+                            <button type="button" class="rb-btn rb-btn-sm rb-btn-danger delete-brake-btn">
+                                × Удалить
+                            </button>
                         </div>
                     </div>
 
                     <div class="brake-card__body">
                         {{ brake_form.curve_source_brake_id }}
+                        {{ brake_form.catalog_source_id }}
+
+                        {# === Срез 3b: выбор источника параметров === #}
+                        <div class="rb-source-toggle">
+                            <button type="button" class="rb-source-tab is-active" data-source-mode="manual">
+                                ✎ Вручную
+                            </button>
+                            <button type="button" class="rb-source-tab"
+                                    data-source-mode="catalog"
+                                    {% if catalog_count == 0 %}disabled title="Каталог пуст"{% endif %}>
+                                ⊟ Из каталога{% if catalog_count == 0 %} (пусто){% endif %}
+                            </button>
+                            {% if catalog_count == 0 %}
+                            <a class="rb-source-add-link" href="{% url 'catalog_new' %}" target="_blank">
+                                + добавить в каталог
+                            </a>
+                            {% endif %}
+                        </div>
+
+                        {% if catalog_count > 0 %}
+                        <div class="rb-catalog-picker" hidden>
+                            <label>Выберите тормоз из каталога:</label>
+                            <select class="rb-catalog-select">
+                                <option value="">— выберите —</option>
+                                {% for item in catalog_items %}
+                                    <option value="{{ item.id }}" data-model-type="{{ item.model_type }}">
+                                        {{ item.name }} ({{ item.summary }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="rb-catalog-picker-info"></div>
+                        </div>
+                        {% endif %}
 
                         {% if brake_form.non_field_errors %}
-                            <div class="notice">
+                            <div class="notice" style="background: var(--rb-danger-soft); color: var(--rb-danger-dark); border-color: rgba(180,77,122,0.3);">
                                 {{ brake_form.non_field_errors }}
                             </div>
                         {% endif %}
@@ -126,279 +484,383 @@
 
                         <div class="brake-parametric-fields">
                             <h5>Параметрическая модель</h5>
-
                             <div class="form-grid">
                                 <div class="form-field">
-                                    <label for="{{ brake_form.gamma.id_for_label }}">{{ brake_form.gamma.label }}</label>
+                                    <label>γ (gamma)</label>
                                     {{ brake_form.gamma }}
                                     {% if brake_form.gamma.errors %}<div class="field-error">{{ brake_form.gamma.errors }}</div>{% endif %}
                                 </div>
-
                                 <div class="form-field">
-                                    <label for="{{ brake_form.delta.id_for_label }}">{{ brake_form.delta.label }}</label>
+                                    <label>δ (delta)</label>
                                     {{ brake_form.delta }}
                                     {% if brake_form.delta.errors %}<div class="field-error">{{ brake_form.delta.errors }}</div>{% endif %}
                                 </div>
-
                                 <div class="form-field">
-                                    <label for="{{ brake_form.xm.id_for_label }}">{{ brake_form.xm.label }}</label>
-                                    {{ brake_form.xm }}
-                                    {% if brake_form.xm.errors %}<div class="field-error">{{ brake_form.xm.errors }}</div>{% endif %}
-                                </div>
-
-                                <div class="form-field">
-                                    <label for="{{ brake_form.ym.id_for_label }}">{{ brake_form.ym.label }}</label>
-                                    {{ brake_form.ym }}
-                                    {% if brake_form.ym.errors %}<div class="field-error">{{ brake_form.ym.errors }}</div>{% endif %}
-                                </div>
-
-                                <div class="form-field">
-                                    <label for="{{ brake_form.dh1.id_for_label }}">{{ brake_form.dh1.label }}</label>
-                                    {{ brake_form.dh1 }}
-                                    {% if brake_form.dh1.errors %}<div class="field-error">{{ brake_form.dh1.errors }}</div>{% endif %}
-                                </div>
-
-                                <div class="form-field">
-                                    <label for="{{ brake_form.dh2.id_for_label }}">{{ brake_form.dh2.label }}</label>
-                                    {{ brake_form.dh2 }}
-                                    {% if brake_form.dh2.errors %}<div class="field-error">{{ brake_form.dh2.errors }}</div>{% endif %}
-                                </div>
-
-                                <div class="form-field">
-                                    <label for="{{ brake_form.dm.id_for_label }}">{{ brake_form.dm.label }}</label>
-                                    {{ brake_form.dm }}
-                                    {% if brake_form.dm.errors %}<div class="field-error">{{ brake_form.dm.errors }}</div>{% endif %}
-                                </div>
-
-                                <div class="form-field">
-                                    <label for="{{ brake_form.n.id_for_label }}">{{ brake_form.n.label }}</label>
+                                    <label>N (число секций)</label>
                                     {{ brake_form.n }}
                                     {% if brake_form.n.errors %}<div class="field-error">{{ brake_form.n.errors }}</div>{% endif %}
                                 </div>
-
                                 <div class="form-field">
-                                    <label for="{{ brake_form.mu.id_for_label }}">{{ brake_form.mu.label }}</label>
+                                    <label>x_m</label>
+                                    {{ brake_form.xm }}
+                                    {% if brake_form.xm.errors %}<div class="field-error">{{ brake_form.xm.errors }}</div>{% endif %}
+                                </div>
+                                <div class="form-field">
+                                    <label>y_m</label>
+                                    {{ brake_form.ym }}
+                                    {% if brake_form.ym.errors %}<div class="field-error">{{ brake_form.ym.errors }}</div>{% endif %}
+                                </div>
+                                <div class="form-field">
+                                    <label>Δh₁</label>
+                                    {{ brake_form.dh1 }}
+                                    {% if brake_form.dh1.errors %}<div class="field-error">{{ brake_form.dh1.errors }}</div>{% endif %}
+                                </div>
+                                <div class="form-field">
+                                    <label>Δh₂</label>
+                                    {{ brake_form.dh2 }}
+                                    {% if brake_form.dh2.errors %}<div class="field-error">{{ brake_form.dh2.errors }}</div>{% endif %}
+                                </div>
+                                <div class="form-field">
+                                    <label>d_m</label>
+                                    {{ brake_form.dm }}
+                                    {% if brake_form.dm.errors %}<div class="field-error">{{ brake_form.dm.errors }}</div>{% endif %}
+                                </div>
+                                <div class="form-field">
+                                    <label>μ</label>
                                     {{ brake_form.mu }}
                                     {% if brake_form.mu.errors %}<div class="field-error">{{ brake_form.mu.errors }}</div>{% endif %}
                                 </div>
-
                                 <div class="form-field">
-                                    <label for="{{ brake_form.bz.id_for_label }}">{{ brake_form.bz.label }}</label>
+                                    <label>B̄₃</label>
                                     {{ brake_form.bz }}
                                     {% if brake_form.bz.errors %}<div class="field-error">{{ brake_form.bz.errors }}</div>{% endif %}
                                 </div>
-
                                 <div class="form-field">
-                                    <label for="{{ brake_form.lya.id_for_label }}">{{ brake_form.lya.label }}</label>
+                                    <label>λ_a</label>
                                     {{ brake_form.lya }}
                                     {% if brake_form.lya.errors %}<div class="field-error">{{ brake_form.lya.errors }}</div>{% endif %}
                                 </div>
-
                                 <div class="form-field">
-                                    <label for="{{ brake_form.wn0.id_for_label }}">{{ brake_form.wn0.label }}</label>
+                                    <label>w_n0</label>
                                     {{ brake_form.wn0 }}
                                     {% if brake_form.wn0.errors %}<div class="field-error">{{ brake_form.wn0.errors }}</div>{% endif %}
                                 </div>
                             </div>
                         </div>
 
-                        <div class="brake-curve-fields">
-                            <h5>Характеристика по Excel-файлу F(v)</h5>
-
+                        <div class="brake-curve-fields" style="display: none;">
+                            <h5>Табличная характеристика F(v)</h5>
                             <div class="form-field">
-                                <label for="{{ brake_form.force_curve_file.id_for_label }}">
-                                    {{ brake_form.force_curve_file.label }}
-                                </label>
+                                <label for="{{ brake_form.force_curve_file.id_for_label }}">{{ brake_form.force_curve_file.label }}</label>
                                 {{ brake_form.force_curve_file }}
+                                {% if brake_form.force_curve_file.errors %}<div class="field-error">{{ brake_form.force_curve_file.errors }}</div>{% endif %}
                                 {% if brake_form.force_curve_file.help_text %}
-                                    <div class="muted">{{ brake_form.force_curve_file.help_text }}</div>
-                                {% endif %}
-                                {% if brake_form.force_curve_file.errors %}
-                                    <div class="field-error">{{ brake_form.force_curve_file.errors }}</div>
+                                    <div style="font-size: 11px; color: var(--rb-text-muted);">{{ brake_form.force_curve_file.help_text }}</div>
                                 {% endif %}
                             </div>
-
-                            <div class="curve-preview-block" style="display:none; margin-top:16px;">
-                                <h6 style="margin:0 0 10px 0;">Предварительный график F(v)</h6>
-                                <div class="curve-preview-plot" style="width:100%; min-height:320px;"></div>
+                            <div class="curve-preview-block" style="display: none;">
+                                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rb-text-muted); margin-bottom: 8px;">
+                                    Предварительный просмотр F(v)
+                                </div>
+                                <div class="curve-preview-plot"></div>
                             </div>
-
-                            <div class="curve-preview-error notice" style="display:none; margin-top:12px;"></div>
-
-                            <div class="muted" style="margin-top: 8px;">
-                                Браузер не сохраняет выбранный файл после ошибки валидации.
-                                Если форма вернулась с ошибками, Excel-файл может потребоваться выбрать повторно.
-                            </div>
+                            <div class="curve-preview-error" style="display: none;"></div>
                         </div>
                     </div>
                 </div>
-            {% endfor %}
-        </div>
+                {% endfor %}
+            </div>
 
-        <div id="empty-brake-form" class="hidden-template">
-            <div class="brake-card brake-form-item">
-                <div class="brake-card__head">
-                    <h4>Тормоз __number__</h4>
-                    <div class="brake-card__actions">
-                        <button type="button" class="copy-brake-btn">Копировать</button>
-                        <button type="button" class="delete-brake-btn">Удалить</button>
+        </div>{# /центральная панель #}
+    </div>{# /CAD #}
+
+    {# Шаблон пустой формы для динамического добавления #}
+    <div id="empty-brake-form" class="hidden-template" style="display: none;">
+        <div class="brake-card brake-form-item" data-brake-index="__prefix__">
+            <div class="rb-cad-brake-head">
+                <div class="rb-cad-brake-head-title">
+                    <span class="rb-cad-brake-head-prefix">Тормоз __number__</span>
+                    <span class="rb-cad-brake-head-divider"> · </span>
+                    <span class="rb-cad-brake-head-name" data-brake-display-name></span>
+                </div>
+                <div class="rb-cad-brake-head-actions">
+                    <button type="button" class="rb-btn rb-btn-sm rb-cad-save-to-catalog-btn">⊕ В каталог</button>
+                    <button type="button" class="rb-btn rb-btn-sm copy-brake-btn">⎘ Копировать</button>
+                    <button type="button" class="rb-btn rb-btn-sm rb-btn-danger delete-brake-btn">× Удалить</button>
+                </div>
+            </div>
+
+            <div class="brake-card__body">
+                {{ brake_formset.empty_form.curve_source_brake_id }}
+                {{ brake_formset.empty_form.catalog_source_id }}
+
+                <div class="rb-source-toggle">
+                    <button type="button" class="rb-source-tab is-active" data-source-mode="manual">✎ Вручную</button>
+                    <button type="button" class="rb-source-tab"
+                            data-source-mode="catalog"
+                            {% if catalog_count == 0 %}disabled title="Каталог пуст"{% endif %}>
+                        ⊟ Из каталога{% if catalog_count == 0 %} (пусто){% endif %}
+                    </button>
+                </div>
+
+                {% if catalog_count > 0 %}
+                <div class="rb-catalog-picker" hidden>
+                    <label>Выберите тормоз из каталога:</label>
+                    <select class="rb-catalog-select">
+                        <option value="">— выберите —</option>
+                        {% for item in catalog_items %}
+                            <option value="{{ item.id }}" data-model-type="{{ item.model_type }}">
+                                {{ item.name }} ({{ item.summary }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="rb-catalog-picker-info"></div>
+                </div>
+                {% endif %}
+
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="id_brakes-__prefix__-name">Имя тормоза</label>
+                        {{ brake_formset.empty_form.name }}
+                    </div>
+                    <div class="form-field">
+                        <label for="id_brakes-__prefix__-model_type">Тип задания тормоза</label>
+                        {{ brake_formset.empty_form.model_type }}
                     </div>
                 </div>
 
-                <div class="brake-card__body">
-                    {{ brake_formset.empty_form.curve_source_brake_id }}
-
+                <div class="brake-parametric-fields">
+                    <h5>Параметрическая модель</h5>
                     <div class="form-grid">
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-name">Имя тормоза</label>
-                            {{ brake_formset.empty_form.name }}
-                        </div>
-
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-model_type">Тип задания тормоза</label>
-                            {{ brake_formset.empty_form.model_type }}
-                        </div>
+                        <div class="form-field"><label>γ (gamma)</label>{{ brake_formset.empty_form.gamma }}</div>
+                        <div class="form-field"><label>δ (delta)</label>{{ brake_formset.empty_form.delta }}</div>
+                        <div class="form-field"><label>N</label>{{ brake_formset.empty_form.n }}</div>
+                        <div class="form-field"><label>x_m</label>{{ brake_formset.empty_form.xm }}</div>
+                        <div class="form-field"><label>y_m</label>{{ brake_formset.empty_form.ym }}</div>
+                        <div class="form-field"><label>Δh₁</label>{{ brake_formset.empty_form.dh1 }}</div>
+                        <div class="form-field"><label>Δh₂</label>{{ brake_formset.empty_form.dh2 }}</div>
+                        <div class="form-field"><label>d_m</label>{{ brake_formset.empty_form.dm }}</div>
+                        <div class="form-field"><label>μ</label>{{ brake_formset.empty_form.mu }}</div>
+                        <div class="form-field"><label>B̄₃</label>{{ brake_formset.empty_form.bz }}</div>
+                        <div class="form-field"><label>λ_a</label>{{ brake_formset.empty_form.lya }}</div>
+                        <div class="form-field"><label>w_n0</label>{{ brake_formset.empty_form.wn0 }}</div>
                     </div>
+                </div>
 
-                    <div class="brake-parametric-fields">
-                        <h5>Параметрическая модель</h5>
-
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-gamma">gamma</label>
-                                {{ brake_formset.empty_form.gamma }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-delta">delta</label>
-                                {{ brake_formset.empty_form.delta }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-xm">xm</label>
-                                {{ brake_formset.empty_form.xm }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-ym">ym</label>
-                                {{ brake_formset.empty_form.ym }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-dh1">dh1</label>
-                                {{ brake_formset.empty_form.dh1 }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-dh2">dh2</label>
-                                {{ brake_formset.empty_form.dh2 }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-dm">dm</label>
-                                {{ brake_formset.empty_form.dm }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-n">n</label>
-                                {{ brake_formset.empty_form.n }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-mu">mu</label>
-                                {{ brake_formset.empty_form.mu }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-bz">bz</label>
-                                {{ brake_formset.empty_form.bz }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-lya">lya</label>
-                                {{ brake_formset.empty_form.lya }}
-                            </div>
-                            <div class="form-field">
-                                <label for="id_brakes-__prefix__-wn0">wn0</label>
-                                {{ brake_formset.empty_form.wn0 }}
-                            </div>
-                        </div>
+                <div class="brake-curve-fields" style="display: none;">
+                    <h5>Табличная характеристика F(v)</h5>
+                    <div class="form-field">
+                        <label for="id_brakes-__prefix__-force_curve_file">Excel-файл F(v)</label>
+                        {{ brake_formset.empty_form.force_curve_file }}
                     </div>
-
-                    <div class="brake-curve-fields">
-                        <h5>Характеристика по Excel-файлу F(v)</h5>
-
-                        <div class="form-field">
-                            <label for="id_brakes-__prefix__-force_curve_file">Excel-файл характеристики F(v)</label>
-                            {{ brake_formset.empty_form.force_curve_file }}
-                            <div class="muted">
-                                Первый лист: колонка A — скорость, колонка B — сила.
-                                Первая строка может быть заголовком.
-                            </div>
+                    <div class="curve-preview-block" style="display: none;">
+                        <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rb-text-muted); margin-bottom: 8px;">
+                            Предварительный просмотр F(v)
                         </div>
-
-                        <div class="curve-preview-block" style="display:none; margin-top:16px;">
-                            <h6 style="margin:0 0 10px 0;">Предварительный график F(v)</h6>
-                            <div class="curve-preview-plot" style="width:100%; min-height:320px;"></div>
-                        </div>
-
-                        <div class="curve-preview-error notice" style="display:none; margin-top:12px;"></div>
-
-                        <div class="muted" style="margin-top: 8px;">
-                            При копировании карточки выбранный файл браузером не копируется.
-                        </div>
+                        <div class="curve-preview-plot"></div>
                     </div>
+                    <div class="curve-preview-error" style="display: none;"></div>
                 </div>
             </div>
         </div>
+    </div>
+</form>
 
-        <div class="actions">
-            <button type="submit" id="submit-calc-btn">Запустить расчёт</button>
-        </div>
-    </form>
-
-    <div id="calculation-overlay" class="calc-overlay">
-        <div class="calc-overlay__box">
-            <div class="calc-spinner"></div>
-            <h3>Идёт расчёт</h3>
-            <p>Пожалуйста, дождитесь завершения...</p>
-        </div>
+{# Loader при сабмите #}
+<div id="calculation-overlay">
+    <div>
+        <div style="font-size: 18px; margin-bottom: 8px;">Идёт расчёт...</div>
+        <div style="font-size: 13px; opacity: 0.7;">Это может занять несколько секунд</div>
     </div>
 </div>
 
-<div class="card">
-    <h2>Последние расчёты</h2>
-    <ul>
-        {% for run in runs %}
-            <li>
-                <a href="{% url 'run_detail' run.id %}">{{ run }}</a>
-                — {{ run.created_at }}
-            </li>
-        {% empty %}
-            <li>Пока нет расчётов</li>
-        {% endfor %}
-    </ul>
-</div>
+{# Toast notification #}
+<div id="rb-toast" class="rb-toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+{% endblock %}
+
+{% block body_extra %}
+{# Каталог тормозов — для JS-подстановки #}
+{{ catalog_items|json_script:"rb-catalog-data" }}
 
 <script>
+/* ============================================================================
+   FORMSET: добавление/удаление/копирование тормозов + sync со списком слева
+   ============================================================================ */
 (function () {
     const formsContainer = document.getElementById("brake-forms");
     const addBtn = document.getElementById("add-brake-btn");
     const totalFormsInput = document.getElementById("id_brakes-TOTAL_FORMS");
     const emptyFormTemplate = document.getElementById("empty-brake-form");
+    const brakeList = document.getElementById("brake-list");
+    const brakeCount = document.getElementById("brake-count");
+    const emptyState = document.getElementById("brake-empty-state");
 
     if (!formsContainer || !addBtn || !totalFormsInput || !emptyFormTemplate) return;
 
-    function renumberBrakeTitles() {
+    let activeIndex = 0;
+
+    function getBrakeName(card, index) {
+        const nameInput = card.querySelector('input[name$="-name"]');
+        const value = nameInput ? (nameInput.value || "").trim() : "";
+        return value || `Тормоз ${index + 1}`;
+    }
+
+    function getBrakeType(card) {
+        const select = card.querySelector('select[name$="-model_type"]');
+        return select ? select.value : "parametric";
+    }
+
+    function hasErrors(card) {
+        return card.querySelectorAll(".field-error, .notice").length > 0
+            && Array.from(card.querySelectorAll(".notice")).some(n => n.textContent.trim());
+    }
+
+    /* Срез 6a: статус заполненности тормоза для индикатора в sidebar */
+    const PARAM_FIELD_NAMES = [
+        "gamma", "delta", "n", "xm", "ym", "dh1", "dh2", "dm",
+        "mu", "bz", "lya", "wn0",
+    ];
+
+    function getBrakeStatus(card) {
+        // Server-side ошибки после неудачного сабмита — приоритет
+        if (hasErrors(card)) return "error";
+
+        const modelType = getBrakeType(card);
+
+        if (modelType === "curve") {
+            const fileInput = card.querySelector('input[name$="-force_curve_file"]');
+            const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+
+            const catalogIdInput = card.querySelector('input[name$="-catalog_source_id"]');
+            const hasCatalog = catalogIdInput && (catalogIdInput.value || "").trim() !== "";
+
+            const sourceBrakeInput = card.querySelector('input[name$="-curve_source_brake_id"]');
+            const hasSource = sourceBrakeInput && (sourceBrakeInput.value || "").trim() !== "";
+
+            return (hasFile || hasCatalog || hasSource) ? "complete" : "partial";
+        }
+
+        // parametric
+        let filled = 0;
+        PARAM_FIELD_NAMES.forEach(p => {
+            const el = card.querySelector('[name$="-' + p + '"]');
+            if (el && (el.value || "").trim() !== "") filled += 1;
+        });
+        if (filled === PARAM_FIELD_NAMES.length) return "complete";
+        if (filled === 0) return "empty";
+        return "partial";
+    }
+
+    const STATUS_ICONS = { complete: "✓", partial: "⚠", empty: "○", error: "✗" };
+    const STATUS_TITLES = {
+        complete: "Все параметры заполнены",
+        partial: "Заполнены не все параметры",
+        empty: "Параметры не заполнены",
+        error: "Есть ошибки валидации",
+    };
+
+    function rebuildBrakeList() {
         const items = formsContainer.querySelectorAll(".brake-form-item");
-        items.forEach((item, index) => {
-            const title = item.querySelector("h4");
-            if (title) title.textContent = `Тормоз ${index + 1}`;
+        brakeList.innerHTML = "";
+
+        items.forEach((card, index) => {
+            const name = getBrakeName(card, index);
+            const type = getBrakeType(card);
+            const status = getBrakeStatus(card);
+            const errored = (status === "error");
+
+            const li = document.createElement("div");
+            li.className = "rb-cad-brake-item";
+            if (index === activeIndex) li.classList.add("is-active");
+            if (errored) li.classList.add("has-errors");
+            li.dataset.brakeIndex = String(index);
+
+            li.innerHTML = `
+                <div class="rb-cad-brake-item-icon">${index + 1}</div>
+                <div class="rb-cad-brake-item-name" title="${name}">${name}</div>
+                <span class="rb-cad-brake-item-status is-${status}" title="${STATUS_TITLES[status]}">${STATUS_ICONS[status]}</span>
+                <div class="rb-cad-brake-item-badge">${type === "curve" ? "F(v)" : "пар"}</div>
+            `;
+
+            li.addEventListener("click", () => {
+                setActiveBrake(index);
+            });
+
+            brakeList.appendChild(li);
+        });
+
+        brakeCount.textContent = items.length;
+        updateEmptyState();
+    }
+
+    function updateEmptyState() {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        if (items.length === 0) {
+            emptyState.style.display = "";
+        } else {
+            emptyState.style.display = "none";
+        }
+    }
+
+    function setActiveBrake(index) {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        if (items.length === 0) {
+            activeIndex = 0;
+            updateEmptyState();
+            return;
+        }
+
+        if (index < 0) index = 0;
+        if (index >= items.length) index = items.length - 1;
+
+        activeIndex = index;
+
+        items.forEach((card, i) => {
+            card.classList.toggle("is-active", i === activeIndex);
+        });
+
+        rebuildBrakeList();
+        syncBrakeHeader();
+    }
+
+    function syncBrakeHeader() {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        items.forEach((card, index) => {
+            const name = getBrakeName(card, index);
+            const display = card.querySelector("[data-brake-display-name]");
+            if (display) display.textContent = name;
+            const prefix = card.querySelector(".rb-cad-brake-head-prefix");
+            if (prefix) prefix.textContent = `Тормоз ${index + 1}`;
         });
     }
 
+    /* === Старая логика реиндексации formset (нужна для add/delete) === */
+    function reindexForms() {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        items.forEach((item, index) => {
+            item.dataset.brakeIndex = String(index);
+            item.querySelectorAll("input, select, textarea, label").forEach((el) => {
+                ["name", "id", "for"].forEach((attr) => {
+                    if (el.hasAttribute && el.hasAttribute(attr)) {
+                        const value = el.getAttribute(attr);
+                        if (value) {
+                            el.setAttribute(attr, value.replace(/brakes-\d+-/g, `brakes-${index}-`));
+                        }
+                    }
+                });
+            });
+        });
+        totalFormsInput.value = items.length;
+    }
+
+    /* === Превью кривой F(v) — без изменений из старой версии === */
     function hideCurvePreview(card) {
         const previewBlock = card.querySelector(".curve-preview-block");
         const previewError = card.querySelector(".curve-preview-error");
         const previewPlot = card.querySelector(".curve-preview-plot");
-
         if (previewBlock) previewBlock.style.display = "none";
-        if (previewError) {
-            previewError.style.display = "none";
-            previewError.textContent = "";
-        }
+        if (previewError) { previewError.style.display = "none"; previewError.textContent = ""; }
         if (previewPlot) previewPlot.innerHTML = "";
     }
 
@@ -406,212 +868,122 @@
         const previewBlock = card.querySelector(".curve-preview-block");
         const previewError = card.querySelector(".curve-preview-error");
         const previewPlot = card.querySelector(".curve-preview-plot");
-
         if (previewBlock) previewBlock.style.display = "none";
         if (previewPlot) previewPlot.innerHTML = "";
-        if (previewError) {
-            previewError.textContent = message;
-            previewError.style.display = "";
-        }
+        if (previewError) { previewError.textContent = message; previewError.style.display = ""; }
     }
 
     function renderCurvePreview(card, points) {
         const previewBlock = card.querySelector(".curve-preview-block");
         const previewError = card.querySelector(".curve-preview-error");
         const previewPlot = card.querySelector(".curve-preview-plot");
-
         if (!previewBlock || !previewPlot) return;
-
-        if (previewError) {
-            previewError.style.display = "none";
-            previewError.textContent = "";
-        }
+        if (previewError) { previewError.style.display = "none"; previewError.textContent = ""; }
 
         const velocities = points.map((p) => p.velocity);
         const forces = points.map((p) => p.force);
 
         previewBlock.style.display = "";
 
-        Plotly.newPlot(
-            previewPlot,
-            [
-                {
-                    x: velocities,
-                    y: forces,
-                    type: "scatter",
-                    mode: "lines+markers",
-                    name: "F(v)",
-                },
-            ],
-            {
-                margin: { l: 60, r: 20, t: 20, b: 60 },
-                xaxis: { title: "Скорость, м/с" },
-                yaxis: { title: "Сила торможения, Н" },
-                showlegend: false,
-            },
-            {
-                responsive: true,
-                displayModeBar: false,
-            }
-        );
+        Plotly.newPlot(previewPlot, [{
+            x: velocities, y: forces, type: "scatter", mode: "lines+markers",
+            line: { color: "#3D73EB", width: 2.5 },
+            marker: { color: "#B44D7A", size: 6 },
+            name: "F(v)",
+        }], {
+            margin: { l: 50, r: 20, t: 20, b: 50 },
+            xaxis: { title: "v, м/с" },
+            yaxis: { title: "F, Н" },
+            showlegend: false,
+        }, { responsive: true, displayModeBar: false });
     }
 
-    function isEmptyCell(value) {
-        return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+    function isEmptyCell(v) {
+        return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
     }
-
-    function coerceNumber(value) {
-        if (typeof value === "number") return value;
-        if (typeof value === "string") {
-            const normalized = value.trim().replace(",", ".");
-            if (!normalized) return null;
-            const parsed = Number(normalized);
-            return Number.isFinite(parsed) ? parsed : null;
+    function coerceNumber(v) {
+        if (typeof v === "number") return v;
+        if (typeof v === "string") {
+            const n = v.trim().replace(",", ".");
+            if (!n) return null;
+            const p = Number(n);
+            return Number.isFinite(p) ? p : null;
         }
         return null;
     }
-
     function parseCurveRows(rows) {
         const points = [];
         let headerSkipped = false;
-
         rows.forEach((row, idx) => {
             const rowNo = idx + 1;
             const velocityRaw = Array.isArray(row) && row.length > 0 ? row[0] : null;
             const forceRaw = Array.isArray(row) && row.length > 1 ? row[1] : null;
-
-            if (isEmptyCell(velocityRaw) && isEmptyCell(forceRaw)) {
-                return;
-            }
-
+            if (isEmptyCell(velocityRaw) && isEmptyCell(forceRaw)) return;
             if (isEmptyCell(velocityRaw) || isEmptyCell(forceRaw)) {
-                throw new Error(`Строка ${rowNo}: должны быть заполнены и скорость, и сила.`);
+                throw new Error(`Строка ${rowNo}: должны быть заполнены и v, и F.`);
             }
-
             const velocity = coerceNumber(velocityRaw);
             const force = coerceNumber(forceRaw);
-
             if (velocity === null || force === null) {
-                if (!headerSkipped && points.length === 0) {
-                    headerSkipped = true;
-                    return;
-                }
-                throw new Error(`Строка ${rowNo}: значения скорости и силы должны быть числами.`);
+                if (!headerSkipped && points.length === 0) { headerSkipped = true; return; }
+                throw new Error(`Строка ${rowNo}: значения должны быть числами.`);
             }
-
-            if (velocity < 0) {
-                throw new Error(`Строка ${rowNo}: скорость не может быть отрицательной.`);
-            }
-
-            if (force < 0) {
-                throw new Error(`Строка ${rowNo}: сила торможения не может быть отрицательной.`);
-            }
-
+            if (velocity < 0) throw new Error(`Строка ${rowNo}: v < 0.`);
+            if (force < 0) throw new Error(`Строка ${rowNo}: F < 0.`);
             points.push({ velocity, force });
         });
-
-        if (points.length < 2) {
-            throw new Error("Для графического тормоза необходимо минимум 2 точки.");
-        }
-
+        if (points.length < 2) throw new Error("Минимум 2 точки.");
         for (let i = 1; i < points.length; i += 1) {
             if (points[i].velocity <= points[i - 1].velocity) {
-                throw new Error("Скорости в характеристике тормоза должны быть строго возрастающими.");
+                throw new Error("Скорости должны быть строго возрастающими.");
             }
         }
-
         return points;
     }
-
     function parseCurveFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-
             reader.onload = function (event) {
                 try {
                     const data = event.target.result;
                     const workbook = XLSX.read(data, { type: "array" });
                     const firstSheetName = workbook.SheetNames[0];
-                    if (!firstSheetName) {
-                        reject(new Error("Excel-файл не содержит листов."));
-                        return;
-                    }
-
+                    if (!firstSheetName) { reject(new Error("Excel пуст.")); return; }
                     const sheet = workbook.Sheets[firstSheetName];
                     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
-                    const points = parseCurveRows(rows);
-                    resolve(points);
-                } catch (error) {
-                    reject(error);
-                }
+                    resolve(parseCurveRows(rows));
+                } catch (err) { reject(err); }
             };
-
-            reader.onerror = function () {
-                reject(new Error("Не удалось прочитать файл."));
-            };
-
+            reader.onerror = function () { reject(new Error("Ошибка чтения файла.")); };
             reader.readAsArrayBuffer(file);
         });
     }
 
     function updateBrakeMode(card) {
         if (!card) return;
-
-        const modelTypeSelect = card.querySelector('select[name$="-model_type"]');
+        const select = card.querySelector('select[name$="-model_type"]');
         const parametricBlock = card.querySelector(".brake-parametric-fields");
         const curveBlock = card.querySelector(".brake-curve-fields");
-
-        if (!modelTypeSelect || !parametricBlock || !curveBlock) return;
-
-        const isCurve = modelTypeSelect.value === "curve";
+        if (!select || !parametricBlock || !curveBlock) return;
+        const isCurve = select.value === "curve";
         parametricBlock.style.display = isCurve ? "none" : "";
         curveBlock.style.display = isCurve ? "" : "none";
+        if (!isCurve) hideCurvePreview(card);
 
-        if (!isCurve) {
-            hideCurvePreview(card);
-        }
-    }
-
-    function reindexForms() {
-        const items = formsContainer.querySelectorAll(".brake-form-item");
-        items.forEach((item, index) => {
-            item.querySelectorAll("input, select, textarea, label").forEach((el) => {
-                ["name", "id", "for"].forEach((attr) => {
-                    if (el.hasAttribute && el.hasAttribute(attr)) {
-                        const value = el.getAttribute(attr);
-                        if (value) {
-                            el.setAttribute(
-                                attr,
-                                value.replace(/brakes-\d+-/g, `brakes-${index}-`)
-                            );
-                        }
-                    }
-                });
-            });
-        });
-        totalFormsInput.value = items.length;
-        renumberBrakeTitles();
+        // Обновляем значок типа в sidebar-списке
+        rebuildBrakeList();
     }
 
     function fillNewCardFromSource(sourceCard, newCard) {
         const sourceInputs = sourceCard.querySelectorAll("input, select, textarea");
         const newInputs = newCard.querySelectorAll("input, select, textarea");
-
         sourceInputs.forEach((src, index) => {
             const dst = newInputs[index];
             if (!dst) return;
-
-            if (src.type === "file") {
-                return;
-            }
-
-            if (src.type === "checkbox" || src.type === "radio") {
-                dst.checked = src.checked;
-            } else {
-                dst.value = src.value;
-            }
+            if (src.type === "file") return;
+            if (src.type === "checkbox" || src.type === "radio") dst.checked = src.checked;
+            else dst.value = src.value;
         });
-
         hideCurvePreview(newCard);
         updateBrakeMode(newCard);
     }
@@ -621,31 +993,43 @@
         let templateHtml = emptyFormTemplate.innerHTML
             .replace(/__prefix__/g, formIndex)
             .replace(/__number__/g, formIndex + 1);
-
         const wrapper = document.createElement("div");
         wrapper.innerHTML = templateHtml.trim();
         const newForm = wrapper.firstElementChild;
-
         formsContainer.appendChild(newForm);
         totalFormsInput.value = formIndex + 1;
         bindCardActions(newForm);
         updateBrakeMode(newForm);
-        renumberBrakeTitles();
+        rebuildBrakeList();
+        syncBrakeHeader();
         return newForm;
     }
 
     function bindCardActions(card) {
         const deleteBtn = card.querySelector(".delete-brake-btn");
         const copyBtn = card.querySelector(".copy-brake-btn");
-        const modelTypeSelect = card.querySelector('select[name$="-model_type"]');
-        const curveFileInput = card.querySelector('input[name$="-force_curve_file"]');
+        const select = card.querySelector('select[name$="-model_type"]');
+        const fileInput = card.querySelector('input[name$="-force_curve_file"]');
+        const nameInput = card.querySelector('input[name$="-name"]');
+        const saveCatalogBtn = card.querySelector(".rb-cad-save-to-catalog-btn");
 
         if (deleteBtn) {
             deleteBtn.addEventListener("click", function () {
                 const items = formsContainer.querySelectorAll(".brake-form-item");
-                if (items.length <= 1) return;
+                if (items.length <= 1) {
+                    showToast("Должен остаться хотя бы один тормоз", "error");
+                    return;
+                }
+                const wasIndex = parseInt(card.dataset.brakeIndex || "0", 10);
                 card.remove();
                 reindexForms();
+
+                // Переключаемся на ближайший
+                const newCount = formsContainer.querySelectorAll(".brake-form-item").length;
+                let newActive = wasIndex;
+                if (newActive >= newCount) newActive = newCount - 1;
+                if (newActive < 0) newActive = 0;
+                setActiveBrake(newActive);
             });
         }
 
@@ -653,56 +1037,294 @@
             copyBtn.addEventListener("click", function () {
                 const newCard = createBrakeForm();
                 fillNewCardFromSource(card, newCard);
+                // Активируем копию
+                const items = formsContainer.querySelectorAll(".brake-form-item");
+                setActiveBrake(items.length - 1);
             });
         }
 
-        if (modelTypeSelect) {
-            modelTypeSelect.addEventListener("change", function () {
+        if (select) {
+            select.addEventListener("change", function () {
                 updateBrakeMode(card);
             });
         }
 
-        if (curveFileInput) {
-            curveFileInput.addEventListener("change", async function () {
-                if (!curveFileInput.files || curveFileInput.files.length === 0) {
+        if (fileInput) {
+            fileInput.addEventListener("change", async function () {
+                if (!fileInput.files || fileInput.files.length === 0) {
                     hideCurvePreview(card);
                     return;
                 }
-
-                const file = curveFileInput.files[0];
-
+                const file = fileInput.files[0];
                 try {
                     const points = await parseCurveFile(file);
                     renderCurvePreview(card, points);
-                } catch (error) {
-                    showCurvePreviewError(card, error.message || "Не удалось построить предварительный график.");
+                } catch (err) {
+                    showCurvePreviewError(card, err.message || "Ошибка построения предпросмотра.");
                 }
+            });
+        }
+
+        if (nameInput) {
+            nameInput.addEventListener("input", function () {
+                rebuildBrakeList();
+                syncBrakeHeader();
+            });
+        }
+
+        /* Срез 6a: любое изменение поля карточки → пересчёт статуса в sidebar */
+        card.addEventListener("input", function () { rebuildBrakeList(); });
+        card.addEventListener("change", function () { rebuildBrakeList(); });
+
+        if (saveCatalogBtn) {
+            saveCatalogBtn.addEventListener("click", function () {
+                saveBrakeToCatalog(card);
             });
         }
 
         updateBrakeMode(card);
     }
 
-    addBtn.addEventListener("click", createBrakeForm);
+    /* === AJAX: сохранить тормоз в каталог === */
+    async function saveBrakeToCatalog(card) {
+        const fields = card.querySelectorAll("input, select, textarea");
+        const data = new FormData();
+
+        // CSRF токен
+        const csrf = document.querySelector("[name=csrfmiddlewaretoken]");
+        if (csrf) data.append("csrfmiddlewaretoken", csrf.value);
+
+        function getVal(name) {
+            const el = card.querySelector('[name$="-' + name + '"]');
+            return el ? (el.value || "").trim() : "";
+        }
+        function getFile(name) {
+            const el = card.querySelector('input[name$="-' + name + '"][type="file"]');
+            return el && el.files && el.files[0] ? el.files[0] : null;
+        }
+
+        const name = getVal("name");
+        if (!name) {
+            showToast("Заполните имя тормоза перед сохранением", "error");
+            return;
+        }
+
+        data.append("name", name);
+        data.append("model_type", getVal("model_type"));
+
+        const modelType = getVal("model_type");
+        if (modelType === "parametric") {
+            ["gamma", "delta", "n", "xm", "ym", "dh1", "dh2", "dm",
+             "mu", "bz", "lya", "wn0"].forEach(k => {
+                data.append(k, getVal(k));
+            });
+        } else {
+            // Файл F(v)
+            const file = getFile("force_curve_file");
+            if (file) {
+                data.append("curve_file", file);
+            } else {
+                // Может быть catalog_source_id если выбран из каталога
+                const catSrc = getVal("catalog_source_id");
+                if (catSrc) data.append("catalog_source_id", catSrc);
+            }
+        }
+
+        try {
+            const response = await fetch("{% url 'catalog_save_from_form' %}", {
+                method: "POST",
+                body: data,
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            const result = await response.json();
+            if (result.ok) {
+                showToast(`Тормоз «${result.name}» добавлен в каталог`, "success");
+            } else {
+                showToast(result.error || "Ошибка сохранения", "error");
+            }
+        } catch (err) {
+            showToast("Сетевая ошибка: " + err.message, "error");
+        }
+    }
+
+    function showToast(message, kind) {
+        const toast = document.getElementById("rb-toast");
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.remove("is-success", "is-error");
+        if (kind === "success") toast.classList.add("is-success");
+        if (kind === "error") toast.classList.add("is-error");
+        toast.classList.add("is-visible");
+        setTimeout(() => { toast.classList.remove("is-visible"); }, 3500);
+    }
+
+    // Если есть формы с server-side ошибками — переключаемся на первую с ошибкой
+    function focusFirstErrorForm() {
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        for (let i = 0; i < items.length; i += 1) {
+            if (hasErrors(items[i])) {
+                setActiveBrake(i);
+                return;
+            }
+        }
+    }
+
+    // === ИНИЦИАЛИЗАЦИЯ ===
+    addBtn.addEventListener("click", function () {
+        const newCard = createBrakeForm();
+        const items = formsContainer.querySelectorAll(".brake-form-item");
+        setActiveBrake(items.length - 1);
+    });
+
     formsContainer.querySelectorAll(".brake-form-item").forEach(bindCardActions);
-    renumberBrakeTitles();
+    setActiveBrake(0);
+    focusFirstErrorForm();
+
+    // Глобальный экспорт для каталог-скрипта (Срез 3b)
+    window.__rbRebuildBrakeList = rebuildBrakeList;
+    window.__rbSyncBrakeHeader = syncBrakeHeader;
 })();
 </script>
 
 <script>
+/* === Срез 3b: каталог тормозов — переключатель источника === */
+(function () {
+    "use strict";
+
+    function readCatalog() {
+        const node = document.getElementById("rb-catalog-data");
+        if (!node) return [];
+        try { return JSON.parse(node.textContent); } catch (e) { return []; }
+    }
+
+    const CATALOG = readCatalog();
+    const CATALOG_BY_ID = {};
+    CATALOG.forEach(item => { CATALOG_BY_ID[String(item.id)] = item; });
+
+    function findFields(card) {
+        const out = {};
+        const FIELD_NAMES = [
+            "name", "model_type",
+            "gamma", "delta", "n", "xm", "ym", "dh1", "dh2", "dm",
+            "mu", "bz", "lya", "wn0",
+            "catalog_source_id", "force_curve_file",
+        ];
+        FIELD_NAMES.forEach(fname => {
+            const candidates = card.querySelectorAll('[name$="-' + fname + '"]');
+            if (candidates.length) out[fname] = candidates[0];
+        });
+        return out;
+    }
+
+    function setField(field, value) {
+        if (!field) return;
+        field.value = (value === null || value === undefined) ? "" : value;
+        field.classList.add("rb-from-catalog");
+    }
+
+    function clearCatalogHighlight(card) {
+        card.querySelectorAll(".rb-from-catalog").forEach(el => el.classList.remove("rb-from-catalog"));
+    }
+
+    function applyCatalogItem(card, item) {
+        const fields = findFields(card);
+        const params = item.params || {};
+
+        if (fields.name) setField(fields.name, item.name);
+        if (fields.model_type) {
+            fields.model_type.value = item.model_type;
+            fields.model_type.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        if (fields.catalog_source_id) fields.catalog_source_id.value = String(item.id);
+
+        ["gamma", "delta", "n", "xm", "ym", "dh1", "dh2", "dm",
+         "mu", "bz", "lya", "wn0"].forEach(key => setField(fields[key], params[key]));
+
+        const picker = card.querySelector(".rb-catalog-picker");
+        const info = picker ? picker.querySelector(".rb-catalog-picker-info") : null;
+        if (info) {
+            const parts = [item.summary];
+            if (item.description) parts.push(item.description);
+            if (item.is_curve) parts.push("Файл F(v) будет взят из каталога");
+            info.textContent = parts.join(" — ");
+        }
+
+        // Sync с CAD-sidebar
+        if (window.__rbRebuildBrakeList) window.__rbRebuildBrakeList();
+        if (window.__rbSyncBrakeHeader) window.__rbSyncBrakeHeader();
+    }
+
+    function clearCatalogSource(card) {
+        const fields = findFields(card);
+        if (fields.catalog_source_id) fields.catalog_source_id.value = "";
+        clearCatalogHighlight(card);
+        const picker = card.querySelector(".rb-catalog-picker");
+        if (picker) {
+            const info = picker.querySelector(".rb-catalog-picker-info");
+            if (info) info.textContent = "";
+            const sel = picker.querySelector(".rb-catalog-select");
+            if (sel) sel.value = "";
+        }
+    }
+
+    function setMode(card, mode) {
+        const tabs = card.querySelectorAll(".rb-source-tab");
+        tabs.forEach(t => t.classList.toggle("is-active", t.dataset.sourceMode === mode));
+        const picker = card.querySelector(".rb-catalog-picker");
+        if (picker) picker.hidden = (mode !== "catalog");
+        if (mode === "manual") clearCatalogSource(card);
+    }
+
+    document.addEventListener("click", function (e) {
+        const tab = e.target.closest(".rb-source-tab");
+        if (!tab || tab.disabled) return;
+        const card = tab.closest(".brake-form-item");
+        if (!card) return;
+        e.preventDefault();
+        setMode(card, tab.dataset.sourceMode);
+    });
+
+    document.addEventListener("change", function (e) {
+        const sel = e.target.closest(".rb-catalog-select");
+        if (!sel) return;
+        const card = sel.closest(".brake-form-item");
+        if (!card) return;
+        const value = sel.value;
+        if (!value) { clearCatalogSource(card); return; }
+        const item = CATALOG_BY_ID[value];
+        if (item) applyCatalogItem(card, item);
+    });
+})();
+</script>
+
+<script>
+/* === Submit-кнопка в hero + Loader при сабмите === */
 (function () {
     const form = document.getElementById("calculation-form");
     const overlay = document.getElementById("calculation-overlay");
     const submitBtn = document.getElementById("submit-calc-btn");
 
-    if (!form || !overlay) return;
+    if (!form) return;
+
+    // Кнопка в hero находится вне <form> — кликом запускаем submit программно
+    if (submitBtn) {
+        submitBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            // requestSubmit вызывает submit-event, который пройдёт через handler ниже
+            if (typeof form.requestSubmit === "function") {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        });
+    }
 
     form.addEventListener("submit", function () {
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.textContent = "Идёт расчёт...";
         }
-        overlay.classList.add("active");
+        if (overlay) overlay.classList.add("active");
         form.classList.add("is-submitting");
     });
 })();

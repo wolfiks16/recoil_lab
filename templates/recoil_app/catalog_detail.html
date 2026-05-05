@@ -1,0 +1,373 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load static %}
+{% load recoil_extras %}
+
+{% block title %}{{ object.name }} — Каталог · RecoilLab{% endblock %}
+{% block shell_active %}catalog{% endblock %}
+{% block shell_crumb %}{{ object.name }}{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<style>
+    .rb-content { max-width: none; }
+
+    /* === Таблица параметров (Вариант 1 — техническая спецификация) === */
+    .rb-spec-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--rb-panel-bg-white);
+        border: 1px solid var(--rb-panel-border);
+        border-radius: var(--rb-radius-lg);
+        overflow: hidden;
+    }
+
+    .rb-spec-table thead th {
+        background: var(--rb-panel-bg-alt);
+        color: var(--rb-text-muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+        padding: 12px 18px;
+        text-align: left;
+        border-bottom: 1px solid var(--rb-panel-border);
+    }
+
+    .rb-spec-table thead th.num {
+        text-align: right;
+    }
+
+    .rb-spec-table tbody td {
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--rb-panel-border);
+        font-size: 13px;
+        vertical-align: middle;
+    }
+
+    .rb-spec-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .rb-spec-table tbody tr:hover {
+        background: rgba(61, 115, 235, 0.025);
+    }
+
+    .rb-spec-table .rb-spec-symbol {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--rb-blue);
+        width: 80px;
+        white-space: nowrap;
+    }
+
+    .rb-spec-table .rb-spec-label {
+        color: var(--rb-text);
+    }
+
+    .rb-spec-table .rb-spec-value {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--rb-text);
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .rb-spec-table .rb-spec-value-empty {
+        color: var(--rb-text-muted);
+        font-weight: 400;
+    }
+
+    .rb-spec-table .rb-spec-unit {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--rb-text-muted);
+        text-align: left;
+        padding-left: 0;
+        width: 80px;
+    }
+
+    /* Формула в hero */
+    .rb-formula-card {
+        background: linear-gradient(135deg, rgba(61,115,235,0.06), rgba(180,77,122,0.06));
+        border: 1px solid rgba(61,115,235,0.2);
+        border-radius: var(--rb-radius-lg);
+        padding: 18px 22px;
+        margin-bottom: 18px;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 16px;
+        color: var(--rb-text);
+        line-height: 1.6;
+        text-align: center;
+    }
+
+    .rb-formula-card sub {
+        font-size: 0.7em;
+    }
+
+    .rb-formula-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--rb-text-muted);
+        margin-bottom: 8px;
+        font-family: Manrope, sans-serif;
+    }
+
+    .rb-section-anchor {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--rb-text-muted);
+        margin: 22px 0 10px;
+    }
+
+    /* Таблица первых точек кривой */
+    .rb-curve-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 12px;
+    }
+
+    .rb-curve-table th {
+        text-align: left;
+        padding: 8px 12px;
+        background: var(--rb-panel-bg-alt);
+        color: var(--rb-text-muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+        position: sticky;
+        top: 0;
+    }
+
+    .rb-curve-table td {
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--rb-panel-border);
+        text-align: right;
+    }
+
+    .rb-curve-table td:first-child {
+        text-align: left;
+        color: var(--rb-text-muted);
+        font-size: 10px;
+    }
+
+    .rb-curve-table-wrap {
+        max-height: 320px;
+        overflow-y: auto;
+        border: 1px solid var(--rb-panel-border);
+        border-radius: var(--rb-radius);
+    }
+
+    /* Описание */
+    .rb-description-card {
+        background: var(--rb-panel-bg-white);
+        border: 1px solid var(--rb-panel-border);
+        border-radius: var(--rb-radius-lg);
+        padding: 16px 20px;
+        margin-bottom: 18px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--rb-text);
+        white-space: pre-line;
+    }
+
+    /* Простые карточки статистики (для табличной модели — оставляю карточки,
+       т.к. там их всего 3 и они компактные) */
+    .rb-stat-mini {
+        background: var(--rb-panel-bg-white);
+        border: 1px solid var(--rb-panel-border);
+        border-radius: var(--rb-radius);
+        padding: 12px 14px;
+        margin-bottom: 8px;
+    }
+    .rb-stat-mini-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--rb-text-muted);
+        margin-bottom: 4px;
+    }
+    .rb-stat-mini-value {
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--rb-text);
+    }
+    .rb-stat-mini-unit {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--rb-text-muted);
+        margin-left: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# === HERO === #}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>{{ object.name }}</h1>
+                {% if object.is_parametric %}
+                    <span class="rb-badge rb-badge-blue">параметрический</span>
+                {% else %}
+                    <span class="rb-badge rb-badge-accent">табличный F(v)</span>
+                {% endif %}
+            </div>
+            <div class="rb-hero-sub">
+                Запись каталога #{{ object.pk }} ·
+                создан {{ object.created_at|date:"d.m.Y" }} ·
+                обновлён {{ object.updated_at|date:"d.m.Y · H:i" }}
+                {% if usage_count %} · использовался в {{ usage_count }} расчёт{{ usage_count|pluralize:"е,ах,ах" }}{% endif %}
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn rb-btn-primary" href="{% url 'catalog_edit' object.pk %}">✎ Редактировать</a>
+            <a class="rb-btn" href="{% url 'index' %}">↗ Использовать в расчёте</a>
+            <a class="rb-btn" href="{% url 'catalog_list' %}">← К списку</a>
+            <form method="post" action="{% url 'catalog_delete' object.pk %}" style="display:inline-block;"
+                  onsubmit="return confirm('Удалить тормоз «{{ object.name|escapejs }}» из каталога?');">
+                {% csrf_token %}
+                <button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+{# === Описание (если есть) === #}
+{% if object.description %}
+<div class="rb-description-card">{{ object.description }}</div>
+{% endif %}
+
+{# === ПАРАМЕТРИЧЕСКАЯ МОДЕЛЬ === #}
+{% if object.is_parametric %}
+
+<div class="rb-formula-label">Физическая модель силы тормоза</div>
+<div class="rb-formula-card">
+    F<sub>T</sub> = (B̄<sub>3</sub>·k̄<sub>B</sub>·Ȳ<sub>a</sub>)² · V · [2θ<sub>κ</sub>/R<sub>κ</sub> + 4(2N-1)θ<sub>y</sub>/R<sub>y</sub>]
+</div>
+
+<div class="rb-section-anchor">Параметры тормоза</div>
+<table class="rb-spec-table">
+    <thead>
+        <tr>
+            <th style="width: 80px;">Символ</th>
+            <th>Параметр</th>
+            <th class="num">Значение</th>
+            <th style="width: 80px;">Ед.</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for card in parametric_cards %}
+        <tr>
+            <td class="rb-spec-symbol">{{ card.symbol }}</td>
+            <td class="rb-spec-label">{{ card.label }}</td>
+            <td class="rb-spec-value{% if card.value is None %} rb-spec-value-empty{% endif %}">
+                {% if card.value is not None %}{{ card.value|smart_num }}{% else %}—{% endif %}
+            </td>
+            <td class="rb-spec-unit">{{ card.unit|default:"" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{# === ТАБЛИЧНАЯ МОДЕЛЬ === #}
+{% else %}
+
+{# График F(v) #}
+<div class="rb-section">
+    <div class="rb-section-head">
+        <div class="rb-section-title">Характеристика F(v)</div>
+    </div>
+    <div class="rb-card">
+        {% if curve_html %}
+            {{ curve_html|safe }}
+        {% elif curve_error %}
+            <div class="rb-status-banner rb-status-banner-danger" style="margin: 0;">
+                <div class="rb-status-banner-icon">!</div>
+                <div>
+                    <div class="rb-status-banner-title">Ошибка чтения файла</div>
+                    <div class="rb-status-banner-sub" style="font-family: monospace; font-size: 12px;">{{ curve_error }}</div>
+                </div>
+            </div>
+        {% else %}
+            <div class="rb-text-muted" style="padding: 40px; text-align: center;">
+                Файл F(v) отсутствует или не содержит данных
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{# Статистика и таблица точек #}
+{% if curve_stats %}
+<div class="rb-plot-grid rb-plot-grid-main">
+    <div>
+        <div class="rb-section-head">
+            <div class="rb-section-title">Точки характеристики ({{ curve_stats.n_points }})</div>
+        </div>
+        <div class="rb-curve-table-wrap">
+            <table class="rb-curve-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th style="text-align:right;">v, м/с</th>
+                        <th style="text-align:right;">F, Н</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in curve_points %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ p.velocity|floatformat:4 }}</td>
+                        <td>{{ p.force|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <div class="rb-section-head">
+            <div class="rb-section-title">Статистика</div>
+        </div>
+        <div>
+            <div class="rb-stat-mini">
+                <div class="rb-stat-mini-label">Точек кривой</div>
+                <div class="rb-stat-mini-value">{{ curve_stats.n_points }}</div>
+            </div>
+            <div class="rb-stat-mini">
+                <div class="rb-stat-mini-label">Диапазон скорости</div>
+                <div class="rb-stat-mini-value">{{ curve_stats.v_min|floatformat:3 }} … {{ curve_stats.v_max|floatformat:3 }}<span class="rb-stat-mini-unit">м/с</span></div>
+            </div>
+            <div class="rb-stat-mini">
+                <div class="rb-stat-mini-label">Диапазон силы</div>
+                <div class="rb-stat-mini-value">{{ curve_stats.f_min|floatformat:1 }} … {{ curve_stats.f_max|floatformat:1 }}<span class="rb-stat-mini-unit">Н</span></div>
+            </div>
+            {% if object.curve_file %}
+            <a class="rb-file-row is-report" href="{{ object.curve_file.url }}" download>
+                <div class="rb-file-icon"></div>
+                <div class="rb-file-name">Скачать файл F(v)</div>
+                <div class="rb-file-meta">⬇ XLSX</div>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
