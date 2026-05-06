@@ -69,6 +69,7 @@
         const crumb         = mountEl.dataset.crumb || '';
         const indexUrl      = mountEl.dataset.indexUrl || '/';
         const dashboardUrl  = mountEl.dataset.dashboardUrl || indexUrl;
+        const resultsUrl    = mountEl.dataset.resultsUrl || '#';
         const compareUrl    = mountEl.dataset.compareUrl || '/compare/';
         const catalogUrl    = mountEl.dataset.catalogUrl || '#';
         const userInit      = mountEl.dataset.userInitials || 'ИК';
@@ -76,7 +77,7 @@
         const railUrls = {
             dashboard: dashboardUrl,
             workspace: indexUrl,
-            result:    '#',
+            result:    resultsUrl,
             optimize:  '#',
             compare:   compareUrl,
             catalog:   catalogUrl

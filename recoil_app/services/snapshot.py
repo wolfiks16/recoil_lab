@@ -36,19 +36,24 @@ def extract_snapshot_parts(run: CalculationRun) -> dict:
 
 
 def extract_overlay_data(run: CalculationRun) -> dict:
-    """Timeline + ключевые индексы из result_snapshot для overlay-графиков сравнения.
+    """Timeline + силы + индексы фаз из result_snapshot для overlay-графиков сравнения.
 
     Возвращает словарь:
         t, x, v, a — временные ряды
-        f_magnetic — суммарная магнитная сила (по времени)
-        t_recoil_end — момент разворота (для vline на графике)
-        recoil_end_index — индекс точки разворота в массиве t
+        f_magnetic, f_total, f_ext, f_spring, f_angle — суммарные силы
+        f_magnetic_each — матрица [N_точек × N_тормозов]
+        t_recoil_end / recoil_end_index — момент и индекс разворота
+        t_return_end / return_end_index — момент и индекс возврата (если был)
     """
     out: dict = {
         "t": [], "x": [], "v": [], "a": [],
-        "f_magnetic": [],
+        "f_magnetic": [], "f_total": [], "f_ext": [],
+        "f_spring": [], "f_angle": [],
+        "f_magnetic_each": [],
         "t_recoil_end": None,
         "recoil_end_index": None,
+        "t_return_end": None,
+        "return_end_index": None,
     }
     try:
         snap = run.snapshot
@@ -63,11 +68,19 @@ def extract_overlay_data(run: CalculationRun) -> dict:
     out["a"] = timeline.get("a") or []
 
     forces = rs.get("forces") or {}
-    out["f_magnetic"] = forces.get("magnetic_sum") or []
+    out["f_magnetic"]      = forces.get("magnetic_sum") or []
+    out["f_total"]         = forces.get("total") or []
+    out["f_ext"]           = forces.get("ext") or []
+    out["f_spring"]        = forces.get("spring") or []
+    out["f_angle"]         = forces.get("angle") or []
+    out["f_magnetic_each"] = forces.get("magnetic_each") or []
 
     phases = rs.get("phases") or {}
     recoil = phases.get("recoil") or {}
-    out["t_recoil_end"] = recoil.get("end_time")
+    out["t_recoil_end"]    = recoil.get("end_time")
     out["recoil_end_index"] = recoil.get("end_index")
+    return_phase = phases.get("return") or {}
+    out["t_return_end"]    = return_phase.get("end_time")
+    out["return_end_index"] = return_phase.get("end_index")
 
     return out

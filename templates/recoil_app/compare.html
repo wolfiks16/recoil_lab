@@ -10,6 +10,8 @@
 {% block head_extra %}
 <style>
     .rb-content { max-width: none; }
+    /* Скрываем неактивные панели (как на странице результата) */
+    .rb-tab-panel:not(.is-active) { display: none; }
 
     /* === Селектор расчётов === */
     .rb-cmp-selector {
@@ -254,7 +256,13 @@
 
 {% if run_a and run_b %}
 
+{# === LAYOUT: основная колонка + сайд-панель модулей === #}
+<div class="rb-with-sidepanel">
+
+<div>{# === MAIN COLUMN === #}
+
 {# === Карточки A и B === #}
+<section class="rb-module-section" data-module="cmp-runs">
 <div class="rb-cmp-runs">
     <div class="rb-cmp-run-card is-a">
         <div class="rb-cmp-run-letter">A</div>
@@ -273,8 +281,10 @@
         <a class="rb-cmp-run-link" href="{% url 'run_detail_v2' run_b.id %}">Открыть результат →</a>
     </div>
 </div>
+</section>
 
 {# === Дельта-таблица === #}
+<section class="rb-module-section" data-module="cmp-metrics">
 <div class="rb-section-head" style="margin-top: 18px;">
     <div class="rb-section-title">Метрики · дельта B — A</div>
 </div>
@@ -315,29 +325,96 @@
         {% endfor %}
     </tbody>
 </table>
+</section>
 
-{# === Графики (overlay через табы) === #}
+{# === Графики (двухуровневые табы как на странице результата) === #}
+<section class="rb-module-section" data-module="cmp-charts">
 <div class="rb-cmp-charts-card">
-    <div class="rb-tabs" data-tab-group="cmp">
-        <button class="rb-tab is-active" data-tab="x-t" type="button">x(t)</button>
-        <button class="rb-tab" data-tab="v-a" type="button">v · a (t)</button>
-        <button class="rb-tab" data-tab="v-x" type="button">v(x)</button>
-        <button class="rb-tab" data-tab="fmag-v" type="button">F_маг(v)</button>
+
+    {# Верхний уровень: набор графиков (Общие / Откат / Накат) #}
+    <div class="rb-tabs rb-tabs-pills" data-tab-group="cmp-set">
+        <button class="rb-tab is-active" data-tab="common" type="button">Общие</button>
+        {% if overlay_charts.has_recoil %}<button class="rb-tab" data-tab="recoil" type="button">Откат</button>{% endif %}
+        {% if overlay_charts.has_return %}<button class="rb-tab" data-tab="return" type="button">Накат</button>{% endif %}
     </div>
 
-    <div class="rb-tab-panel is-active" data-tab-group="cmp" data-tab="x-t">
-        {{ overlay_charts.x_t|safe }}
+    {# === НАБОР: ОБЩИЕ === #}
+    <div class="rb-tab-panel is-active" data-tab-group="cmp-set" data-tab="common">
+        <div class="rb-tabs" data-tab-group="cmp-common">
+            <button class="rb-tab is-active" data-tab="x-t"    type="button">x(t)</button>
+            <button class="rb-tab"           data-tab="v-a"    type="button">v · a (t)</button>
+            <button class="rb-tab"           data-tab="v-x"    type="button">v(x)</button>
+            <button class="rb-tab"           data-tab="fmag-v" type="button">F_маг(v)</button>
+            <button class="rb-tab"           data-tab="forces" type="button">F(t) силы</button>
+        </div>
+
+        <div class="rb-tab-panel is-active" data-tab-group="cmp-common" data-tab="x-t">{{ overlay_charts.common.x_t|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-common" data-tab="v-a">{{ overlay_charts.common.v_a_t|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-common" data-tab="v-x">{{ overlay_charts.common.v_x|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-common" data-tab="fmag-v">{{ overlay_charts.common.fmag_v|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-common" data-tab="forces">{{ overlay_charts.common.forces_secondary|safe }}</div>
     </div>
-    <div class="rb-tab-panel" data-tab-group="cmp" data-tab="v-a">
-        {{ overlay_charts.v_a_t|safe }}
+
+    {# === НАБОР: ОТКАТ === #}
+    {% if overlay_charts.has_recoil %}
+    <div class="rb-tab-panel" data-tab-group="cmp-set" data-tab="recoil">
+        <div class="rb-tabs" data-tab-group="cmp-recoil">
+            <button class="rb-tab is-active" data-tab="x-t"    type="button">x(t)</button>
+            <button class="rb-tab"           data-tab="v-a"    type="button">v · a (t)</button>
+            <button class="rb-tab"           data-tab="f-main" type="button">F движущая · F общая</button>
+            <button class="rb-tab"           data-tab="forces" type="button">F(t) силы</button>
+        </div>
+
+        <div class="rb-tab-panel is-active" data-tab-group="cmp-recoil" data-tab="x-t">{{ overlay_charts.recoil.x_t|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-recoil" data-tab="v-a">{{ overlay_charts.recoil.v_a_t|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-recoil" data-tab="f-main">{{ overlay_charts.recoil.forces_main|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-recoil" data-tab="forces">{{ overlay_charts.recoil.forces_secondary|safe }}</div>
     </div>
-    <div class="rb-tab-panel" data-tab-group="cmp" data-tab="v-x">
-        {{ overlay_charts.v_x|safe }}
+    {% endif %}
+
+    {# === НАБОР: НАКАТ === #}
+    {% if overlay_charts.has_return %}
+    <div class="rb-tab-panel" data-tab-group="cmp-set" data-tab="return">
+        <div class="rb-tabs" data-tab-group="cmp-return">
+            <button class="rb-tab is-active" data-tab="x-t"    type="button">x(t)</button>
+            <button class="rb-tab"           data-tab="v-a"    type="button">v · a (t)</button>
+            <button class="rb-tab"           data-tab="forces" type="button">F(t) силы</button>
+        </div>
+
+        <div class="rb-tab-panel is-active" data-tab-group="cmp-return" data-tab="x-t">{{ overlay_charts.return.x_t|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-return" data-tab="v-a">{{ overlay_charts.return.v_a_t|safe }}</div>
+        <div class="rb-tab-panel"           data-tab-group="cmp-return" data-tab="forces">{{ overlay_charts.return.forces_secondary|safe }}</div>
     </div>
-    <div class="rb-tab-panel" data-tab-group="cmp" data-tab="fmag-v">
-        {{ overlay_charts.fmag_v|safe }}
-    </div>
+    {% endif %}
+
 </div>
+</section>
+
+</div>{# /MAIN COLUMN #}
+
+{# === SIDE PANEL: модули === #}
+<aside class="rb-modules-panel">
+    <div class="rb-modules-panel-title">Модули</div>
+    <div class="rb-modules-actions">
+        <button class="rb-btn rb-btn-sm" id="rb-modules-show-all" type="button">Показать все</button>
+        <button class="rb-btn rb-btn-sm" id="rb-modules-hide-all" type="button">Скрыть все</button>
+    </div>
+
+    <label class="rb-module-toggle">
+        <input type="checkbox" class="rb-module-checkbox" data-module="cmp-runs" checked>
+        <span>Карточки A · B</span>
+    </label>
+    <label class="rb-module-toggle">
+        <input type="checkbox" class="rb-module-checkbox" data-module="cmp-metrics" checked>
+        <span>Метрики · дельта</span>
+    </label>
+    <label class="rb-module-toggle">
+        <input type="checkbox" class="rb-module-checkbox" data-module="cmp-charts" checked>
+        <span>Графики (общие/фазы)</span>
+    </label>
+</aside>
+
+</div>{# /rb-with-sidepanel #}
 
 {% else %}
 

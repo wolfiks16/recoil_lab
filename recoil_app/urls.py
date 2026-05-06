@@ -8,6 +8,8 @@ urlpatterns = [
     # Имя `index` сохраняется ради обратной совместимости с многочисленными {% url 'index' %}
     # в шаблонах (включая редиректы после создания и кнопки «Скопировать»).
     path("new/", views.index_view, name="index"),
+    # Каталог расчётов (список с поиском/фильтрами/пагинацией) — раньше жил на дашборде.
+    path("results/", views.results_view, name="results"),
     # Детали расчёта
     path("run/<int:run_id>/", views.run_detail_v2_view, name="run_detail_v2"),
     path("run/<int:run_id>/delete/", views.delete_run_view, name="delete_run"),

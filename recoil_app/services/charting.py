@@ -48,6 +48,13 @@ def _series_color(i: int) -> str:
     return SERIES_PALETTE[i % len(SERIES_PALETTE)]
 
 
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """#RRGGBB → rgba(r, g, b, a) для полупрозрачных линий и подписей."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
 def _add_recoil_vline(fig: go.Figure, result, label_text: str = "разворот") -> None:
     """Вертикальная пунктирная линия в момент разворота (если он есть).
 
@@ -74,40 +81,56 @@ def _add_peak_marker(
     label: str,
     color: str = RB_ACCENT,
     yref: str = "y",
+    label_xpos: float = 0.5,
     **kwargs,
 ) -> None:
-    """Маркер пика + аннотация справа от точки.
+    """Маркер пика: точка на (x, y) + горизонтальная пунктирная линия на уровне y
+    + полупрозрачная подпись по линии.
 
-    Любые лишние kwargs (ax, ay, x_arr, y_arr) принимаются для совместимости
-    со старыми вызовами и игнорируются — позиция аннотации фиксирована: справа.
+    Линия идёт горизонтально на уровне пика (касается кривой только в одной точке),
+    а подпись слабо видна на фоне графика — не перекрывает данные.
+
+    label_xpos — позиция плашки по горизонтали в долях ширины графика (0..1).
+    Для overlay-сравнения используем 0.33 / 0.66, чтобы плашки A и B не наложились.
+
+    Любые лишние kwargs (ax, ay, x_arr, y_arr) принимаются для совместимости.
     """
+    line_color = _hex_to_rgba(color, 0.45)
+
+    # Точка на самом пике — индикация x-позиции
     fig.add_trace(
         go.Scatter(
             x=[x_value],
             y=[y_value],
             mode="markers",
-            marker=dict(color=color, size=PEAK_MARKER_SIZE, line=dict(color="white", width=PEAK_MARKER_LINE_W)),
+            marker=dict(color=color, size=PEAK_MARKER_SIZE - 2, line=dict(color="white", width=PEAK_MARKER_LINE_W)),
             showlegend=False,
             hoverinfo="skip",
             yaxis=yref if yref != "y" else None,
         )
     )
+    # Горизонтальная пунктирная линия на уровне y_value, на всю ширину графика.
+    # layer="below" → линия под кривой, кривая не разрывается визуально.
+    fig.add_shape(
+        type="line",
+        xref="paper", x0=0.0, x1=1.0,
+        yref=yref, y0=y_value, y1=y_value,
+        line=dict(color=line_color, width=1.5, dash="dash"),
+        layer="below",
+    )
+    # Полупрозрачная подпись (чуть выше линии — чтобы её не перерезала).
     fig.add_annotation(
-        x=x_value,
-        y=y_value,
-        yref=yref,
+        xref="paper", x=label_xpos,
+        yref=yref, y=y_value,
         text=label,
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1.4,
-        arrowwidth=2,
-        arrowcolor=color,
-        ax=90,   # хвост стрелки на 90 px правее точки → плашка справа с заметным отступом
-        ay=0,    # на той же высоте
-        bgcolor=color,
-        bordercolor=color,
-        font=dict(color="white", size=ANNOT_FONT_SIZE, family=FONT_FAMILY_MONO),
+        showarrow=False,
+        bgcolor="rgba(255,255,255,0.7)",
+        bordercolor=line_color,
+        borderwidth=1,
+        font=dict(color=color, size=ANNOT_FONT_SIZE - 1, family=FONT_FAMILY_MONO),
         borderpad=4,
+        yshift=14,
+        opacity=0.9,
     )
 
 
@@ -756,7 +779,7 @@ def make_compare_x_t_fragment(
         fillcolor=_CMP_FILL_B,
     ))
 
-    # Маркеры пиков
+    # Маркеры пиков (плашки разнесены по горизонтали, чтобы A и B не наложились)
     pi_a = _peak_index_safe(x_a)
     if pi_a is not None and pi_a < len(t_a):
         _add_peak_marker(
@@ -765,6 +788,7 @@ def make_compare_x_t_fragment(
             y_value=float(x_a[pi_a]),
             label=f"A: x_max = {x_a[pi_a] * 1000:.1f} мм",
             color=_CMP_COLOR_A,
+            label_xpos=0.33,
         )
     pi_b = _peak_index_safe(x_b)
     if pi_b is not None and pi_b < len(t_b):
@@ -774,6 +798,7 @@ def make_compare_x_t_fragment(
             y_value=float(x_b[pi_b]),
             label=f"B: x_max = {x_b[pi_b] * 1000:.1f} мм",
             color=_CMP_COLOR_B,
+            label_xpos=0.66,
         )
 
     # Vlines разворотов разными цветами
@@ -894,6 +919,7 @@ def make_compare_v_x_fragment(
             y_value=float(v_a[ia]),
             label=f"A: разворот x={x_a[ia]*1000:.1f} мм",
             color=_CMP_COLOR_A,
+            label_xpos=0.33,
         )
     idx_b = snap_b.get("recoil_end_index")
     if idx_b is not None and 0 <= int(idx_b) < len(x_b):
@@ -904,6 +930,7 @@ def make_compare_v_x_fragment(
             y_value=float(v_b[ib]),
             label=f"B: разворот x={x_b[ib]*1000:.1f} мм",
             color=_CMP_COLOR_B,
+            label_xpos=0.66,
         )
 
     _apply_layout(fig, "Сравнение v(x) — фазовая плоскость", "x, м", "v, м/с")
@@ -933,4 +960,318 @@ def make_compare_fmag_v_fragment(
         ))
 
     _apply_layout(fig, "Сравнение F_маг(v) — суммарные магнитные силы", "v, м/с", "F, Н")
+    return _to_html_fragment(fig)
+
+
+# ---------------------------------------------------------------------------
+# Утилиты для фазовых срезов
+# ---------------------------------------------------------------------------
+
+def _slice_phase(snap: dict, phase: str) -> dict:
+    """Возвращает копию snap с массивами, обрезанными по выбранной фазе.
+
+    phase = "recoil" → точки 0..recoil_end_index (включительно)
+    phase = "return" → точки recoil_end_index..return_end_index (или до конца)
+    Если границ нет — возвращает пустые массивы.
+    """
+    out = {**snap}
+    n = len(snap.get("t") or [])
+    if n == 0:
+        return out
+
+    rec_end = snap.get("recoil_end_index")
+    ret_end = snap.get("return_end_index")
+
+    if phase == "recoil":
+        if rec_end is None:
+            i0, i1 = 0, n
+        else:
+            i0, i1 = 0, int(rec_end) + 1
+    elif phase == "return":
+        if rec_end is None:
+            return {**snap, "t": [], "x": [], "v": [], "a": [],
+                    "f_magnetic": [], "f_total": [], "f_ext": [],
+                    "f_spring": [], "f_angle": [], "f_magnetic_each": []}
+        i0 = int(rec_end)
+        i1 = int(ret_end) + 1 if ret_end is not None else n
+    else:
+        return out
+
+    i1 = min(i1, n)
+    if i0 >= i1:
+        return {**snap, "t": [], "x": [], "v": [], "a": [],
+                "f_magnetic": [], "f_total": [], "f_ext": [],
+                "f_spring": [], "f_angle": [], "f_magnetic_each": []}
+
+    def sl(key: str):
+        arr = snap.get(key) or []
+        return arr[i0:i1] if arr else []
+
+    out["t"]               = sl("t")
+    out["x"]               = sl("x")
+    out["v"]               = sl("v")
+    out["a"]               = sl("a")
+    out["f_magnetic"]      = sl("f_magnetic")
+    out["f_total"]         = sl("f_total")
+    out["f_ext"]           = sl("f_ext")
+    out["f_spring"]        = sl("f_spring")
+    out["f_angle"]         = sl("f_angle")
+    me = snap.get("f_magnetic_each") or []
+    out["f_magnetic_each"] = me[i0:i1] if me else []
+
+    # На фазовых срезах vline разворота не нужен — он стоит на границе
+    out["t_recoil_end"] = None
+    out["recoil_end_index"] = None
+
+    return out
+
+
+def has_phase(snap: dict, phase: str) -> bool:
+    """True если у расчёта есть данные для фазы."""
+    sliced = _slice_phase(snap, phase)
+    return bool(sliced.get("t"))
+
+
+# ---------------------------------------------------------------------------
+# Compare-overlay: x(t) для произвольной фазы
+# ---------------------------------------------------------------------------
+
+def make_compare_x_t_phase_fragment(
+    snap_a: dict, snap_b: dict, name_a: str, name_b: str, phase: str,
+) -> str:
+    """Overlay x(t) для одной фазы (recoil/return)."""
+    sa = _slice_phase(snap_a, phase)
+    sb = _slice_phase(snap_b, phase)
+    label = _phase_label(phase)
+    return _make_compare_x_t_overlay(
+        sa, sb, name_a, name_b,
+        title=f"Сравнение x(t) — фаза {label}",
+    )
+
+
+def _make_compare_x_t_overlay(
+    snap_a: dict, snap_b: dict, name_a: str, name_b: str, title: str,
+) -> str:
+    t_a = snap_a.get("t", []); x_a = snap_a.get("x", [])
+    t_b = snap_b.get("t", []); x_b = snap_b.get("x", [])
+
+    fig = go.Figure()
+    if t_a and x_a:
+        fig.add_trace(go.Scatter(
+            x=t_a, y=x_a, mode="lines", name=f"A · {name_a}",
+            line=dict(color=_CMP_COLOR_A, width=LINE_WIDTH_PRIMARY),
+            fill="tozeroy", fillcolor=_CMP_FILL_A,
+        ))
+    if t_b and x_b:
+        fig.add_trace(go.Scatter(
+            x=t_b, y=x_b, mode="lines", name=f"B · {name_b}",
+            line=dict(color=_CMP_COLOR_B, width=LINE_WIDTH_PRIMARY),
+            fill="tozeroy", fillcolor=_CMP_FILL_B,
+        ))
+
+    pi_a = _peak_index_safe(x_a)
+    if pi_a is not None and pi_a < len(t_a):
+        _add_peak_marker(
+            fig,
+            x_value=float(t_a[pi_a]), y_value=float(x_a[pi_a]),
+            label=f"A: x_max = {x_a[pi_a] * 1000:.1f} мм",
+            color=_CMP_COLOR_A, label_xpos=0.33,
+        )
+    pi_b = _peak_index_safe(x_b)
+    if pi_b is not None and pi_b < len(t_b):
+        _add_peak_marker(
+            fig,
+            x_value=float(t_b[pi_b]), y_value=float(x_b[pi_b]),
+            label=f"B: x_max = {x_b[pi_b] * 1000:.1f} мм",
+            color=_CMP_COLOR_B, label_xpos=0.66,
+        )
+
+    _apply_layout(fig, title, "t, c", "x, м")
+    return _to_html_fragment(fig)
+
+
+# ---------------------------------------------------------------------------
+# Compare-overlay: v · a (t) для произвольной фазы
+# ---------------------------------------------------------------------------
+
+def make_compare_v_a_t_phase_fragment(
+    snap_a: dict, snap_b: dict, name_a: str, name_b: str, phase: str,
+) -> str:
+    sa = _slice_phase(snap_a, phase)
+    sb = _slice_phase(snap_b, phase)
+    label = _phase_label(phase)
+    return _make_compare_v_a_t_overlay(
+        sa, sb, name_a, name_b,
+        title=f"Сравнение v(t) и a(t) — фаза {label}",
+    )
+
+
+def _make_compare_v_a_t_overlay(
+    snap_a: dict, snap_b: dict, name_a: str, name_b: str, title: str,
+) -> str:
+    t_a = snap_a.get("t", []); v_a = snap_a.get("v", []); a_a = snap_a.get("a", [])
+    t_b = snap_b.get("t", []); v_b = snap_b.get("v", []); a_b = snap_b.get("a", [])
+
+    if not (t_a or t_b):
+        return _to_html_fragment(go.Figure())
+
+    left_range, right_range = _aligned_zero_ranges(
+        list(v_a) + list(v_b), list(a_a) + list(a_b),
+    )
+
+    fig = go.Figure()
+    if t_a:
+        fig.add_trace(go.Scatter(
+            x=t_a, y=v_a, mode="lines", name=f"A · v: {name_a}", yaxis="y1",
+            line=dict(color=_CMP_COLOR_A, width=LINE_WIDTH_SECONDARY),
+        ))
+        fig.add_trace(go.Scatter(
+            x=t_a, y=a_a, mode="lines", name=f"A · a: {name_a}", yaxis="y2",
+            line=dict(color=_CMP_COLOR_A, width=LINE_WIDTH_SECONDARY, dash="dash"),
+        ))
+    if t_b:
+        fig.add_trace(go.Scatter(
+            x=t_b, y=v_b, mode="lines", name=f"B · v: {name_b}", yaxis="y1",
+            line=dict(color=_CMP_COLOR_B, width=LINE_WIDTH_SECONDARY),
+        ))
+        fig.add_trace(go.Scatter(
+            x=t_b, y=a_b, mode="lines", name=f"B · a: {name_b}", yaxis="y2",
+            line=dict(color=_CMP_COLOR_B, width=LINE_WIDTH_SECONDARY, dash="dash"),
+        ))
+
+    fig.update_layout(
+        title=dict(text=title, font=dict(family=FONT_FAMILY_UI, size=15, color="#1B2430")),
+        template="plotly_white", hovermode="x unified",
+        font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
+        plot_bgcolor="white",
+        yaxis=dict(
+            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_MONO, size=11)),
+            range=left_range,
+            zeroline=True, zerolinewidth=1.5, zerolinecolor="#C5CDD8",
+            gridcolor="#E1E5EC",
+            tickfont=dict(family=FONT_FAMILY_MONO, size=10),
+        ),
+        yaxis2=dict(
+            title=dict(text="a, м/с² (dash)", font=dict(family=FONT_FAMILY_MONO, size=11)),
+            overlaying="y", side="right", range=right_range,
+            zeroline=True, zerolinewidth=1.5, zerolinecolor="#C5CDD8",
+            tickfont=dict(family=FONT_FAMILY_MONO, size=10),
+        ),
+        legend=dict(
+            x=0.99, y=0.99, xanchor="right", yanchor="top",
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor="#E1E5EC", borderwidth=1,
+            font=dict(family=FONT_FAMILY_MONO, size=10),
+        ),
+        margin=dict(l=60, r=60, t=80, b=55),
+    )
+    fig.update_xaxes(
+        title=dict(text="t, c", font=dict(family=FONT_FAMILY_MONO, size=11)),
+        gridcolor="#E1E5EC", zerolinecolor="#C5CDD8",
+        tickfont=dict(family=FONT_FAMILY_MONO, size=10),
+    )
+
+    _add_compare_recoil_vline(fig, snap_a.get("t_recoil_end"), "разворот A", _CMP_COLOR_A)
+    _add_compare_recoil_vline(fig, snap_b.get("t_recoil_end"), "разворот B", _CMP_COLOR_B)
+    return _to_html_fragment(fig)
+
+
+# ---------------------------------------------------------------------------
+# Compare-overlay: распределение сил F(t) — общий и фазовые
+# ---------------------------------------------------------------------------
+
+def make_compare_forces_secondary_fragment(
+    snap_a: dict, snap_b: dict, name_a: str, name_b: str, phase: str | None = None,
+) -> str:
+    """Overlay распределения сил по времени (Fугла, Fпруж, Fмаг_сумм) для двух расчётов.
+
+    Серии каждого расчёта окрашены в свой основной цвет, чтобы различить A/B,
+    но с разной плотностью линии (пунктир для пружины, точка для магнитной).
+    Если phase задан — данные обрезаются по фазе.
+    """
+    sa = _slice_phase(snap_a, phase) if phase else snap_a
+    sb = _slice_phase(snap_b, phase) if phase else snap_b
+    label = _phase_label(phase) if phase else None
+
+    t_a = sa.get("t", [])
+    t_b = sb.get("t", [])
+
+    fig = go.Figure()
+
+    def _add_run_series(t, snap, color, prefix):
+        if not t:
+            return
+        fig.add_trace(go.Scatter(
+            x=t, y=snap.get("f_angle", []), mode="lines",
+            name=f"{prefix} · Fугла",
+            line=dict(color=color, width=LINE_WIDTH_SECONDARY),
+        ))
+        fig.add_trace(go.Scatter(
+            x=t, y=snap.get("f_spring", []), mode="lines",
+            name=f"{prefix} · Fпруж",
+            line=dict(color=color, width=LINE_WIDTH_SECONDARY, dash="dash"),
+        ))
+        fig.add_trace(go.Scatter(
+            x=t, y=snap.get("f_magnetic", []), mode="lines",
+            name=f"{prefix} · Fмаг_сумм",
+            line=dict(color=color, width=LINE_WIDTH_SECONDARY, dash="dot"),
+        ))
+
+    _add_run_series(t_a, sa, _CMP_COLOR_A, f"A · {name_a}")
+    _add_run_series(t_b, sb, _CMP_COLOR_B, f"B · {name_b}")
+
+    title = "Сравнение распределения сил от времени"
+    if label:
+        title += f" — фаза {label}"
+    _apply_layout(fig, title, "t, c", "F, Н")
+
+    if phase is None:
+        _add_compare_recoil_vline(fig, snap_a.get("t_recoil_end"), "разворот A", _CMP_COLOR_A)
+        _add_compare_recoil_vline(fig, snap_b.get("t_recoil_end"), "разворот B", _CMP_COLOR_B)
+
+    return _to_html_fragment(fig)
+
+
+# ---------------------------------------------------------------------------
+# Compare-overlay: F движущая · F общая (только для отката)
+# ---------------------------------------------------------------------------
+
+def make_compare_forces_main_recoil_fragment(
+    snap_a: dict, snap_b: dict, name_a: str, name_b: str,
+) -> str:
+    """Overlay движущей и суммарной сил по времени, обрезанных по фазе отката."""
+    sa = _slice_phase(snap_a, "recoil")
+    sb = _slice_phase(snap_b, "recoil")
+    t_a = sa.get("t", [])
+    t_b = sb.get("t", [])
+
+    fig = go.Figure()
+    if t_a:
+        fig.add_trace(go.Scatter(
+            x=t_a, y=sa.get("f_ext", []), mode="lines",
+            name=f"A · Fдв: {name_a}",
+            line=dict(color=_CMP_COLOR_A, width=LINE_WIDTH_SECONDARY),
+        ))
+        fig.add_trace(go.Scatter(
+            x=t_a, y=sa.get("f_total", []), mode="lines",
+            name=f"A · FΣ: {name_a}",
+            line=dict(color=_CMP_COLOR_A, width=LINE_WIDTH_SECONDARY, dash="dash"),
+        ))
+    if t_b:
+        fig.add_trace(go.Scatter(
+            x=t_b, y=sb.get("f_ext", []), mode="lines",
+            name=f"B · Fдв: {name_b}",
+            line=dict(color=_CMP_COLOR_B, width=LINE_WIDTH_SECONDARY),
+        ))
+        fig.add_trace(go.Scatter(
+            x=t_b, y=sb.get("f_total", []), mode="lines",
+            name=f"B · FΣ: {name_b}",
+            line=dict(color=_CMP_COLOR_B, width=LINE_WIDTH_SECONDARY, dash="dash"),
+        ))
+
+    _apply_layout(
+        fig,
+        "Сравнение движущей и суммарной сил — фаза откат",
+        "t, c", "F, Н",
+    )
     return _to_html_fragment(fig)
