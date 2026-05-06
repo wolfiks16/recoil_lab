@@ -211,4 +211,9 @@ __marimo__/
 
 # excel
 *.xlsx
+
+# claude
 .claude
+
+# тепло
+teplo
