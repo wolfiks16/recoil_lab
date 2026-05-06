@@ -1,30 +1,29 @@
 [Unit]
-Description=RecoilLab gunicorn daemon
+Description=Gunicorn for RecoilLab
 After=network.target
 
 [Service]
-# Пользователь recoil — выделенный, без shell. См. deploy/README.md.
-User=recoil
-# Группа www-data нужна, чтобы nginx мог писать в Unix socket gunicorn'а.
+# User=root, Group=www-data — сокет /run/recoil.sock создаётся доступным
+# группе www-data (под которой бежит nginx). Для большей изоляции можно
+# создать выделенного пользователя (см. deploy/README.md), но текущий prod
+# работает от root.
+User=root
 Group=www-data
 
-WorkingDirectory=/srv/recoil/recoil_web
+WorkingDirectory=/srv/recoil_lab
 
 # settings.prod подхватит .env через django-environ.
 Environment="DJANGO_SETTINGS_MODULE=recoil_project.settings.prod"
 
-ExecStart=/srv/recoil/recoil_web/.venv/bin/gunicorn \
-    --workers 3 \
-    --bind unix:/run/recoil.sock \
-    --timeout 300 \
-    --access-logfile - \
-    --error-logfile - \
-    recoil_project.wsgi:application
+# ВАЖНО: ExecStart строго одной строкой. Многострочный вариант с "\" в systemd
+# хрупкий — однажды у нас отвалился префикс "--" перед error-logfile, и
+# gunicorn пытался импортировать модуль с именем error-logfile.
+ExecStart=/srv/recoil_lab/.venv/bin/gunicorn --workers 3 --bind unix:/run/recoil.sock --timeout 300 --access-logfile - --error-logfile - recoil_project.wsgi:application
 
 Restart=on-failure
 RestartSec=5s
 
-# Логи через stderr → systemd journal (см. journalctl -u gunicorn).
+# Логи через stdout/stderr → systemd journal (см. journalctl -u recoillab).
 
 [Install]
 WantedBy=multi-user.target
