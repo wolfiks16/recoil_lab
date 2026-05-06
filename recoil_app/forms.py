@@ -324,3 +324,256 @@ class BrakeCatalogForm(forms.ModelForm):
         if qs.exists():
             raise ValidationError("Запись с таким именем уже существует в каталоге.")
         return name
+
+
+# ============================================================================
+# Тепловой модуль: формы для ThermalRun
+# ============================================================================
+
+from .models import ThermalRun  # noqa: E402
+from .services.thermal.materials import (  # noqa: E402
+    BUS_MATERIAL_CHOICES,
+    NONMAG_ROD_MATERIAL_CHOICES,
+    material_choices_for_form,
+)
+
+
+def _positive_float(label: str, *, initial=None, required=True, help_text="") -> forms.FloatField:
+    return forms.FloatField(
+        label=label,
+        required=required,
+        initial=initial,
+        help_text=help_text,
+        validators=[MinValueValidator(0.0, "Значение должно быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+
+
+def _strict_positive_float(label: str, *, initial=None, required=True, help_text="") -> forms.FloatField:
+    return forms.FloatField(
+        label=label,
+        required=required,
+        initial=initial,
+        help_text=help_text,
+        validators=[MinValueValidator(1e-9, "Значение должно быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0.000000001", "step": "any"}),
+    )
+
+
+class ThermalRunForm(forms.Form):
+    """Главная форма теплового сценария — цикл и параметры сборки."""
+
+    name = forms.CharField(
+        label="Название сценария",
+        max_length=200,
+        widget=forms.TextInput(attrs={
+            "placeholder": "Очередь 5 выстрелов",
+        }),
+    )
+
+    network_preset = forms.ChoiceField(
+        label="Тепловая сеть",
+        choices=ThermalRun.PRESET_CHOICES,
+        initial=ThermalRun.PRESET_NINE_NODE,
+    )
+
+    repetitions = forms.IntegerField(
+        label="Число повторений",
+        initial=1,
+        validators=[
+            MinValueValidator(1, "Повторений должно быть не меньше 1."),
+            MaxValueValidator(100, "Повторений не больше 100."),
+        ],
+        widget=forms.NumberInput(attrs={"min": "1", "max": "100", "step": "1"}),
+    )
+    pause_s = forms.FloatField(
+        label="Пауза между повторениями, с",
+        initial=10.0,
+        validators=[MinValueValidator(0.0, "Пауза не может быть отрицательной.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+
+    # --- Геометрия сборки (только для 9-узловой сети) ---
+    D_casing_outer = _strict_positive_float("Обечайка: внешний Ø, м", initial=0.450, required=False)
+    delta_casing = _strict_positive_float("Обечайка: толщина стенки, м", initial=0.015, required=False)
+    L_casing = _strict_positive_float("Обечайка: длина, м", initial=0.85, required=False)
+
+    D_nonmag_outer = _strict_positive_float("Шток немагн.: внешний Ø, м", initial=0.322, required=False)
+    D_nonmag_inner = _strict_positive_float("Шток немагн.: внутренний Ø, м", initial=0.282, required=False)
+    L_nonmag = _strict_positive_float("Шток немагн.: длина, м", initial=0.85, required=False)
+    nonmag_rod_material = forms.ChoiceField(
+        label="Материал штока немагнитного",
+        choices=material_choices_for_form(NONMAG_ROD_MATERIAL_CHOICES),
+        initial="stainless",
+        required=False,
+    )
+
+    D_rod_steel_outer = _strict_positive_float("Шток сталь: внешний Ø, м", initial=0.202, required=False)
+    D_rod_steel_inner = _positive_float("Шток сталь: внутренний Ø (0 = сплошной), м", initial=0.172, required=False)
+    L_rod_steel = _strict_positive_float("Шток сталь: длина, м", initial=0.85, required=False)
+
+    delta_gap_casing_to_outer_bus = _strict_positive_float(
+        "Зазор обечайка↔шина внеш., м", initial=1e-3, required=False,
+    )
+    delta_gap_inner_bus_to_rod = _strict_positive_float(
+        "Зазор шина внутр.↔шток сталь, м", initial=1e-3, required=False,
+    )
+    h_contact_magnet_rod = _strict_positive_float(
+        "h контакта магнит↔шток, Вт/(м²·К)", initial=1000.0, required=False,
+    )
+
+    h_ambient_outer = _strict_positive_float(
+        "h наружного воздуха, Вт/(м²·К)", initial=10.0, required=False,
+    )
+    T_ambient_outer = forms.FloatField(
+        label="T наружного воздуха, °C",
+        initial=20.0,
+        required=False,
+        widget=forms.NumberInput(attrs={"step": "any"}),
+    )
+    h_ambient_rod_cavity = _positive_float(
+        "h воздуха внутри штока, Вт/(м²·К)", initial=4.0, required=False,
+    )
+    T_ambient_rod_cavity = forms.FloatField(
+        label="T воздуха внутри штока, °C",
+        initial=25.0,
+        required=False,
+        widget=forms.NumberInput(attrs={"step": "any"}),
+    )
+
+    def __init__(self, *args, run=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._run = run
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise ValidationError("Название обязательно.")
+        if self._run is not None:
+            qs = ThermalRun.objects.filter(run=self._run, name=name)
+            if qs.exists():
+                raise ValidationError(
+                    "Сценарий с таким названием уже есть для этого расчёта."
+                )
+        return name
+
+    def clean(self):
+        cleaned = super().clean()
+        preset = cleaned.get("network_preset")
+        if preset == ThermalRun.PRESET_NINE_NODE:
+            required_fields = [
+                "D_casing_outer", "delta_casing", "L_casing",
+                "D_nonmag_outer", "D_nonmag_inner", "L_nonmag", "nonmag_rod_material",
+                "D_rod_steel_outer", "L_rod_steel",
+                "delta_gap_casing_to_outer_bus", "delta_gap_inner_bus_to_rod",
+                "h_contact_magnet_rod",
+                "h_ambient_outer", "T_ambient_outer",
+            ]
+            missing = [f for f in required_fields if cleaned.get(f) in (None, "")]
+            if missing:
+                for f in missing:
+                    self.add_error(f, "Обязательное поле для 9-узловой сети.")
+                raise ValidationError(
+                    "Для 9-узловой сети заполните геометрию сборки полностью."
+                )
+
+            # Sanity-check: D_outer > D_inner у пар.
+            pairs = [
+                ("D_nonmag_outer", "D_nonmag_inner"),
+                ("D_rod_steel_outer", "D_rod_steel_inner"),
+            ]
+            for d_out, d_in in pairs:
+                v_out = cleaned.get(d_out)
+                v_in = cleaned.get(d_in)
+                if v_out is not None and v_in is not None and v_in > 0 and v_in >= v_out:
+                    self.add_error(d_in, "Внутренний Ø должен быть меньше внешнего.")
+        return cleaned
+
+
+class ThermalBrakeForm(forms.Form):
+    """Форма геометрии одного тормоза для тепловой сети."""
+
+    bus_material = forms.ChoiceField(
+        label="Материал шины",
+        choices=material_choices_for_form(BUS_MATERIAL_CHOICES),
+        initial="aluminum",
+    )
+
+    D_bus_outer = _strict_positive_float("Шина: внешний Ø, м", initial=0.4)
+    D_bus_inner = _strict_positive_float("Шина: внутренний Ø, м", initial=0.385)
+    L_active = _strict_positive_float("Активная длина, м", initial=0.80)
+
+    D_pole_outer = _strict_positive_float("Полюсник: внешний Ø, м", initial=0.382, required=False)
+    D_pole_inner = _strict_positive_float("Полюсник: внутренний Ø, м", initial=0.352, required=False)
+    L_pole = _strict_positive_float("Полюсник: длина, м", initial=0.80, required=False)
+
+    D_magnet_outer = _strict_positive_float("Магниты: внешний Ø, м", initial=0.352, required=False)
+    D_magnet_inner = _strict_positive_float("Магниты: внутренний Ø, м", initial=0.322, required=False)
+    L_magnet = _strict_positive_float("Магниты: длина, м", initial=0.78, required=False)
+
+    delta_gap_working = _strict_positive_float(
+        "Толщина рабочего магнитного зазора, м", initial=1.5e-3, required=False,
+    )
+    h_contact_pole_magnet = _strict_positive_float(
+        "h контакта полюсник↔магнит, Вт/(м²·К)", initial=1000.0, required=False,
+    )
+
+    def __init__(self, *args, network_preset=None, brake_meta=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._network_preset = network_preset
+        # brake_meta: {'index': int, 'display_name': str, 'magnetic_params': dict|None}
+        # Используется в шаблоне для подписи и в JS-кнопке "подставить из brake params".
+        self._brake_meta = brake_meta or {}
+
+    def clean(self):
+        cleaned = super().clean()
+
+        # Проверка, что внутр. Ø < внешн. Ø по парам
+        pairs = [
+            ("D_bus_outer", "D_bus_inner"),
+            ("D_pole_outer", "D_pole_inner"),
+            ("D_magnet_outer", "D_magnet_inner"),
+        ]
+        for d_out, d_in in pairs:
+            v_out = cleaned.get(d_out)
+            v_in = cleaned.get(d_in)
+            if v_out is not None and v_in is not None and v_in >= v_out:
+                self.add_error(d_in, "Внутренний Ø должен быть меньше внешнего.")
+
+        # Для 9-узловой все поля обязательные.
+        if self._network_preset == ThermalRun.PRESET_NINE_NODE:
+            nine_node_required = [
+                "D_pole_outer", "D_pole_inner", "L_pole",
+                "D_magnet_outer", "D_magnet_inner", "L_magnet",
+                "delta_gap_working", "h_contact_pole_magnet",
+            ]
+            for f in nine_node_required:
+                if cleaned.get(f) in (None, ""):
+                    self.add_error(f, "Обязательное поле для 9-узловой сети.")
+        return cleaned
+
+
+class BaseThermalBrakeFormSet(BaseFormSet):
+    """Formset, в котором каждой форме можно прокинуть network_preset и brake_meta."""
+
+    def __init__(self, *args, network_preset=None, brake_meta_list=None, **kwargs):
+        self._network_preset = network_preset
+        self._brake_meta_list = brake_meta_list or []
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        kwargs["network_preset"] = self._network_preset
+        if 0 <= index < len(self._brake_meta_list):
+            kwargs["brake_meta"] = self._brake_meta_list[index]
+        return kwargs
+
+
+ThermalBrakeFormSet = formset_factory(
+    ThermalBrakeForm,
+    formset=BaseThermalBrakeFormSet,
+    extra=0,
+    min_num=1,
+    validate_min=True,
+)
+

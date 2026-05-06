@@ -1,9 +1,44 @@
+import json
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django import template
+from django.utils.safestring import mark_safe
 
 
 register = template.Library()
+
+
+@register.filter(name="index_or")
+def index_or(seq, idx):
+    """`seq[idx]`, либо None при ошибке.
+
+    Поддерживает и список (числовой индекс), и словарь (строковый ключ).
+    Шаблонная разметка не позволяет напрямую обращаться к dict с переменным ключом —
+    отсюда и фильтр.
+    """
+    if seq is None:
+        return None
+    if isinstance(seq, dict):
+        return seq.get(idx)
+    try:
+        return seq[int(idx)]
+    except (TypeError, ValueError, IndexError, KeyError):
+        try:
+            return seq[idx]
+        except Exception:  # noqa: BLE001
+            return None
+
+
+@register.filter(name="json_script_data", is_safe=True)
+def json_script_data(value):
+    """Сериализация значения как JSON для встраивания в <script type="application/json">.
+
+    Простая обёртка над json.dumps с экранированием опасных подпоследовательностей,
+    чтобы безопасно встроить в HTML без `</script>` injection.
+    """
+    text = json.dumps(value, ensure_ascii=False, default=str)
+    text = text.replace("</", "<\\/").replace("<!--", "<\\!--")
+    return mark_safe(text)
 
 
 @register.filter(name="fmt5")

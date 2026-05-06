@@ -265,6 +265,9 @@ def run_detail_v2_view(request, run_id):
         "chart_x_t_return", "chart_v_a_t_return", "chart_forces_secondary_return"
     ])
 
+    thermal_runs_preview = list(run.thermal_runs.order_by("-created_at")[:3])
+    thermal_runs_total = run.thermal_runs.count()
+
     return render(
         request,
         "recoil_app/run_detail_v2.html",
@@ -284,6 +287,8 @@ def run_detail_v2_view(request, run_id):
             "phase_analysis": snapshot_parts["phase_analysis"],
             "characteristic_points": snapshot_parts["characteristic_points"],
             "engineering_metrics": snapshot_parts["engineering_metrics"],
+            "thermal_runs_preview": thermal_runs_preview,
+            "thermal_runs_total": thermal_runs_total,
         },
     )
 

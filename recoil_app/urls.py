@@ -25,4 +25,10 @@ urlpatterns = [
 
     # AJAX: сохранить тормоз из формы расчёта в каталог (Срез 4)
     path("catalog/save-from-form/", views.catalog_save_from_brake_form_view, name="catalog_save_from_form"),
+
+    # Тепловой модуль
+    path("run/<int:run_id>/thermal/", views.thermal_list_view, name="thermal_list"),
+    path("run/<int:run_id>/thermal/new/", views.thermal_new_view, name="thermal_new"),
+    path("run/<int:run_id>/thermal/<int:thermal_id>/", views.thermal_detail_view, name="thermal_detail"),
+    path("run/<int:run_id>/thermal/<int:thermal_id>/delete/", views.thermal_delete_view, name="thermal_delete"),
 ]

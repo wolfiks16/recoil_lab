@@ -1,0 +1,186 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+{% load static %}
+
+{% block title %}Новый тепловой сценарий — {{ run.name }} · RecoilLab{% endblock %}
+{% block shell_active %}result{% endblock %}
+{% block shell_crumb %}{{ run.name }} · Тепло · Новый{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<style>
+    .rb-content { max-width: none; }
+    .tf-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+    .tf-card { padding: 16px; }
+    .tf-section-title { font-weight: 600; font-size: 13px; color: var(--rb-text); margin: 16px 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid var(--rb-panel-border); }
+    .tf-section-title:first-child { margin-top: 0; }
+    .tf-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+    .tf-fields label { font-size: 12px; color: var(--rb-text-soft); display: flex; flex-direction: column; gap: 4px; }
+    .tf-fields input, .tf-fields select { padding: 6px 8px; font-family: var(--rb-font-mono, monospace); font-size: 12px; border: 1px solid var(--rb-panel-border); border-radius: 4px; background: white; }
+    .tf-fields .errors { color: var(--rb-danger-dark); font-size: 11px; }
+    .tf-brake-form { padding: 12px; border: 1px solid var(--rb-panel-border); border-radius: 6px; margin-bottom: 12px; background: var(--rb-bg-soft, #FAFBFC); }
+    .tf-brake-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .tf-brake-title { font-weight: 600; font-size: 13px; }
+    .tf-prefill-btn { font-size: 11px; padding: 4px 8px; }
+    .tf-form-errors { color: var(--rb-danger-dark); font-size: 12px; padding: 8px 12px; background: var(--rb-danger-soft); border-radius: 4px; margin-bottom: 12px; }
+    .tf-conditional[data-preset-only="nine_node"] { display: var(--tf-9n-display, block); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# === HERO === #}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>Новый тепловой сценарий</h1>
+            </div>
+            <div class="rb-hero-sub">
+                Расчёт «{{ run.name }}» · тормозов: {{ brakes|length }}
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn" href="{% url 'thermal_list' run.id %}">← К сценариям</a>
+        </div>
+    </div>
+</section>
+
+{% if form.non_field_errors %}
+<div class="tf-form-errors">{{ form.non_field_errors }}</div>
+{% endif %}
+
+<form method="post" id="thermal-form">
+    {% csrf_token %}
+    {{ brake_formset.management_form }}
+
+    <div class="tf-grid">
+
+        <div>{# === ЛЕВАЯ КОЛОНКА: тормоза === #}
+        <div class="rb-card tf-card">
+            <div class="tf-section-title">Геометрия тормозов</div>
+
+            {% for brake_form in brake_formset.forms %}
+            <div class="tf-brake-form" data-brake-index="{{ forloop.counter0 }}">
+                <div class="tf-brake-head">
+                    <div class="tf-brake-title">
+                        {% with meta=brake_meta|index_or:forloop.counter0 %}
+                            {% if meta %}
+                                #{{ meta.index|add:1 }} · {{ meta.display_name }}
+                                {% if meta.is_parametric %}
+                                    <span class="rb-badge rb-badge-blue" style="margin-left: 6px;">parametric</span>
+                                {% else %}
+                                    <span class="rb-badge rb-badge-accent" style="margin-left: 6px;">curve</span>
+                                {% endif %}
+                            {% else %}
+                                Тормоз #{{ forloop.counter }}
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    <button type="button" class="rb-btn rb-btn-sm tf-prefill-btn"
+                            data-prefill-target="{{ forloop.counter0 }}"
+                            {% with meta=brake_meta|index_or:forloop.counter0 %}
+                                {% if not meta or not meta.is_parametric %}disabled title="Доступно только для parametric-тормоза"{% endif %}
+                            {% endwith %}>
+                        ↓ Подставить из brake params
+                    </button>
+                </div>
+
+                {% if brake_form.non_field_errors %}
+                <div class="tf-form-errors">{{ brake_form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="tf-fields">
+                    {% for field in brake_form %}
+                    <label>
+                        {{ field.label }}
+                        {{ field }}
+                        {% if field.errors %}<span class="errors">{{ field.errors|join:", " }}</span>{% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        </div>
+
+        <div>{# === ПРАВАЯ КОЛОНКА: цикл, общая геометрия === #}
+        <div class="rb-card tf-card">
+            <div class="tf-section-title">Сценарий</div>
+            <div class="tf-fields" style="grid-template-columns: 1fr;">
+                <label>{{ form.name.label }} {{ form.name }}
+                    {% if form.name.errors %}<span class="errors">{{ form.name.errors|join:", " }}</span>{% endif %}
+                </label>
+                <label>{{ form.network_preset.label }} {{ form.network_preset }}
+                    {% if form.network_preset.errors %}<span class="errors">{{ form.network_preset.errors|join:", " }}</span>{% endif %}
+                </label>
+            </div>
+
+            <div class="tf-section-title">Повторения</div>
+            <div class="tf-fields">
+                <label>{{ form.repetitions.label }} {{ form.repetitions }}
+                    {% if form.repetitions.errors %}<span class="errors">{{ form.repetitions.errors|join:", " }}</span>{% endif %}
+                </label>
+                <label>{{ form.pause_s.label }} {{ form.pause_s }}
+                    {% if form.pause_s.errors %}<span class="errors">{{ form.pause_s.errors|join:", " }}</span>{% endif %}
+                </label>
+            </div>
+
+            <div class="tf-conditional" data-preset-only="nine_node">
+                <div class="tf-section-title">Обечайка</div>
+                <div class="tf-fields">
+                    <label>{{ form.D_casing_outer.label }} {{ form.D_casing_outer }}{% if form.D_casing_outer.errors %}<span class="errors">{{ form.D_casing_outer.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.delta_casing.label }} {{ form.delta_casing }}{% if form.delta_casing.errors %}<span class="errors">{{ form.delta_casing.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.L_casing.label }} {{ form.L_casing }}{% if form.L_casing.errors %}<span class="errors">{{ form.L_casing.errors|join:", " }}</span>{% endif %}</label>
+                </div>
+
+                <div class="tf-section-title">Шток немагнитный</div>
+                <div class="tf-fields">
+                    <label>{{ form.D_nonmag_outer.label }} {{ form.D_nonmag_outer }}{% if form.D_nonmag_outer.errors %}<span class="errors">{{ form.D_nonmag_outer.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.D_nonmag_inner.label }} {{ form.D_nonmag_inner }}{% if form.D_nonmag_inner.errors %}<span class="errors">{{ form.D_nonmag_inner.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.L_nonmag.label }} {{ form.L_nonmag }}{% if form.L_nonmag.errors %}<span class="errors">{{ form.L_nonmag.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.nonmag_rod_material.label }} {{ form.nonmag_rod_material }}{% if form.nonmag_rod_material.errors %}<span class="errors">{{ form.nonmag_rod_material.errors|join:", " }}</span>{% endif %}</label>
+                </div>
+
+                <div class="tf-section-title">Внутренний стальной шток</div>
+                <div class="tf-fields">
+                    <label>{{ form.D_rod_steel_outer.label }} {{ form.D_rod_steel_outer }}{% if form.D_rod_steel_outer.errors %}<span class="errors">{{ form.D_rod_steel_outer.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.D_rod_steel_inner.label }} {{ form.D_rod_steel_inner }}{% if form.D_rod_steel_inner.errors %}<span class="errors">{{ form.D_rod_steel_inner.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.L_rod_steel.label }} {{ form.L_rod_steel }}{% if form.L_rod_steel.errors %}<span class="errors">{{ form.L_rod_steel.errors|join:", " }}</span>{% endif %}</label>
+                </div>
+
+                <div class="tf-section-title">Зазоры и контакты</div>
+                <div class="tf-fields">
+                    <label>{{ form.delta_gap_casing_to_outer_bus.label }} {{ form.delta_gap_casing_to_outer_bus }}{% if form.delta_gap_casing_to_outer_bus.errors %}<span class="errors">{{ form.delta_gap_casing_to_outer_bus.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.delta_gap_inner_bus_to_rod.label }} {{ form.delta_gap_inner_bus_to_rod }}{% if form.delta_gap_inner_bus_to_rod.errors %}<span class="errors">{{ form.delta_gap_inner_bus_to_rod.errors|join:", " }}</span>{% endif %}</label>
+                    <label>{{ form.h_contact_magnet_rod.label }} {{ form.h_contact_magnet_rod }}{% if form.h_contact_magnet_rod.errors %}<span class="errors">{{ form.h_contact_magnet_rod.errors|join:", " }}</span>{% endif %}</label>
+                </div>
+            </div>
+
+            <div class="tf-section-title">Окружающая среда</div>
+            <div class="tf-fields">
+                <label>{{ form.h_ambient_outer.label }} {{ form.h_ambient_outer }}{% if form.h_ambient_outer.errors %}<span class="errors">{{ form.h_ambient_outer.errors|join:", " }}</span>{% endif %}</label>
+                <label>{{ form.T_ambient_outer.label }} {{ form.T_ambient_outer }}{% if form.T_ambient_outer.errors %}<span class="errors">{{ form.T_ambient_outer.errors|join:", " }}</span>{% endif %}</label>
+                <label class="tf-conditional" data-preset-only="nine_node">{{ form.h_ambient_rod_cavity.label }} {{ form.h_ambient_rod_cavity }}{% if form.h_ambient_rod_cavity.errors %}<span class="errors">{{ form.h_ambient_rod_cavity.errors|join:", " }}</span>{% endif %}</label>
+                <label class="tf-conditional" data-preset-only="nine_node">{{ form.T_ambient_rod_cavity.label }} {{ form.T_ambient_rod_cavity }}{% if form.T_ambient_rod_cavity.errors %}<span class="errors">{{ form.T_ambient_rod_cavity.errors|join:", " }}</span>{% endif %}</label>
+            </div>
+
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+                <button type="submit" class="rb-btn rb-btn-grad" style="flex: 1;">Запустить расчёт</button>
+                <a href="{% url 'thermal_list' run.id %}" class="rb-btn">Отмена</a>
+            </div>
+        </div>
+        </div>
+
+    </div>
+</form>
+
+{# Метаданные тормозов для prefill-кнопок (включая параметры parametric-моделей) #}
+<script id="brake-meta-data" type="application/json">{{ brake_meta|json_script_data }}</script>
+
+{% endblock %}
+
+{% block body_extra %}
+<script src="{% static 'recoil_app/js/thermal_form.js' %}"></script>
+{% endblock %}

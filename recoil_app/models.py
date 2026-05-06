@@ -260,3 +260,75 @@ class BrakeCatalog(BrakeParametersMixin):
                 parts.append(f"n={self.n}")
             return " · ".join(parts) if parts else "параметрический"
         return "F(v) — табличная характеристика"
+
+
+# ============================================================================
+# Тепловой модуль: тепловой расчёт по готовому CalculationRun
+# ============================================================================
+
+def thermal_report_upload_to(instance, filename: str) -> str:
+    """Папка для HTML-фрагментов и доп. артефактов теплового сценария."""
+    folder = f"thermal_reports/run_{instance.run_id or 'x'}_thermal_{instance.pk or 'new'}"
+    return f"{folder}/{filename}"
+
+
+class ThermalRun(models.Model):
+    """Один тепловой сценарий поверх готового CalculationRun.
+
+    Тепловой расчёт не пересчитывает кинематику — он берёт готовые ряды t/v/F_brake
+    из `CalculationSnapshot.result_snapshot` и интегрирует тепловую сеть.
+    На один CalculationRun допускается несколько ThermalRun: разные материалы,
+    режимы стрельбы, упрощённая или детальная сеть.
+    """
+
+    PRESET_NINE_NODE = "nine_node"
+    PRESET_SINGLE_NODE = "single_node"
+    PRESET_CHOICES = [
+        (PRESET_NINE_NODE, "9-узловая сеть"),
+        (PRESET_SINGLE_NODE, "Упрощённая (1 узел/тормоз)"),
+    ]
+
+    run = models.ForeignKey(
+        CalculationRun,
+        on_delete=models.CASCADE,
+        related_name="thermal_runs",
+    )
+    name = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    network_preset = models.CharField(
+        max_length=16,
+        choices=PRESET_CHOICES,
+        default=PRESET_NINE_NODE,
+    )
+    repetitions = models.PositiveIntegerField(default=1)
+    pause_s = models.FloatField(default=0.0)
+
+    # Денормализованные пики — нужны для списков, фильтрации и KPI на странице.
+    max_temp_c = models.FloatField(null=True, blank=True)
+    max_temp_node_name = models.CharField(max_length=120, blank=True, default="")
+    total_heat_j = models.FloatField(null=True, blank=True)
+
+    # Полные данные.
+    config_snapshot = models.JSONField(default=dict, blank=True)
+    result_snapshot = models.JSONField(default=dict, blank=True)
+    warnings_text = models.TextField(blank=True, default="")
+
+    # HTML-фрагменты Plotly, генерируемые в services.thermal.charting.
+    chart_temperatures = models.FileField(upload_to=thermal_report_upload_to, null=True, blank=True)
+    chart_power_brakes = models.FileField(upload_to=thermal_report_upload_to, null=True, blank=True)
+    chart_heat_brakes = models.FileField(upload_to=thermal_report_upload_to, null=True, blank=True)
+    chart_cycle_envelope = models.FileField(upload_to=thermal_report_upload_to, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Тепловой сценарий"
+        verbose_name_plural = "Тепловые сценарии"
+        ordering = ["-created_at"]
+        unique_together = [("run", "name")]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.run_id})"
+
+    @property
+    def report_folder(self) -> str:
+        return f"thermal_reports/run_{self.run_id}_thermal_{self.pk}"

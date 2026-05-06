@@ -1,0 +1,256 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+{% load static %}
+
+{% block title %}{{ thermal_run.name }} · Тепло — {{ run.name }}{% endblock %}
+{% block shell_active %}result{% endblock %}
+{% block shell_crumb %}{{ run.name }} · {{ thermal_run.name }}{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<style>
+    .rb-content { max-width: none; }
+    .rb-tab-panel:not(.is-active) { display: none; }
+    .td-table { width: 100%; border-collapse: collapse; font-family: var(--rb-font-mono, monospace); font-size: 12px; }
+    .td-table th, .td-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--rb-panel-border); white-space: nowrap; }
+    .td-table th { font-weight: 600; color: var(--rb-text-soft); background: var(--rb-bg-soft, #FAFBFC); }
+    .td-table th.num, .td-table td.num { text-align: right; }
+    .td-table-scroll { overflow-x: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# === HERO === #}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>{{ thermal_run.name }}</h1>
+                {% if thermal_run.network_preset == 'nine_node' %}
+                    <span class="rb-badge rb-badge-blue">9-узл.</span>
+                {% else %}
+                    <span class="rb-badge rb-badge-accent">упрощ.</span>
+                {% endif %}
+            </div>
+            <div class="rb-hero-sub">
+                Расчёт «{{ run.name }}» · циклов {{ thermal_run.repetitions }} · пауза {{ thermal_run.pause_s|smart_num }} с
+                · создан {{ thermal_run.created_at|date:"d.m.Y · H:i" }}
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn" href="{% url 'thermal_list' run.id %}">← К сценариям</a>
+            <a class="rb-btn" href="{% url 'thermal_new' run.id %}">+ Новый</a>
+            <form method="post" action="{% url 'thermal_delete' run.id thermal_run.id %}" style="display:inline-block;"
+                  onsubmit="return confirm('Удалить сценарий «{{ thermal_run.name|escapejs }}»?');">
+                {% csrf_token %}
+                <button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+{% if thermal_run.warnings_text %}
+<div class="rb-status-banner rb-status-banner-warn">
+    <div class="rb-status-banner-icon">⚠</div>
+    <div>
+        <div class="rb-status-banner-title">Предупреждения</div>
+        <div class="rb-status-banner-sub" style="white-space: pre-line;">{{ thermal_run.warnings_text }}</div>
+    </div>
+</div>
+{% endif %}
+
+{# === KPI === #}
+<section class="rb-module-section rb-kpi-group">
+    <div class="rb-kpi-group-head"><div class="rb-kpi-group-title">Ключевые метрики</div></div>
+    <div class="rb-kpi-row">
+        <div class="rb-kpi rb-kpi-blue rb-kpi-status-ok">
+            <div class="rb-kpi-label">T_max</div>
+            <div class="rb-kpi-main">
+                <span class="rb-kpi-value">{{ thermal_run.max_temp_c|smart_num }}</span><span class="rb-kpi-unit"> °C</span>
+            </div>
+            {% if thermal_run.max_temp_node_name %}
+                <div class="rb-kpi-hint">{{ thermal_run.max_temp_node_name }}</div>
+            {% endif %}
+        </div>
+        <div class="rb-kpi rb-kpi-accent rb-kpi-status-ok">
+            <div class="rb-kpi-label">Накоплено тепла</div>
+            <div class="rb-kpi-main">
+                <span class="rb-kpi-value">{{ thermal_run.total_heat_j|smart_num }}</span><span class="rb-kpi-unit"> Дж</span>
+            </div>
+        </div>
+        <div class="rb-kpi rb-kpi-status-ok">
+            <div class="rb-kpi-label">Циклов</div>
+            <div class="rb-kpi-main">
+                <span class="rb-kpi-value">{{ thermal_run.repetitions }}</span>
+            </div>
+        </div>
+        <div class="rb-kpi rb-kpi-status-ok">
+            <div class="rb-kpi-label">Пауза</div>
+            <div class="rb-kpi-main">
+                <span class="rb-kpi-value">{{ thermal_run.pause_s|smart_num }}</span><span class="rb-kpi-unit"> с</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# === ГРАФИКИ === #}
+<section class="rb-module-section">
+<div class="rb-card">
+    <div class="rb-tabs rb-tabs-pills" data-tab-group="thermal">
+        {% if chart_html.chart_temperatures %}<button class="rb-tab is-active" data-tab="t" type="button">T(t) узлы</button>{% endif %}
+        {% if chart_html.chart_power_brakes %}<button class="rb-tab" data-tab="p" type="button">P(t) тормоза</button>{% endif %}
+        {% if chart_html.chart_heat_brakes %}<button class="rb-tab" data-tab="q" type="button">Q(t) накопл.</button>{% endif %}
+        {% if chart_html.chart_cycle_envelope %}<button class="rb-tab" data-tab="env" type="button">Огибающая по циклам</button>{% endif %}
+    </div>
+
+    {% if chart_html.chart_temperatures %}
+    <div class="rb-tab-panel is-active" data-tab-group="thermal" data-tab="t">{{ chart_html.chart_temperatures|safe }}</div>
+    {% endif %}
+    {% if chart_html.chart_power_brakes %}
+    <div class="rb-tab-panel" data-tab-group="thermal" data-tab="p">{{ chart_html.chart_power_brakes|safe }}</div>
+    {% endif %}
+    {% if chart_html.chart_heat_brakes %}
+    <div class="rb-tab-panel" data-tab-group="thermal" data-tab="q">{{ chart_html.chart_heat_brakes|safe }}</div>
+    {% endif %}
+    {% if chart_html.chart_cycle_envelope %}
+    <div class="rb-tab-panel" data-tab-group="thermal" data-tab="env">{{ chart_html.chart_cycle_envelope|safe }}</div>
+    {% endif %}
+
+    {% if chart_errors %}
+    <div class="rb-text-muted" style="font-family: monospace; font-size: 11px; padding: 8px 16px; color: var(--rb-danger-dark);">
+        {% for err in chart_errors %}<div>{{ err }}</div>{% endfor %}
+    </div>
+    {% endif %}
+</div>
+</section>
+
+{# === ПИКИ ПО УЗЛАМ === #}
+{% if peaks %}
+<section class="rb-module-section">
+<div class="rb-card">
+    <div class="rb-card-title"><span class="rb-card-title-text">Пики температур по узлам</span></div>
+    <div class="td-table-scroll">
+    <table class="td-table">
+        <thead><tr>
+            <th>Узел</th><th class="num">T_пик, °C</th><th class="num">t, с</th><th class="num">Цикл</th><th>Сегмент</th>
+        </tr></thead>
+        <tbody>
+        {% for key, p in peaks.items %}
+            <tr>
+                <td>{{ p.display_name }}</td>
+                <td class="num">{{ p.temp_peak_c|smart_num }}</td>
+                <td class="num">{{ p.t_peak_s|smart_num }}</td>
+                <td class="num">{{ p.cycle_at_peak }}</td>
+                <td>{{ p.segment_at_peak }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+</section>
+{% endif %}
+
+{# === СВОДКА ПО ЦИКЛАМ === #}
+{% if cycles %}
+<section class="rb-module-section">
+<div class="rb-card">
+    <div class="rb-card-title">
+        <span class="rb-card-title-text">Сводка по циклам — T_max по узлам, °C</span>
+    </div>
+    <div class="td-table-scroll">
+    <table class="td-table">
+        <thead><tr>
+            <th>#</th>
+            {% for nd in nodes_table %}
+                <th class="num">{{ nd.display_name }}</th>
+            {% endfor %}
+            <th class="num">Доб. Дж</th>
+        </tr></thead>
+        <tbody>
+        {% for c in cycles %}
+            <tr>
+                <td>{{ c.cycle_number }}</td>
+                {% for nd in nodes_table %}
+                    <td class="num">{{ c.max_temp_in_cycle_c|index_or:nd.display_name|smart_num }}</td>
+                {% endfor %}
+                <td class="num">
+                    {% for k, v in c.added_heat_by_brake_j.items %}{{ v|smart_num }}{% if not forloop.last %} · {% endif %}{% endfor %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+</section>
+{% endif %}
+
+{# === СЕТЬ === #}
+{% if nodes_table %}
+<section class="rb-module-section">
+<div class="rb-card">
+    <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · узлы</span></div>
+    <div class="td-table-scroll">
+    <table class="td-table">
+        <thead><tr>
+            <th>Имя</th><th>Материал</th>
+            <th class="num">m, кг</th><th class="num">cp, Дж/(кг·К)</th><th class="num">C, Дж/К</th>
+            <th class="num">A_amb, м²</th><th class="num">h_amb</th><th class="num">A_rad, м²</th>
+        </tr></thead>
+        <tbody>
+        {% for nd in nodes_table %}
+            <tr>
+                <td>{{ nd.display_name }}</td>
+                <td>{{ nd.material_key }}</td>
+                <td class="num">{{ nd.mass_kg|smart_num }}</td>
+                <td class="num">{{ nd.cp_j_per_kgk|smart_num }}</td>
+                <td class="num">{{ nd.capacitance_j_per_k|smart_num }}</td>
+                <td class="num">{{ nd.area_ambient_m2|smart_num }}</td>
+                <td class="num">{{ nd.h_ambient_w_per_m2k|smart_num }}</td>
+                <td class="num">{{ nd.area_radiation_m2|smart_num }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+</section>
+{% endif %}
+
+{% if links_table %}
+<section class="rb-module-section">
+<div class="rb-card">
+    <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · связи</span></div>
+    <div class="td-table-scroll">
+    <table class="td-table">
+        <thead><tr>
+            <th>A</th><th>B</th>
+            <th class="num">h, Вт/(м²·К)</th><th class="num">A, м²</th><th class="num">G, Вт/К</th>
+            <th>Описание</th>
+        </tr></thead>
+        <tbody>
+        {% for lk in links_table %}
+            <tr>
+                <td>{{ lk.node_a }}</td>
+                <td>{{ lk.node_b }}</td>
+                <td class="num">{{ lk.h_w_per_m2k|smart_num }}</td>
+                <td class="num">{{ lk.area_m2|smart_num }}</td>
+                <td class="num">{{ lk.conductance_w_per_k|smart_num }}</td>
+                <td style="font-size: 11px; color: var(--rb-text-soft);">{{ lk.description }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block body_extra %}
+<script src="{% static 'recoil_app/js/modules.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+
+{% block title %}Тепловые сценарии — {{ run.name }} · RecoilLab{% endblock %}
+{% block shell_active %}result{% endblock %}
+{% block shell_crumb %}{{ run.name }} · Тепло{% endblock %}
+{% block user_initials %}И.К.{% endblock %}
+
+{% block head_extra %}
+<style>
+    .rb-content { max-width: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# === HERO === #}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>Тепловые сценарии</h1>
+                <span class="rb-badge rb-badge-blue">{{ thermal_runs|length }}</span>
+            </div>
+            <div class="rb-hero-sub">
+                Расчёт «{{ run.name }}» (#{{ run.id }})
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn rb-btn-grad" href="{% url 'thermal_new' run.id %}">+ Новый сценарий</a>
+            <a class="rb-btn" href="{% url 'run_detail_v2' run.id %}">← К расчёту</a>
+        </div>
+    </div>
+</section>
+
+{% if messages %}
+{% for message in messages %}
+<div class="rb-status-banner rb-status-banner-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warn{% else %}ok{% endif %}" style="margin-bottom: 16px;">
+    <div class="rb-status-banner-icon">{% if message.tags == 'error' %}!{% elif message.tags == 'warning' %}⚠{% else %}✓{% endif %}</div>
+    <div><div class="rb-status-banner-sub">{{ message }}</div></div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if thermal_runs %}
+<div class="rb-runs-grid">
+    {% for tr in thermal_runs %}
+    <div class="rb-run-card {% if tr.max_temp_c and tr.max_temp_c > 150 %}is-warn{% else %}is-success{% endif %}">
+        <div class="rb-run-card-head">
+            <a class="rb-run-card-name" href="{% url 'thermal_detail' run.id tr.id %}">{{ tr.name }}</a>
+            <div class="rb-run-card-badges">
+                {% if tr.network_preset == 'nine_node' %}
+                    <span class="rb-badge rb-badge-blue">9-узл.</span>
+                {% else %}
+                    <span class="rb-badge rb-badge-accent">упрощ.</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="rb-run-card-meta">
+            #{{ tr.id }} · {{ tr.created_at|date:"d.m.Y · H:i" }}
+        </div>
+
+        <div class="rb-run-card-metrics">
+            <div>
+                <div class="rb-run-card-metric-label">Циклов</div>
+                <div class="rb-run-card-metric-value">{{ tr.repetitions }}</div>
+            </div>
+            <div>
+                <div class="rb-run-card-metric-label">Пауза</div>
+                <div class="rb-run-card-metric-value">{{ tr.pause_s|smart_num }} с</div>
+            </div>
+            {% if tr.max_temp_c %}
+            <div>
+                <div class="rb-run-card-metric-label">T_max</div>
+                <div class="rb-run-card-metric-value">{{ tr.max_temp_c|smart_num }} °C</div>
+            </div>
+            {% endif %}
+            {% if tr.max_temp_node_name %}
+            <div>
+                <div class="rb-run-card-metric-label">Где</div>
+                <div class="rb-run-card-metric-value" style="font-size: 12px;">{{ tr.max_temp_node_name }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="rb-run-card-actions">
+            <a class="rb-btn rb-btn-primary rb-btn-sm" href="{% url 'thermal_detail' run.id tr.id %}">Открыть</a>
+            <form method="post" action="{% url 'thermal_delete' run.id tr.id %}" onsubmit="return confirm('Удалить сценарий «{{ tr.name|escapejs }}»?');">
+                {% csrf_token %}
+                <button type="submit" class="rb-btn rb-btn-danger rb-btn-sm">×</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="rb-empty">
+    <svg class="rb-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 3-2 4-2 7H8c0-3-2-4-2-7a6 6 0 0 1 6-6z"/>
+    </svg>
+    <div class="rb-empty-title">Нет тепловых сценариев</div>
+    <div class="rb-empty-sub">Создайте первый — пройдём по геометрии и материалам</div>
+    <a class="rb-btn rb-btn-grad" href="{% url 'thermal_new' run.id %}">+ Новый сценарий</a>
+</div>
+{% endif %}
+
+{% endblock %}

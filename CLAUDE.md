@@ -103,6 +103,20 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - **`MagneticBrakeConfig`** (наследует `BrakeParametersMixin`) — параметры тормоза для конкретного `CalculationRun` (`unique_together = (run, index)`). Тип `parametric` или `curve`.
 - **`BrakeForcePoint`** — точки кривой F(v) для curve-тормоза.
 - **`BrakeCatalog`** (наследует `BrakeParametersMixin`) — глобальный каталог тормозов. **Copy-on-use**: при использовании в расчёте параметры/файл копируются в `MagneticBrakeConfig`, чтобы расчёт оставался воспроизводимым после редактирования каталога.
+- **`ThermalRun`** (FK→`CalculationRun`, `unique_together=(run, name)`) — отдельный тепловой сценарий поверх готового расчёта. Хранит `network_preset` (`nine_node`/`single_node`), `repetitions`, `pause_s`, два JSON-снапшота (`config_snapshot` с полной сетью + геометрией + материалами, `result_snapshot` с decimated timeline + cycle table + peaks) и 4 FileField'а под HTML-фрагменты Plotly. Денормализованные `max_temp_c`/`max_temp_node_name`/`total_heat_j` — для KPI и фильтрации списка. Каскадно удаляется с `CalculationRun`; файлы и папка `media/thermal_reports/run_<rid>_thermal_<tid>/` чистятся через `post_delete` сигнал в [signals.py](recoil_app/signals.py).
+
+### Тепловой модуль (`services/thermal/`, страницы `/run/<id>/thermal/`)
+
+Кинематика **не пересчитывается** — берётся `t/v/f_magnetic_each` из `CalculationSnapshot.result_snapshot.timeline/forces`. Это значит: для тепла нужен расчёт со snapshot'ом (новые расчёты — ок, архивные могут не иметь — view вернёт ошибку).
+
+- [services/thermal/materials.py](recoil_app/services/thermal/materials.py) — справочник из 7 материалов (ρ/cp/ε). Степень черноты в форму НЕ выводится — берётся по материалу.
+- [services/thermal/network.py](recoil_app/services/thermal/network.py) — `ThermalNode`/`ThermalLink`/`ThermalSource`/`ThermalNetwork` (dataclass'ы с валидацией). `linearized_radiation_h(T, T_amb, ε)` — для подмешивания излучения в G_amb на каждом шаге.
+- [services/thermal/geometry.py](recoil_app/services/thermal/geometry.py) — `BrakeGeometry`/`AssemblyGeometry`. Backend получает все размеры явно (без fallback'ов «если 0 — взять из brake params» — это задача UI через кнопку «↓ Подставить»). Два пресета сети: `build_nine_node_network` (требует ровно 2 тормоза) и `build_single_node_network` (любое количество).
+- [services/thermal/integrator.py](recoil_app/services/thermal/integrator.py) — **неявный Эйлер** с линеаризованным излучением. `solve_active_phase` интегрирует по готовой сетке (источник Q явно, T неявно — IMEX). `solve_cooling` для пауз с **адаптивным шагом** `dt = clamp(0.1·τ_min, 1ms, 0.5s)`. Численно проверено: сходимость 1-го порядка по dt, сохранение энергии до машинной точности.
+- [services/thermal/cycles.py](recoil_app/services/thermal/cycles.py) — `simulate_repeated_cycles` реплицирует базовую фазу N раз с паузами. Последний цикл идёт без паузы (как в teplo v3). Возвращает `CombinedCycleResult` с глобальным timeline и `CycleSummary` по каждому циклу.
+- [services/thermal/decimation.py](recoil_app/services/thermal/decimation.py) — урезание до ~100 Гц по сегментам, с обязательным сохранением точек пиков и границ цикл/пауза.
+- [services/thermal/snapshot.py](recoil_app/services/thermal/snapshot.py) — упаковка в JSON для `ThermalRun`. После decimation result_snapshot ~ 500 КБ для 10 циклов.
+- [services/thermal/charting.py](recoil_app/services/thermal/charting.py) — 4 Plotly-фрагмента: T(t) узлов, P_brake(t), Q_накопл(t), огибающая по циклам. Использует общие хелперы `_apply_layout` + расширенная палитра `NODE_PALETTE` для 9 узлов. **Не плодить свои палитры.**
 
 ### Срезы редизайна (история)
 
@@ -114,6 +128,7 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 5. Страница сравнения (`/compare/`) с overlay и дельта-таблицей
 6. UX-полировка формы: HTML5-валидация (mass>0, 0≤angle≤90, v0≥0, x0≥0, 0<t_max≤10) + индикаторы заполненности тормозов в sidebar (✓ ⚠ ○ ✗)
 7. Production-конфигурация: split-settings + .env + gunicorn + nginx (см. `deploy/`)
+8. Тепловой модуль: отдельная сущность `ThermalRun`, неявный Эйлер по 9-узловой/упрощённой сети, формы с авто-геометрией через prefill-кнопку, 4 графика (T/P/Q/огибающая по циклам), страницы `/run/<id>/thermal/{,/new/,/<id>/}`. Кинематика берётся из готового снапшота — не пересчитывается.
 
 После Срезов 1–7 проведён большой рефакторинг (6 пассов): удалён legacy, разделён `views.py` на пакет, выделены сервисы, abstract base mixin, inline CSS/JS вынесены в файлы.
 
@@ -123,13 +138,14 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - `media/reports/<safe_name>_<id>/` — HTML-фрагменты Plotly + XLSX-отчёт. Папка создаётся при расчёте, удаляется через `delete_run_view` (`shutil.rmtree`).
 - `media/brake_curves/run_<id>/brake_<idx>/` — curve-файлы тормозов конкретного расчёта
 - `media/brake_catalog/curves/cat_<id>/` — curve-файлы записей каталога
+- `media/thermal_reports/run_<rid>_thermal_<tid>/` — HTML-фрагменты Plotly теплового сценария. Чистятся в `post_delete` сигнале на `ThermalRun`.
 
 ## Project conventions (обязательно соблюдать)
 
 1. **Все новые графики — через хелперы из `recoil_app/services/charting.py`**: `_apply_layout`, `_add_peak_marker`, `_add_recoil_vline`, `_make_dual_axis_figure`. Цвета — константы `RB_BLUE` (`#3D73EB`), `RB_ACCENT` (`#B44D7A`), `RB_GREEN`, `RB_AMBER`, `LINE_WIDTH_PRIMARY=3.0`. Шрифты — `FONT_FAMILY_UI` (Manrope), `FONT_FAMILY_MONO` (JetBrains Mono). Для overlay в сравнении — `_CMP_COLOR_A`/`_CMP_COLOR_B`. **Не плодить новые палитры.**
 2. **Все новые шаблоны наследуют `base_v2.html`**.
 3. **Числовые значения в UI — через фильтры `smart_num` или `fmt5`** из `recoil_app/templatetags/recoil_extras.py`. `floatformat:N` допускается только для случаев осознанной фиксированной точности (например, `mass|floatformat:1` в боковой таблице параметров — иначе `smart_num` выведет полную точность из БД, что некрасиво).
-4. **Любые изменения схемы — миграцией** (`makemigrations` → `migrate`). Не редактировать уже применённые миграции (на момент написания их 19, последняя `0019_alter_brakecatalog_id_and_more`). Новые поля моделей делать `null=True, blank=True`, чтобы миграция была безопасна для существующих записей.
+4. **Любые изменения схемы — миграцией** (`makemigrations` → `migrate`). Не редактировать уже применённые миграции (на момент написания их 20, последняя `0020_thermalrun`). Новые поля моделей делать `null=True, blank=True`, чтобы миграция была безопасна для существующих записей.
 5. **Бизнес-логика — в `services/`, не во view'хах.** View должен только: распарсить запрос, вызвать сервис, отрендерить шаблон. Если функция начинает делать что-то «доменное» (создавать модели, считать KPI, парсить файлы) — её место в `services/<area>.py`.
 6. **Перед большими изменениями — согласовать план с пользователем**, не ломиться в код.
 
@@ -142,6 +158,8 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - **`spring_force_signed` всегда направлена к `x=0`**; знак возвращается из абсолютного `spring_force(abs(x))`. Если симулятор выходит за табличный диапазон пружины — выставляется флаг `spring_out_of_range`, добавляется warning, но расчёт продолжается.
 - **AJAX `catalog_save_from_form`** принимает form-encoded POST, не JSON. URL читается из `data-catalog-save-url` на `<form id="calculation-form">`.
 - **`compare_view` использует `result_snapshot.timeline`**, а не графики на диске. Для расчётов без snapshot'а overlay будет пустым.
+- **Тепловой модуль тоже зависит от `result_snapshot.timeline/forces`** — для архивных расчётов без snapshot'а `thermal_new_view` поднимет `ValueError`. Чтобы починить — пересоздать расчёт.
+- **9-узловая сеть требует ровно 2 тормоза** (`build_nine_node_network` поднимает ValueError иначе). Для 1, 3, 4+ тормозов используется `single_node` пресет. Форма блокирует выбор 9-узловой через `clean()`.
 - **`MagneticBrakeConfig` и `BrakeCatalog` делят 12 параметрических полей** через `BrakeParametersMixin`. Если добавлять новый параметр тормоза — добавляй в mixin, а не в каждую модель.
 - **Settings разделены** на пакет `recoil_project/settings/`: `base.py` (общее), `dev.py` (DEBUG=True, локальный SQLite, `django-insecure` SECRET_KEY), `prod.py` (DEBUG=False, всё из `.env`, `CSRF_TRUSTED_ORIGINS`, `SILENCED_SYSTEM_CHECKS` для HTTPS-warnings — деплой по HTTP). `manage.py` по умолчанию указывает на `settings.dev`, `wsgi.py`/`asgi.py` — на `settings.prod`.
 - **`.env`** в корне проекта (gitignored). `django-environ` читает в `base.py` через `read_env(BASE_DIR / ".env")`. Шаблон в [`.env.example`](.env.example).
@@ -156,4 +174,5 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - `recoil_app/static/recoil_app/js/shell.js` — топбар и левый rail; вставляется в `base_v2.html` декларативно через `data-*` атрибуты.
 - `recoil_app/static/recoil_app/js/modules.js` — управление видимостью модулей на странице результата.
 - `recoil_app/static/recoil_app/js/calc_form.js` — formset, индикаторы заполненности, AJAX «в каталог», submit + loader (вынесен из inline `<script>` шаблона при Pass 6).
-- `recoil_app/templatetags/recoil_extras.py` — `fmt5` (5 знаков после запятой), `smart_num` (умное форматирование).
+- `recoil_app/static/recoil_app/js/thermal_form.js` — управление видимостью полей при смене preset'а сети, prefill-кнопки «↓ Подставить из brake params» (только для parametric-тормозов).
+- `recoil_app/templatetags/recoil_extras.py` — `fmt5` (5 знаков), `smart_num` (умное форматирование), `index_or` (для индексации в шаблоне с formset'ом), `json_script_data` (безопасная сериализация в `<script type="application/json">`).
