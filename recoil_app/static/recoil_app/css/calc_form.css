@@ -1,0 +1,233 @@
+/* Стили формы создания расчёта (templates/recoil_app/index.html). */
+
+.rb-content { max-width: none; }
+
+/* === Brake-card стили внутри центральной панели === */
+
+.brake-card { background: transparent; border: none; padding: 0; margin: 0; }
+.brake-card__body { padding: 0; }
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-field label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--rb-text-muted);
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+    padding: 7px 10px;
+    border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm);
+    background: var(--rb-panel-bg-white);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+    color: var(--rb-text);
+    transition: all .15s;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+    outline: none;
+    border-color: var(--rb-blue);
+    box-shadow: 0 0 0 2px rgba(61, 115, 235, 0.12);
+}
+
+.field-error {
+    font-size: 11px;
+    color: var(--rb-danger-dark);
+    background: var(--rb-danger-soft);
+    padding: 3px 7px;
+    border-radius: var(--rb-radius-sm);
+}
+
+.notice {
+    background: rgba(61, 115, 235, 0.08);
+    border: 1px solid rgba(61, 115, 235, 0.2);
+    color: var(--rb-blue-dark);
+    padding: 10px 14px;
+    border-radius: var(--rb-radius-sm);
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+.brake-parametric-fields,
+.brake-curve-fields {
+    margin-top: 14px;
+}
+
+.brake-parametric-fields h5,
+.brake-curve-fields h5 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--rb-text-muted);
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rb-panel-border);
+}
+
+.brake-card__head { display: none; }
+
+/* Превью кривой */
+.curve-preview-block {
+    background: var(--rb-panel-bg-alt);
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius);
+    padding: 12px;
+    margin-top: 12px;
+}
+
+.curve-preview-plot {
+    width: 100%;
+    height: 240px;
+}
+
+.curve-preview-error {
+    background: var(--rb-danger-soft);
+    color: var(--rb-danger-dark);
+    padding: 8px 12px;
+    border-radius: var(--rb-radius-sm);
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+/* Loader-overlay при сабмите */
+#calculation-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 36, 0.85);
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+    font-size: 16px;
+    font-weight: 600;
+}
+#calculation-overlay.active { display: flex; }
+.is-submitting { pointer-events: none; opacity: 0.7; }
+
+/* Срез 3b: переключатель источника параметров */
+.rb-source-toggle {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 4px;
+    background: var(--rb-panel-bg-alt);
+    border-radius: var(--rb-radius-sm);
+    flex-wrap: wrap;
+    width: fit-content;
+}
+
+.rb-source-tab {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: var(--rb-text-soft);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--rb-radius-sm);
+    transition: all .15s;
+    font-family: inherit;
+}
+.rb-source-tab:hover:not(:disabled) { color: var(--rb-blue); }
+.rb-source-tab.is-active {
+    background: var(--rb-panel-bg-white);
+    color: var(--rb-blue);
+    box-shadow: 0 1px 2px rgba(23, 43, 77, 0.06);
+}
+.rb-source-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rb-source-add-link {
+    font-size: 11px;
+    color: var(--rb-blue);
+    text-decoration: none;
+    margin-left: auto;
+}
+.rb-source-add-link:hover { text-decoration: underline; }
+
+.rb-catalog-picker {
+    background: rgba(61, 115, 235, 0.04);
+    border: 1px solid rgba(61, 115, 235, 0.18);
+    border-radius: var(--rb-radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}
+.rb-catalog-picker label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--rb-text-muted);
+    margin-bottom: 5px;
+}
+.rb-catalog-select {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm);
+    background: var(--rb-panel-bg-white);
+    font-family: inherit;
+    font-size: 12px;
+}
+.rb-catalog-picker-info {
+    font-size: 11px;
+    color: var(--rb-text-soft);
+    margin-top: 6px;
+    font-family: "JetBrains Mono", Consolas, monospace;
+}
+.rb-from-catalog {
+    background: rgba(61, 115, 235, 0.06) !important;
+}
+
+/* === Срез 6a: индикатор заполненности тормоза в sidebar === */
+.rb-cad-brake-item-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+.rb-cad-brake-item-status.is-complete {
+    background: var(--rb-success-soft);
+    color: var(--rb-success-dark);
+}
+.rb-cad-brake-item-status.is-partial {
+    background: var(--rb-warn-soft);
+    color: var(--rb-warn-dark);
+}
+.rb-cad-brake-item-status.is-empty {
+    background: var(--rb-panel-bg-alt);
+    color: var(--rb-text-muted);
+}
+.rb-cad-brake-item-status.is-error {
+    background: var(--rb-danger-soft);
+    color: var(--rb-danger-dark);
+}

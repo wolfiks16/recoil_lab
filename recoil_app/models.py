@@ -3,6 +3,30 @@ from pathlib import Path
 from django.db import models
 
 
+class BrakeParametersMixin(models.Model):
+    """12 параметрических полей вихретокового тормоза.
+
+    Используется обоими: `MagneticBrakeConfig` (тормоз конкретного расчёта)
+    и `BrakeCatalog` (запись глобального каталога, copy-on-use).
+    """
+
+    gamma = models.FloatField(null=True, blank=True, help_text="Линейный коэффициент γ")
+    delta = models.FloatField(null=True, blank=True, help_text="Квадратичный коэффициент δ")
+    n = models.IntegerField(null=True, blank=True, help_text="Число секций")
+    xm = models.FloatField(null=True, blank=True)
+    ym = models.FloatField(null=True, blank=True)
+    dh1 = models.FloatField(null=True, blank=True)
+    dh2 = models.FloatField(null=True, blank=True)
+    dm = models.FloatField(null=True, blank=True)
+    mu = models.FloatField(null=True, blank=True)
+    bz = models.FloatField(null=True, blank=True)
+    lya = models.FloatField(default=2.5, null=True, blank=True)
+    wn0 = models.FloatField(default=1.0, null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+
 def brake_curve_upload_to(instance, filename: str) -> str:
     run_part = f"run_{instance.run_id or 'unknown'}"
     brake_part = f"brake_{instance.index or 'x'}"
@@ -96,7 +120,7 @@ class CalculationSnapshot(models.Model):
         return f"Снимок расчёта {self.run_id} (v{self.model_version})"
 
 
-class MagneticBrakeConfig(models.Model):
+class MagneticBrakeConfig(BrakeParametersMixin):
     MODEL_TYPE_PARAMETRIC = "parametric"
     MODEL_TYPE_CURVE = "curve"
 
@@ -123,20 +147,6 @@ class MagneticBrakeConfig(models.Model):
         null=True,
         blank=True,
     )
-
-    gamma = models.FloatField(null=True, blank=True)
-    delta = models.FloatField(null=True, blank=True)
-    xm = models.FloatField(null=True, blank=True)
-    ym = models.FloatField(null=True, blank=True)
-    dh1 = models.FloatField(null=True, blank=True)
-    dh2 = models.FloatField(null=True, blank=True)
-    dm = models.FloatField(null=True, blank=True)
-    n = models.IntegerField(null=True, blank=True)
-    mu = models.FloatField(null=True, blank=True)
-    bz = models.FloatField(null=True, blank=True)
-
-    lya = models.FloatField(default=2.5, null=True, blank=True)
-    wn0 = models.FloatField(default=1.0, null=True, blank=True)
 
     class Meta:
         verbose_name = "Магнитный тормоз"
@@ -184,7 +194,7 @@ def catalog_curve_upload_to(instance, filename: str) -> str:
     return f"brake_catalog/curves/cat_{instance.pk or 'new'}/{stem}{suffix}"
 
 
-class BrakeCatalog(models.Model):
+class BrakeCatalog(BrakeParametersMixin):
     """Глобальная библиотека тормозов.
 
     Каждая запись — самостоятельная единица в каталоге, независимая от расчётов.
@@ -210,11 +220,6 @@ class BrakeCatalog(models.Model):
         default=MODEL_TYPE_PARAMETRIC,
     )
 
-    # Параметрическая модель
-    gamma = models.FloatField(null=True, blank=True, help_text="Линейный коэффициент γ")
-    delta = models.FloatField(null=True, blank=True, help_text="Квадратичный коэффициент δ")
-    n = models.IntegerField(null=True, blank=True, help_text="Число секций")
-
     # Кривая F(v) — файл с табличной характеристикой
     curve_file = models.FileField(
         upload_to=catalog_curve_upload_to,
@@ -222,17 +227,6 @@ class BrakeCatalog(models.Model):
         blank=True,
         help_text="CSV/XLSX с двумя колонками: v, F",
     )
-
-    # Дополнительные параметры — необязательные, для будущей расширенной формы
-    xm = models.FloatField(null=True, blank=True)
-    ym = models.FloatField(null=True, blank=True)
-    dh1 = models.FloatField(null=True, blank=True)
-    dh2 = models.FloatField(null=True, blank=True)
-    dm = models.FloatField(null=True, blank=True)
-    mu = models.FloatField(null=True, blank=True)
-    bz = models.FloatField(null=True, blank=True)
-    lya = models.FloatField(null=True, blank=True, default=2.5)
-    wn0 = models.FloatField(null=True, blank=True, default=1.0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

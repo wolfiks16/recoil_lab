@@ -47,7 +47,6 @@
             {% if run.report_file %}
                 <a class="rb-btn" href="{{ run.report_file.url }}" download>⬇ Excel</a>
             {% endif %}
-            <a class="rb-btn" href="{% url 'run_detail' run.id %}">Старая версия</a>
             <form method="post" action="{% url 'delete_run' run.id %}" style="display:inline-block;"
                   onsubmit="return confirm('Удалить расчёт и все его файлы?');">
                 {% csrf_token %}

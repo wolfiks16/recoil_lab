@@ -9,8 +9,7 @@ urlpatterns = [
     # в шаблонах (включая редиректы после создания и кнопки «Скопировать»).
     path("new/", views.index_view, name="index"),
     # Детали расчёта
-    path("run/<int:run_id>/", views.run_detail_view, name="run_detail"),
-    path("run/<int:run_id>/v2/", views.run_detail_v2_view, name="run_detail_v2"),
+    path("run/<int:run_id>/", views.run_detail_v2_view, name="run_detail_v2"),
     path("run/<int:run_id>/delete/", views.delete_run_view, name="delete_run"),
     # Сравнение
     path("compare/", views.compare_view, name="compare"),

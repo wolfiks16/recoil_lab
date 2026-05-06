@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.forms import BaseFormSet, formset_factory
-from openpyxl import load_workbook
 
 from .models import CalculationRun, MagneticBrakeConfig
+from .services.curve_parser import parse_force_curve_file
 
 
 class CalculationForm(forms.Form):
@@ -165,7 +164,7 @@ class MagneticBrakeForm(forms.Form):
 
             if uploaded_file:
                 # Файл загружен прямо в форму
-                parsed_points = self._parse_force_curve_file(uploaded_file)
+                parsed_points = parse_force_curve_file(uploaded_file)
                 cleaned_data["parsed_force_curve_points"] = parsed_points
                 cleaned_data["curve_file_provided"] = True
                 cleaned_data["curve_source_brake_id"] = ""
@@ -194,127 +193,6 @@ class MagneticBrakeForm(forms.Form):
                 )
 
         return cleaned_data
-
-    def _parse_force_curve_file(self, uploaded_file) -> list[dict]:
-        self._validate_excel_extension(uploaded_file.name)
-
-        try:
-            uploaded_file.seek(0)
-        except Exception:
-            pass
-
-        try:
-            workbook = load_workbook(uploaded_file, read_only=True, data_only=True)
-        except Exception as exc:
-            raise ValidationError(
-                "Не удалось прочитать Excel-файл характеристики тормоза."
-            ) from exc
-        finally:
-            try:
-                uploaded_file.seek(0)
-            except Exception:
-                pass
-
-        try:
-            sheet = workbook.active
-            parsed_points = self._parse_force_curve_sheet(sheet)
-        finally:
-            workbook.close()
-
-        return parsed_points
-
-    def _validate_excel_extension(self, filename: str) -> None:
-        suffix = Path(filename).suffix.lower()
-        allowed = {".xlsx", ".xlsm", ".xltx", ".xltm"}
-        if suffix not in allowed:
-            raise ValidationError(
-                "Поддерживаются только Excel-файлы форматов .xlsx, .xlsm, .xltx, .xltm."
-            )
-
-    def _parse_force_curve_sheet(self, sheet) -> list[dict]:
-        parsed_points: list[dict] = []
-        header_skipped = False
-
-        for row_no, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-            velocity_raw = row[0] if len(row) > 0 else None
-            force_raw = row[1] if len(row) > 1 else None
-
-            if self._is_empty_cell(velocity_raw) and self._is_empty_cell(force_raw):
-                continue
-
-            if self._is_empty_cell(velocity_raw) or self._is_empty_cell(force_raw):
-                raise ValidationError(
-                    f"Строка {row_no}: должны быть заполнены и скорость, и сила."
-                )
-
-            velocity = self._coerce_excel_number(velocity_raw)
-            force = self._coerce_excel_number(force_raw)
-
-            # Допускаем одну строку заголовков в начале файла
-            if velocity is None or force is None:
-                if not header_skipped and not parsed_points:
-                    header_skipped = True
-                    continue
-                raise ValidationError(
-                    f"Строка {row_no}: значения скорости и силы должны быть числами."
-                )
-
-            if velocity < 0:
-                raise ValidationError(
-                    f"Строка {row_no}: скорость не может быть отрицательной."
-                )
-
-            if force < 0:
-                raise ValidationError(
-                    f"Строка {row_no}: сила торможения не может быть отрицательной."
-                )
-
-            parsed_points.append(
-                {
-                    "order": len(parsed_points) + 1,
-                    "velocity": velocity,
-                    "force": force,
-                }
-            )
-
-        if len(parsed_points) < 2:
-            raise ValidationError(
-                "Для графического тормоза необходимо минимум 2 точки."
-            )
-
-        velocities = [point["velocity"] for point in parsed_points]
-
-        if len(set(velocities)) != len(velocities):
-            raise ValidationError(
-                "Скорости в характеристике тормоза не должны повторяться."
-            )
-
-        if velocities != sorted(velocities):
-            raise ValidationError(
-                "Скорости в характеристике тормоза должны быть строго возрастающими."
-            )
-
-        return parsed_points
-
-    @staticmethod
-    def _is_empty_cell(value) -> bool:
-        return value is None or (isinstance(value, str) and value.strip() == "")
-
-    @staticmethod
-    def _coerce_excel_number(value) -> float | None:
-        if isinstance(value, (int, float)):
-            return float(value)
-
-        if isinstance(value, str):
-            normalized = value.strip().replace(",", ".")
-            if not normalized:
-                return None
-            try:
-                return float(normalized)
-            except ValueError:
-                return None
-
-        return None
 
 
 class BaseMagneticBrakeFormSet(BaseFormSet):
