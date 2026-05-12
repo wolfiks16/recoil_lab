@@ -283,7 +283,9 @@ class ThermalRun(models.Model):
 
     PRESET_NINE_NODE = "nine_node"
     PRESET_SINGLE_NODE = "single_node"
+    PRESET_USER_SIMPLE = "user_simple"
     PRESET_CHOICES = [
+        (PRESET_USER_SIMPLE, "Упрощённая (шина+магнитопровод, ручной ввод)"),
         (PRESET_NINE_NODE, "9-узловая сеть"),
         (PRESET_SINGLE_NODE, "Упрощённая (1 узел/тормоз)"),
     ]

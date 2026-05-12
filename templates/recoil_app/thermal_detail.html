@@ -189,64 +189,172 @@
 {% endif %}
 
 {# === СЕТЬ === #}
-{% if nodes_table %}
-<section class="rb-module-section">
-<div class="rb-card">
-    <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · узлы</span></div>
-    <div class="td-table-scroll">
-    <table class="td-table">
-        <thead><tr>
-            <th>Имя</th><th>Материал</th>
-            <th class="num">m, кг</th><th class="num">cp, Дж/(кг·К)</th><th class="num">C, Дж/К</th>
-            <th class="num">A_amb, м²</th><th class="num">h_amb</th><th class="num">A_rad, м²</th>
-        </tr></thead>
-        <tbody>
-        {% for nd in nodes_table %}
-            <tr>
-                <td>{{ nd.display_name }}</td>
-                <td>{{ nd.material_key }}</td>
-                <td class="num">{{ nd.mass_kg|smart_num }}</td>
-                <td class="num">{{ nd.cp_j_per_kgk|smart_num }}</td>
-                <td class="num">{{ nd.capacitance_j_per_k|smart_num }}</td>
-                <td class="num">{{ nd.area_ambient_m2|smart_num }}</td>
-                <td class="num">{{ nd.h_ambient_w_per_m2k|smart_num }}</td>
-                <td class="num">{{ nd.area_radiation_m2|smart_num }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
-</div>
-</section>
-{% endif %}
+{% if is_user_simple %}
 
-{% if links_table %}
-<section class="rb-module-section">
-<div class="rb-card">
-    <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · связи</span></div>
-    <div class="td-table-scroll">
-    <table class="td-table">
-        <thead><tr>
-            <th>A</th><th>B</th>
-            <th class="num">h, Вт/(м²·К)</th><th class="num">A, м²</th><th class="num">G, Вт/К</th>
-            <th>Описание</th>
-        </tr></thead>
-        <tbody>
-        {% for lk in links_table %}
-            <tr>
-                <td>{{ lk.node_a }}</td>
-                <td>{{ lk.node_b }}</td>
-                <td class="num">{{ lk.h_w_per_m2k|smart_num }}</td>
-                <td class="num">{{ lk.area_m2|smart_num }}</td>
-                <td class="num">{{ lk.conductance_w_per_k|smart_num }}</td>
-                <td style="font-size: 11px; color: var(--rb-text-soft);">{{ lk.description }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+    {# Для preset=user_simple показываем параметры в той же форме, в какой они были введены, #}
+    {# без технических артефактов вроде A=1, h=G.                                              #}
+    {% if user_simple_brakes %}
+    <section class="rb-module-section">
+    <div class="rb-card">
+        <div class="rb-card-title">
+            <span class="rb-card-title-text">Параметры контуров</span>
+            {% if T_ambient_user_simple is not None %}
+                <span style="font-size: 12px; color: var(--rb-text-soft); margin-left: 10px;">
+                    T_воздуха = {{ T_ambient_user_simple|smart_num }} °C
+                </span>
+            {% endif %}
+        </div>
+        <div class="td-table-scroll">
+        <table class="td-table">
+            <thead><tr>
+                <th>Контур</th>
+                <th class="num">m_шина, кг</th><th class="num">cp_шина, Дж/(кг·К)</th>
+                <th class="num">m_маг, кг</th><th class="num">cp_маг, Дж/(кг·К)</th>
+                <th class="num">G_pole, Вт/К</th>
+                <th class="num">G_air_in, Вт/К</th><th class="num">G_air_out, Вт/К</th>
+                <th class="num">T₀, °C</th>
+            </tr></thead>
+            <tbody>
+            {% for bg in user_simple_brakes %}
+                <tr>
+                    <td>#{{ forloop.counter }} · {{ bg.display_name }}</td>
+                    <td class="num">{{ bg.bus_mass_kg|smart_num }}</td>
+                    <td class="num">{{ bg.bus_cp_j_per_kgk|smart_num }}</td>
+                    <td class="num">{{ bg.yoke_mass_kg|smart_num }}</td>
+                    <td class="num">{{ bg.yoke_cp_j_per_kgk|smart_num }}</td>
+                    <td class="num">{{ bg.g_pole_w_per_k|smart_num }}</td>
+                    <td class="num">{{ bg.g_air_inner_w_per_k|smart_num }}</td>
+                    <td class="num">{{ bg.g_air_outer_w_per_k|smart_num }}</td>
+                    <td class="num">{{ bg.temp0_c|smart_num }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
     </div>
-</div>
-</section>
+    </section>
+    {% endif %}
+
+    {% if nodes_table %}
+    <section class="rb-module-section">
+    <div class="rb-card">
+        <div class="rb-card-title">
+            <span class="rb-card-title-text">Тепловая сеть · узлы</span>
+            <span style="font-size: 11px; color: var(--rb-text-soft); margin-left: 10px;">C = m·cp; G_воздух — суммарная теплоотдача узла в воздух</span>
+        </div>
+        <div class="td-table-scroll">
+        <table class="td-table">
+            <thead><tr>
+                <th>Имя</th>
+                <th class="num">m, кг</th><th class="num">cp, Дж/(кг·К)</th><th class="num">C, Дж/К</th>
+                <th class="num">G_воздух, Вт/К</th><th class="num">T₀, °C</th>
+            </tr></thead>
+            <tbody>
+            {% for nd in nodes_table %}
+                <tr>
+                    <td>{{ nd.display_name }}</td>
+                    <td class="num">{{ nd.mass_kg|smart_num }}</td>
+                    <td class="num">{{ nd.cp_j_per_kgk|smart_num }}</td>
+                    <td class="num">{{ nd.capacitance_j_per_k|smart_num }}</td>
+                    <td class="num">{{ nd.g_to_air_w_per_k|smart_num }}</td>
+                    <td class="num">{{ nd.temp0_c|smart_num }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    </section>
+    {% endif %}
+
+    {% if links_table %}
+    <section class="rb-module-section">
+    <div class="rb-card">
+        <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · связи</span></div>
+        <div class="td-table-scroll">
+        <table class="td-table">
+            <thead><tr>
+                <th>A</th><th>B</th>
+                <th class="num">G, Вт/К</th>
+                <th>Описание</th>
+            </tr></thead>
+            <tbody>
+            {% for lk in links_table %}
+                <tr>
+                    <td>{{ lk.node_a }}</td>
+                    <td>{{ lk.node_b }}</td>
+                    <td class="num">{{ lk.conductance_w_per_k|smart_num }}</td>
+                    <td style="font-size: 11px; color: var(--rb-text-soft);">{{ lk.description }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    </section>
+    {% endif %}
+
+{% else %}
+    {# === Legacy (9-node / single_node) — оставляю h·A раздельно === #}
+    {% if nodes_table %}
+    <section class="rb-module-section">
+    <div class="rb-card">
+        <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · узлы</span></div>
+        <div class="td-table-scroll">
+        <table class="td-table">
+            <thead><tr>
+                <th>Имя</th><th>Материал</th>
+                <th class="num">m, кг</th><th class="num">cp, Дж/(кг·К)</th><th class="num">C, Дж/К</th>
+                <th class="num">A_amb, м²</th><th class="num">h_amb</th><th class="num">A_rad, м²</th>
+            </tr></thead>
+            <tbody>
+            {% for nd in nodes_table %}
+                <tr>
+                    <td>{{ nd.display_name }}</td>
+                    <td>{{ nd.material_key }}</td>
+                    <td class="num">{{ nd.mass_kg|smart_num }}</td>
+                    <td class="num">{{ nd.cp_j_per_kgk|smart_num }}</td>
+                    <td class="num">{{ nd.capacitance_j_per_k|smart_num }}</td>
+                    <td class="num">{{ nd.area_ambient_m2|smart_num }}</td>
+                    <td class="num">{{ nd.h_ambient_w_per_m2k|smart_num }}</td>
+                    <td class="num">{{ nd.area_radiation_m2|smart_num }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    </section>
+    {% endif %}
+
+    {% if links_table %}
+    <section class="rb-module-section">
+    <div class="rb-card">
+        <div class="rb-card-title"><span class="rb-card-title-text">Тепловая сеть · связи</span></div>
+        <div class="td-table-scroll">
+        <table class="td-table">
+            <thead><tr>
+                <th>A</th><th>B</th>
+                <th class="num">h, Вт/(м²·К)</th><th class="num">A, м²</th><th class="num">G, Вт/К</th>
+                <th>Описание</th>
+            </tr></thead>
+            <tbody>
+            {% for lk in links_table %}
+                <tr>
+                    <td>{{ lk.node_a }}</td>
+                    <td>{{ lk.node_b }}</td>
+                    <td class="num">{{ lk.h_w_per_m2k|smart_num }}</td>
+                    <td class="num">{{ lk.area_m2|smart_num }}</td>
+                    <td class="num">{{ lk.conductance_w_per_k|smart_num }}</td>
+                    <td style="font-size: 11px; color: var(--rb-text-soft);">{{ lk.description }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    </section>
+    {% endif %}
 {% endif %}
 
 {% endblock %}

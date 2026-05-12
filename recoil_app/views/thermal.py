@@ -11,15 +11,23 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from ..forms import ThermalBrakeFormSet, ThermalRunForm
+from ..forms import (
+    ThermalBrakeFormSet,
+    ThermalRunForm,
+    ThermalUserSimpleBrakeFormSet,
+    ThermalUserSimpleRunForm,
+)
 from ..models import CalculationRun, CalculationSnapshot, ThermalRun
 from ..services.thermal import (
     AssemblyGeometry,
     BrakeGeometry,
+    UserSimpleAssemblyParams,
+    UserSimpleBrakeParams,
     build_config_snapshot,
     build_nine_node_network,
     build_result_snapshot,
     build_single_node_network,
+    build_user_simple_network,
     derive_run_summary,
     simulate_repeated_cycles,
 )
@@ -118,6 +126,49 @@ def _build_brake_geometries(brake_formset: ThermalBrakeFormSet, brake_indices: l
     return geos
 
 
+def _build_user_simple_brakes(
+    brake_formset: ThermalUserSimpleBrakeFormSet,
+    brake_indices: list[int],
+    brake_meta: list[dict],
+) -> list[UserSimpleBrakeParams]:
+    """Из formset → list[UserSimpleBrakeParams].
+
+    ВАЖНО: `brake_index` в `UserSimpleBrakeParams` — это 0-based column-index
+    в forces.magnetic_each, а НЕ значение поля MagneticBrakeConfig.index в БД.
+    Колонки f_each идут в порядке formset (== порядок brakes.order_by('index')),
+    так что column-index = порядковый номер формы.
+    """
+    result: list[UserSimpleBrakeParams] = []
+    for i, form in enumerate(brake_formset.forms):
+        cd = form.cleaned_data
+        db_idx = brake_indices[i] if i < len(brake_indices) else i + 1
+        display = (
+            brake_meta[i].get("display_name")
+            if i < len(brake_meta)
+            else f"Контур #{i + 1}"
+        )
+        result.append(UserSimpleBrakeParams(
+            brake_index=i,                       # column-index, 0-based
+            display_name=display or f"Контур #{i + 1} (БД idx={db_idx})",
+            bus_mass_kg=float(cd.get("bus_mass_kg") or 0.0),
+            bus_cp_j_per_kgk=float(cd.get("bus_cp") or 0.0),
+            yoke_mass_kg=float(cd.get("yoke_mass_kg") or 0.0),
+            yoke_cp_j_per_kgk=float(cd.get("yoke_cp") or 0.0),
+            g_pole_w_per_k=float(cd.get("g_pole") or 0.0),
+            g_air_inner_w_per_k=float(cd.get("g_air_inner") or 0.0),
+            g_air_outer_w_per_k=float(cd.get("g_air_outer") or 0.0),
+            temp0_c=float(cd.get("temp0_c") if cd.get("temp0_c") is not None else 20.0),
+        ))
+    return result
+
+
+def _build_user_simple_assembly(run_form: ThermalUserSimpleRunForm) -> UserSimpleAssemblyParams:
+    cd = run_form.cleaned_data
+    return UserSimpleAssemblyParams(
+        T_ambient=float(cd.get("T_ambient") if cd.get("T_ambient") is not None else 20.0),
+    )
+
+
 def _build_assembly(run_form: ThermalRunForm) -> AssemblyGeometry:
     cd = run_form.cleaned_data
     return AssemblyGeometry(
@@ -153,6 +204,61 @@ def thermal_list_view(request, run_id: int):
     })
 
 
+def _save_and_redirect(
+    *,
+    request,
+    run,
+    name: str,
+    preset: str,
+    repetitions: int,
+    pause_s: float,
+    network,
+    brake_params,
+    assembly,
+    combined,
+) -> str:
+    """Общая часть для всех preset'ов: сохранить ThermalRun, нарисовать графики, редиректить."""
+    config_snap = build_config_snapshot(
+        network=network,
+        brake_geometries=brake_params,
+        assembly=assembly,
+        repetitions=repetitions,
+        pause_s=pause_s,
+        network_preset=preset,
+    )
+    result_snap = build_result_snapshot(network=network, combined=combined)
+    summary = derive_run_summary(result_snap)
+
+    thermal_run = ThermalRun.objects.create(
+        run=run,
+        name=name,
+        network_preset=preset,
+        repetitions=repetitions,
+        pause_s=pause_s,
+        config_snapshot=config_snap,
+        result_snapshot=result_snap,
+        warnings_text="\n".join(combined.warnings),
+        max_temp_c=summary["max_temp_c"],
+        max_temp_node_name=summary["max_temp_node_name"] or "",
+        total_heat_j=summary["total_heat_j"],
+    )
+
+    folder = Path(settings.MEDIA_ROOT) / thermal_run.report_folder
+    paths = save_thermal_charts(
+        combined, network, folder, prefix=f"thermal_{thermal_run.id}",
+    )
+    rel_root = thermal_run.report_folder
+    for chart_key, abs_path in paths.items():
+        setattr(thermal_run, chart_key, f"{rel_root}/{Path(abs_path).name}")
+    thermal_run.save(update_fields=[
+        "chart_temperatures", "chart_power_brakes",
+        "chart_heat_brakes", "chart_cycle_envelope",
+    ])
+
+    messages.success(request, "Тепловой сценарий рассчитан.")
+    return thermal_run
+
+
 def thermal_new_view(request, run_id: int):
     run = get_object_or_404(CalculationRun, pk=run_id)
     brakes = list(run.brakes.order_by("index"))
@@ -162,10 +268,88 @@ def thermal_new_view(request, run_id: int):
 
     brake_meta = _brake_meta_list(run)
 
+    # Preset выбирается верхним переключателем на форме. По умолчанию — упрощённая
+    # ручная постановка: она проще и покрывает 95% случаев первичной оценки нагрева.
+    valid_presets = {value for value, _ in ThermalRun.PRESET_CHOICES}
+    if request.method == "POST":
+        preset = request.POST.get("network_preset", ThermalRun.PRESET_USER_SIMPLE)
+    else:
+        preset = request.GET.get("preset", ThermalRun.PRESET_USER_SIMPLE)
+    if preset not in valid_presets:
+        preset = ThermalRun.PRESET_USER_SIMPLE
+
+    # ===== Ветка PRESET_USER_SIMPLE — упрощённая постановка =====
+    if preset == ThermalRun.PRESET_USER_SIMPLE:
+        if request.method == "POST":
+            run_form = ThermalUserSimpleRunForm(request.POST, run=run)
+            brake_formset = ThermalUserSimpleBrakeFormSet(
+                request.POST,
+                prefix="thermal_brakes",
+                brake_meta_list=brake_meta,
+            )
+
+            if run_form.is_valid() and brake_formset.is_valid():
+                try:
+                    with transaction.atomic():
+                        t_arr, v_arr, f_arr = _read_kinematics_from_snapshot(run)
+                        if f_arr.shape[1] != len(brakes):
+                            raise ValueError(
+                                f"Число столбцов f_magnetic_each ({f_arr.shape[1]}) "
+                                f"не совпадает с числом тормозов расчёта ({len(brakes)})."
+                            )
+
+                        brake_params = _build_user_simple_brakes(
+                            brake_formset,
+                            brake_indices=[b.index for b in brakes],
+                            brake_meta=brake_meta,
+                        )
+                        assembly = _build_user_simple_assembly(run_form)
+                        network = build_user_simple_network(brake_params, assembly)
+
+                        combined = simulate_repeated_cycles(
+                            base_t=t_arr, base_v=v_arr, base_f_each=f_arr,
+                            network=network,
+                            repetitions=run_form.cleaned_data["repetitions"],
+                            pause_s=run_form.cleaned_data["pause_s"],
+                        )
+
+                        thermal_run = _save_and_redirect(
+                            request=request, run=run,
+                            name=run_form.cleaned_data["name"],
+                            preset=preset,
+                            repetitions=run_form.cleaned_data["repetitions"],
+                            pause_s=run_form.cleaned_data["pause_s"],
+                            network=network,
+                            brake_params=brake_params,
+                            assembly=assembly,
+                            combined=combined,
+                        )
+                    return redirect("thermal_detail", run_id=run.id, thermal_id=thermal_run.id)
+                except ValueError as exc:
+                    run_form.add_error(None, str(exc))
+        else:
+            run_form = ThermalUserSimpleRunForm(run=run)
+            initial = [{} for _ in brakes]
+            brake_formset = ThermalUserSimpleBrakeFormSet(
+                initial=initial,
+                prefix="thermal_brakes",
+                brake_meta_list=brake_meta,
+            )
+
+        return render(request, "recoil_app/thermal_form.html", {
+            "run": run,
+            "brakes": brakes,
+            "form": run_form,
+            "brake_formset": brake_formset,
+            "brake_meta": brake_meta,
+            "preset": preset,
+            "preset_choices": ThermalRun.PRESET_CHOICES,
+            "is_user_simple": True,
+        })
+
+    # ===== Ветка PRESET_NINE_NODE / PRESET_SINGLE_NODE (старый код) =====
     if request.method == "POST":
         run_form = ThermalRunForm(request.POST, run=run)
-        # Сначала прочитаем preset, чтобы передать в formset
-        preset = request.POST.get("network_preset", ThermalRun.PRESET_NINE_NODE)
         brake_formset = ThermalBrakeFormSet(
             request.POST,
             prefix="thermal_brakes",
@@ -173,7 +357,6 @@ def thermal_new_view(request, run_id: int):
             brake_meta_list=brake_meta,
         )
 
-        # Дополнительная проверка: для nine_node ровно 2 тормоза.
         if preset == ThermalRun.PRESET_NINE_NODE and len(brakes) != 2:
             run_form.add_error(
                 "network_preset",
@@ -207,61 +390,28 @@ def thermal_new_view(request, run_id: int):
                         pause_s=run_form.cleaned_data["pause_s"],
                     )
 
-                    config_snap = build_config_snapshot(
-                        network=network,
-                        brake_geometries=brake_geos,
-                        assembly=assembly,
-                        repetitions=run_form.cleaned_data["repetitions"],
-                        pause_s=run_form.cleaned_data["pause_s"],
-                        network_preset=preset,
-                    )
-                    result_snap = build_result_snapshot(network=network, combined=combined)
-                    summary = derive_run_summary(result_snap)
-
-                    thermal_run = ThermalRun.objects.create(
-                        run=run,
+                    thermal_run = _save_and_redirect(
+                        request=request, run=run,
                         name=run_form.cleaned_data["name"],
-                        network_preset=preset,
+                        preset=preset,
                         repetitions=run_form.cleaned_data["repetitions"],
                         pause_s=run_form.cleaned_data["pause_s"],
-                        config_snapshot=config_snap,
-                        result_snapshot=result_snap,
-                        warnings_text="\n".join(combined.warnings),
-                        max_temp_c=summary["max_temp_c"],
-                        max_temp_node_name=summary["max_temp_node_name"] or "",
-                        total_heat_j=summary["total_heat_j"],
+                        network=network,
+                        brake_params=brake_geos,
+                        assembly=assembly,
+                        combined=combined,
                     )
-
-                    # Графики
-                    folder = Path(settings.MEDIA_ROOT) / thermal_run.report_folder
-                    paths = save_thermal_charts(
-                        combined, network, folder,
-                        prefix=f"thermal_{thermal_run.id}",
-                    )
-                    rel_root = thermal_run.report_folder
-                    for chart_key, abs_path in paths.items():
-                        setattr(
-                            thermal_run, chart_key,
-                            f"{rel_root}/{Path(abs_path).name}",
-                        )
-                    thermal_run.save(update_fields=[
-                        "chart_temperatures", "chart_power_brakes",
-                        "chart_heat_brakes", "chart_cycle_envelope",
-                    ])
-
-                messages.success(request, "Тепловой сценарий рассчитан.")
                 return redirect("thermal_detail", run_id=run.id, thermal_id=thermal_run.id)
 
             except ValueError as exc:
                 run_form.add_error(None, str(exc))
     else:
         run_form = ThermalRunForm(run=run)
-        # Стартовая раскладка formset: по одной форме на каждый тормоз расчёта.
         initial = [{} for _ in brakes]
         brake_formset = ThermalBrakeFormSet(
             initial=initial,
             prefix="thermal_brakes",
-            network_preset=ThermalRun.PRESET_NINE_NODE,
+            network_preset=preset,
             brake_meta_list=brake_meta,
         )
 
@@ -271,6 +421,9 @@ def thermal_new_view(request, run_id: int):
         "form": run_form,
         "brake_formset": brake_formset,
         "brake_meta": brake_meta,
+        "preset": preset,
+        "preset_choices": ThermalRun.PRESET_CHOICES,
+        "is_user_simple": False,
     })
 
 
@@ -299,6 +452,37 @@ def thermal_detail_view(request, run_id: int, thermal_id: int):
     nodes_table = network_dict.get("nodes") or []
     links_table = network_dict.get("links") or []
 
+    # Для каждого узла добавим производную «G в воздух» = h_amb·A_amb,
+    # чтобы шаблон не делал арифметику. Это особенно важно для user_simple,
+    # где h_amb и A_amb — технические артефакты (h=G, A=1).
+    for nd in nodes_table:
+        h = float(nd.get("h_ambient_w_per_m2k") or 0.0)
+        a = float(nd.get("area_ambient_m2") or 0.0)
+        nd["g_to_air_w_per_k"] = h * a
+
+    # Для preset=user_simple показываем переработанные таблицы:
+    # — узлы: без A_amb/h_amb/A_rad (это технические артефакты кодирования G через h·A=G·1),
+    #   вместо них G в воздух [Вт/К] = h·A;
+    # — связи: только итоговое G [Вт/К] без h и A;
+    # — отдельная секция «Контуры» с исходными параметрами пользователя (m, cp, G_pole, G_air_*).
+    is_user_simple = thermal_run.network_preset == ThermalRun.PRESET_USER_SIMPLE
+
+    user_simple_brakes: list[dict] = []
+    if is_user_simple:
+        for bg in (config.get("geometry") or {}).get("brakes") or []:
+            user_simple_brakes.append({
+                "brake_index": bg.get("brake_index"),
+                "display_name": bg.get("display_name") or "",
+                "bus_mass_kg": bg.get("bus_mass_kg"),
+                "bus_cp_j_per_kgk": bg.get("bus_cp_j_per_kgk"),
+                "yoke_mass_kg": bg.get("yoke_mass_kg"),
+                "yoke_cp_j_per_kgk": bg.get("yoke_cp_j_per_kgk"),
+                "g_pole_w_per_k": bg.get("g_pole_w_per_k"),
+                "g_air_inner_w_per_k": bg.get("g_air_inner_w_per_k"),
+                "g_air_outer_w_per_k": bg.get("g_air_outer_w_per_k"),
+                "temp0_c": bg.get("temp0_c"),
+            })
+
     return render(request, "recoil_app/thermal_detail.html", {
         "run": run,
         "thermal_run": thermal_run,
@@ -310,6 +494,9 @@ def thermal_detail_view(request, run_id: int, thermal_id: int):
         "links_table": links_table,
         "peaks": (result.get("peaks") or {}),
         "cycles": (result.get("cycles") or []),
+        "is_user_simple": is_user_simple,
+        "user_simple_brakes": user_simple_brakes,
+        "T_ambient_user_simple": (config.get("geometry") or {}).get("assembly", {}).get("T_ambient"),
     })
 
 

@@ -33,7 +33,12 @@ from .decimation import (
     merge_indices,
     pick_peak_indices,
 )
-from .geometry import AssemblyGeometry, BrakeGeometry
+from .geometry import (
+    AssemblyGeometry,
+    BrakeGeometry,
+    UserSimpleAssemblyParams,
+    UserSimpleBrakeParams,
+)
 from .network import ThermalNetwork
 
 
@@ -85,8 +90,8 @@ def network_to_dict(network: ThermalNetwork) -> dict[str, Any]:
 def build_config_snapshot(
     *,
     network: ThermalNetwork,
-    brake_geometries: list[BrakeGeometry],
-    assembly: AssemblyGeometry,
+    brake_geometries: list[BrakeGeometry] | list[UserSimpleBrakeParams],
+    assembly: AssemblyGeometry | UserSimpleAssemblyParams,
     repetitions: int,
     pause_s: float,
     network_preset: str,

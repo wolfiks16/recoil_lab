@@ -577,3 +577,152 @@ ThermalBrakeFormSet = formset_factory(
     validate_min=True,
 )
 
+
+# ============================================================================
+# Упрощённая тепловая постановка с ручным вводом (PRESET_USER_SIMPLE)
+# ============================================================================
+#
+# Топология одного контура:
+#   [ВОЗДУХ_in]──G_air_in──[ШИНА+МАГНИТОПРОВОД]──G_air_out──[ВОЗДУХ_out]
+#                                ▲
+#                                │ Q = F_brake(t)·v(t)
+#
+# Шина и магнитопровод объединены в один узел: плотный контакт металл-металл
+# даёт τ ≈ 1 с — выравнивание происходит быстрее одного цикла откат-накат.
+# На контур: m_ш, cp_ш, m_маг, cp_маг, G_air_in, G_air_out, T₀  — 7 полей.
+# Общие: T_ambient, repetitions, pause.
+#
+# G в форме — итоговая проводимость [Вт/К]. Рядом UI-калькулятор h·A → G.
+
+class ThermalUserSimpleRunForm(forms.Form):
+    """Общие параметры упрощённого теплового сценария."""
+
+    name = forms.CharField(
+        label="Название сценария",
+        max_length=200,
+        widget=forms.TextInput(attrs={"placeholder": "Очередь 5 выстрелов"}),
+    )
+
+    repetitions = forms.IntegerField(
+        label="Число повторений",
+        initial=1,
+        validators=[
+            MinValueValidator(1, "Повторений должно быть не меньше 1."),
+            MaxValueValidator(100, "Повторений не больше 100."),
+        ],
+        widget=forms.NumberInput(attrs={"min": "1", "max": "100", "step": "1"}),
+    )
+    pause_s = forms.FloatField(
+        label="Пауза между повторениями, с",
+        initial=10.0,
+        validators=[MinValueValidator(0.0, "Пауза не может быть отрицательной.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+
+    T_ambient = forms.FloatField(
+        label="Температура воздуха, °C",
+        initial=20.0,
+        widget=forms.NumberInput(attrs={"step": "any"}),
+        help_text="Одна общая T для внутренней и внешней стороны коаксиальной трубы.",
+    )
+
+    def __init__(self, *args, run=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._run = run
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise ValidationError("Название обязательно.")
+        if self._run is not None:
+            qs = ThermalRun.objects.filter(run=self._run, name=name)
+            if qs.exists():
+                raise ValidationError(
+                    "Сценарий с таким названием уже есть для этого расчёта."
+                )
+        return name
+
+
+class ThermalUserSimpleBrakeForm(forms.Form):
+    """Параметры одного контура (шина+магнитопровод, плотный контакт)."""
+
+    # --- Шина ---
+    bus_mass_kg = _strict_positive_float(
+        "Масса шины, кг",
+        initial=5.0,
+        help_text="Масса той части шины, что участвует в тепловой задаче.",
+    )
+    bus_cp = _strict_positive_float(
+        "Теплоёмкость шины cp, Дж/(кг·К)",
+        initial=900.0,
+        help_text="Алюминий ≈ 900, медь ≈ 385, сталь ≈ 460.",
+    )
+
+    # --- Магнитопровод (плотный контакт с шиной) ---
+    yoke_mass_kg = _strict_positive_float(
+        "Масса магнитопровода, кг",
+        initial=10.0,
+        help_text="Магнитопровод плотно прижат к шине, тепло проходит через G_pole.",
+    )
+    yoke_cp = _strict_positive_float(
+        "Теплоёмкость магнитопровода cp, Дж/(кг·К)",
+        initial=460.0,
+        help_text="Сталь магнитная (Ст10, Ст3 и т.п.) ≈ 460.",
+    )
+
+    # --- Контакт шина↔магнитопровод ---
+    g_pole = _strict_positive_float(
+        "G шина↔магнитопровод, Вт/К",
+        initial=2000.0,
+        help_text=(
+            "Плотный металл-металл контакт обычно 1000…3000 Вт/К. "
+            "Чем выше, тем быстрее температуры выравниваются."
+        ),
+    )
+
+    # --- Теплоотдача в воздух с двух сторон коаксиальной трубы ---
+    g_air_inner = _strict_positive_float(
+        "G шина→внутренний воздух, Вт/К",
+        initial=3.0,
+        help_text="Сторона шины, обращённая внутрь трубы. Можно посчитать как h·A.",
+    )
+    g_air_outer = _strict_positive_float(
+        "G магнитопровод→внешний воздух, Вт/К",
+        initial=5.0,
+        help_text="Сторона магнитопровода, обращённая наружу (часто обдув → большее G).",
+    )
+
+    # --- Начальная температура контура ---
+    temp0_c = forms.FloatField(
+        label="Начальная температура, °C",
+        initial=20.0,
+        widget=forms.NumberInput(attrs={"step": "any"}),
+    )
+
+    def __init__(self, *args, brake_meta=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._brake_meta = brake_meta or {}
+
+
+class BaseThermalUserSimpleBrakeFormSet(BaseFormSet):
+    """Formset: позволяет прокинуть brake_meta_list (по тормозу на форму)."""
+
+    def __init__(self, *args, brake_meta_list=None, **kwargs):
+        self._brake_meta_list = brake_meta_list or []
+        super().__init__(*args, **kwargs)
+
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        if 0 <= index < len(self._brake_meta_list):
+            kwargs["brake_meta"] = self._brake_meta_list[index]
+        return kwargs
+
+
+ThermalUserSimpleBrakeFormSet = formset_factory(
+    ThermalUserSimpleBrakeForm,
+    formset=BaseThermalUserSimpleBrakeFormSet,
+    extra=0,
+    min_num=1,
+    validate_min=True,
+)
+

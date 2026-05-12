@@ -5,9 +5,12 @@ Backend ожидает все размеры в SI и не делает fallback
 и при необходимости валидацию формы. Так пользователь всегда видит, какие
 числа попадают в расчёт.
 
-Здесь только два «автопостроителя сети»:
-    build_nine_node_network(brakes, assembly) — стандартная 9-узловая сеть
+Здесь три «автопостроителя сети»:
+    build_nine_node_network(brakes, assembly)   — стандартная 9-узловая сеть
     build_single_node_network(brakes, assembly) — одна теплоёмкость на тормоз
+    build_user_simple_network(brakes, assembly) — объединённый узел шина+магнитопровод
+                                                  с двумя теплоотдачами в воздух
+                                                  (используется в простой форме)
 """
 
 from __future__ import annotations
@@ -352,6 +355,152 @@ def build_nine_node_network(
         ThermalSource(brake_index=outer.brake_index, node_name="bus_outer", heat_fraction=1.0),
         ThermalSource(brake_index=inner.brake_index, node_name="bus_inner", heat_fraction=1.0),
     ]
+
+    return ThermalNetwork(nodes=nodes, links=links, sources=sources)
+
+
+# --- User-simple network (ручной ввод параметров) -------------------------------------
+
+
+@dataclass(slots=True)
+class UserSimpleBrakeParams:
+    """Параметры одного контура в упрощённой постановке (ручной ввод).
+
+    Топология: ДВА узла на контур — шина и магнитопровод. Источник Q_in идёт
+    только в шину (там наводятся вихревые токи). Магнитопровод плотно прижат
+    к шине: связь G_pole. Воздух с внутренней стороны касается шины (G_air_in),
+    с внешней — магнитопровода (G_air_out).
+
+    ОДУ:
+        m_ш·cp_ш·dT_ш/dt   = Q_in − G_air_in·(T_ш − T_air) − G_pole·(T_ш − T_маг)
+        m_маг·cp_маг·dT_маг/dt =       G_pole·(T_ш − T_маг) − G_air_out·(T_маг − T_air)
+
+    brake_index ОБЯЗАТЕЛЬНО соответствует колонке в forces.magnetic_each
+    (0-based порядковый номер). Это column-index, а не значение поля
+    MagneticBrakeConfig.index в БД.
+    """
+
+    brake_index: int           # 0-based column index в f_magnetic_each
+    display_name: str = ""
+
+    # Шина — здесь и происходит тепловыделение (источник Q подключается сюда).
+    bus_mass_kg: float = 0.0
+    bus_cp_j_per_kgk: float = 0.0
+
+    # Магнитопровод — плотный контакт с шиной через G_pole.
+    yoke_mass_kg: float = 0.0
+    yoke_cp_j_per_kgk: float = 0.0
+
+    # G шина↔магнитопровод (плотный контакт, обычно 1000…3000 Вт/К).
+    g_pole_w_per_k: float = 2000.0
+
+    # Теплопередача в воздух: внутрь — от шины, наружу — от магнитопровода.
+    g_air_inner_w_per_k: float = 0.0
+    g_air_outer_w_per_k: float = 0.0
+
+    # Начальная температура контура (для обоих узлов одинаковая).
+    temp0_c: float = 20.0
+
+
+@dataclass(slots=True)
+class UserSimpleAssemblyParams:
+    """Общие параметры для упрощённой постановки."""
+
+    T_ambient: float = 20.0
+
+
+def build_user_simple_network(
+    brakes: list[UserSimpleBrakeParams],
+    assembly: UserSimpleAssemblyParams,
+) -> ThermalNetwork:
+    """Упрощённая сеть: 2 узла на контур (шина и магнитопровод) + связь G_pole.
+
+    На контур:
+        узел bus_<i>:  m_ш·cp_ш,  T0; стоки в воздух h_amb = G_air_in,  A=1
+        узел yoke_<i>: m_маг·cp_маг, T0; стоки в воздух h_amb = G_air_out, A=1
+        связь bus_<i> ↔ yoke_<i> через G_pole (плотный контакт)
+        источник Q_in (вихревые токи) → ТОЛЬКО bus_<i> (heat_fraction=1)
+
+    `brake_index` в источнике — это 0-based column-index в forces.magnetic_each.
+    ThermalLink хранит связь как h·A, поэтому G_pole кодируется как h=G_pole, A=1.
+    """
+    if not brakes:
+        raise ValueError("Нужен хотя бы один контур.")
+
+    nodes: list[ThermalNode] = []
+    links: list[ThermalLink] = []
+    sources: list[ThermalSource] = []
+
+    for brake in brakes:
+        m_bus = max(brake.bus_mass_kg, 0.0)
+        cp_bus = max(brake.bus_cp_j_per_kgk, 0.0)
+        m_yoke = max(brake.yoke_mass_kg, 0.0)
+        cp_yoke = max(brake.yoke_cp_j_per_kgk, 0.0)
+
+        if m_bus <= 0.0 or cp_bus <= 0.0:
+            raise ValueError(
+                f"Контур #{brake.brake_index + 1}: масса и cp шины должны быть положительны."
+            )
+        if m_yoke <= 0.0 or cp_yoke <= 0.0:
+            raise ValueError(
+                f"Контур #{brake.brake_index + 1}: масса и cp магнитопровода должны быть положительны."
+            )
+
+        bus_name = f"bus_{brake.brake_index}"
+        yoke_name = f"yoke_{brake.brake_index}"
+        suffix = f"#{brake.brake_index + 1}"
+        brake_label = (brake.display_name or "").strip()
+        bus_display = f"Шина ({brake_label}) {suffix}" if brake_label else f"Шина {suffix}"
+        yoke_display = f"Магнитопровод ({brake_label}) {suffix}" if brake_label else f"Магнитопровод {suffix}"
+
+        # Узел «шина» — источник тепла. Стоки в воздух через G_air_in.
+        g_in = max(brake.g_air_inner_w_per_k, 0.0)
+        nodes.append(ThermalNode(
+            name=bus_name,
+            display_name=bus_display,
+            mass_kg=m_bus,
+            cp_j_per_kgk=cp_bus,
+            temp0_c=brake.temp0_c,
+            h_ambient_w_per_m2k=g_in,
+            area_ambient_m2=1.0 if g_in > 0.0 else 0.0,
+            ambient_c=assembly.T_ambient,
+            emissivity=0.0,
+            area_radiation_m2=0.0,
+            material_key="user_simple_bus",
+        ))
+
+        # Узел «магнитопровод». Стоки в воздух через G_air_out.
+        g_out = max(brake.g_air_outer_w_per_k, 0.0)
+        nodes.append(ThermalNode(
+            name=yoke_name,
+            display_name=yoke_display,
+            mass_kg=m_yoke,
+            cp_j_per_kgk=cp_yoke,
+            temp0_c=brake.temp0_c,
+            h_ambient_w_per_m2k=g_out,
+            area_ambient_m2=1.0 if g_out > 0.0 else 0.0,
+            ambient_c=assembly.T_ambient,
+            emissivity=0.0,
+            area_radiation_m2=0.0,
+            material_key="user_simple_yoke",
+        ))
+
+        # Связь шина ↔ магнитопровод (плотный контакт через G_pole).
+        g_pole = max(brake.g_pole_w_per_k, 0.0)
+        links.append(ThermalLink(
+            node_a=bus_name,
+            node_b=yoke_name,
+            h_w_per_m2k=g_pole,
+            area_m2=1.0 if g_pole > 0.0 else 0.0,
+            description=f"Контакт шина↔магнитопровод {suffix}",
+        ))
+
+        # Источник: вихревые токи греют ТОЛЬКО шину.
+        sources.append(ThermalSource(
+            brake_index=brake.brake_index,   # column-index в f_magnetic_each
+            node_name=bus_name,
+            heat_fraction=1.0,
+        ))
 
     return ThermalNetwork(nodes=nodes, links=links, sources=sources)
 

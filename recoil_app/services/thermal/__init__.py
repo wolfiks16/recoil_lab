@@ -21,8 +21,11 @@ from .network import (  # noqa: F401
 from .geometry import (  # noqa: F401
     BrakeGeometry,
     AssemblyGeometry,
+    UserSimpleBrakeParams,
+    UserSimpleAssemblyParams,
     build_nine_node_network,
     build_single_node_network,
+    build_user_simple_network,
 )
 from .cycles import (  # noqa: F401
     simulate_repeated_cycles,
