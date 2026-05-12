@@ -1,7 +1,23 @@
+from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
 
 urlpatterns = [
+    # --- Аутентификация ---
+    path(
+        "login/",
+        LoginView.as_view(
+            template_name="registration/login.html",
+            redirect_authenticated_user=True,
+        ),
+        name="login",
+    ),
+    path("logout/", LogoutView.as_view(), name="logout"),
+    path("register/", views.register_view, name="register"),
+    path("profile/", views.profile_view, name="profile"),
+    path("users/", views.users_list_view, name="users_list"),
+    path("users/<int:user_id>/role/", views.users_set_role_view, name="users_set_role"),
+
     # Главная — новый дашборд (Срез 2)
     path("", views.dashboard_view, name="dashboard"),
     # Форма создания нового расчёта (раньше была главной).

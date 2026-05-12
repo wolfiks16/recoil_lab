@@ -12,6 +12,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from ..models import CalculationRun
+from ..services.permissions import runs_visible_to
 
 
 def results_view(request):
@@ -25,7 +26,8 @@ def results_view(request):
     """
     week_ago = timezone.now() - timedelta(days=7)
 
-    qs = CalculationRun.objects.all().prefetch_related("brakes")
+    # Фильтрация по роли: гость — пустой queryset, engineer — свои, analyst/admin — все.
+    qs = runs_visible_to(request.user).prefetch_related("brakes").select_related("owner")
 
     q = (request.GET.get("q") or "").strip()
     if q:

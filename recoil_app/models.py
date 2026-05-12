@@ -1,6 +1,117 @@
 from pathlib import Path
 
+from django.conf import settings
 from django.db import models
+
+
+# ============================================================================
+# Auth / роли пользователей
+# ============================================================================
+
+
+class UserProfile(models.Model):
+    """Дополнительная информация о пользователе: роль в системе.
+
+    Создаётся автоматически сигналом `post_save` на `auth.User`:
+    - if user.is_superuser → role = admin
+    - иначе → role = engineer (минимальные права)
+
+    Роли:
+        admin    — владелец платформы: видит и удаляет всё, раздаёт роли,
+                   полный CRUD по каталогу.
+        analyst  — инженер-аналитик: видит все расчёты, удаляет только свои,
+                   копирует чужие, полный CRUD по каталогу. Прав на роли НЕТ.
+        engineer — обычный инженер: видит и удаляет ТОЛЬКО свои расчёты;
+                   в каталоге может использовать ВСЕ записи, но создавать
+                   и редактировать ТОЛЬКО свои.
+    """
+
+    ROLE_ADMIN = "admin"
+    ROLE_ANALYST = "analyst"
+    ROLE_ENGINEER = "engineer"
+    ROLE_CHOICES = [
+        (ROLE_ADMIN, "Администратор"),
+        (ROLE_ANALYST, "Инженер-аналитик"),
+        (ROLE_ENGINEER, "Инженер"),
+    ]
+
+    # Аватары — мультяшные морды животных через Unicode emoji.
+    # Ключ хранится в БД, эмодзи рендерится фронтом через словарь AVATAR_EMOJI.
+    AVATAR_CHOICES = [
+        ("fox",     "🦊 Лиса"),
+        ("cat",     "🐱 Кот"),
+        ("bear",    "🐻 Медведь"),
+        ("rabbit",  "🐰 Кролик"),
+        ("dog",     "🐶 Собака"),
+        ("panda",   "🐼 Панда"),
+        ("raccoon", "🦝 Енот"),
+        ("wolf",    "🐺 Волк"),
+        ("tiger",   "🐯 Тигр"),
+        ("lion",    "🦁 Лев"),
+        ("mouse",   "🐭 Мышь"),
+        ("frog",    "🐸 Лягушка"),
+    ]
+    AVATAR_EMOJI = {
+        "fox":     "🦊",
+        "cat":     "🐱",
+        "bear":    "🐻",
+        "rabbit":  "🐰",
+        "dog":     "🐶",
+        "panda":   "🐼",
+        "raccoon": "🦝",
+        "wolf":    "🐺",
+        "tiger":   "🐯",
+        "lion":    "🦁",
+        "mouse":   "🐭",
+        "frog":    "🐸",
+    }
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    role = models.CharField(
+        max_length=16,
+        choices=ROLE_CHOICES,
+        default=ROLE_ENGINEER,
+    )
+    avatar_key = models.CharField(
+        max_length=16,
+        choices=AVATAR_CHOICES,
+        default="fox",
+        help_text="Мультяшный аватар пользователя (мордочка животного).",
+    )
+    birth_date = models.DateField(
+        null=True, blank=True,
+        help_text="Дата рождения. Опциональное поле.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Профиль пользователя"
+        verbose_name_plural = "Профили пользователей"
+
+    def __str__(self) -> str:
+        return f"{self.user.username} ({self.get_role_display()})"
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == self.ROLE_ADMIN
+
+    @property
+    def is_analyst(self) -> bool:
+        return self.role == self.ROLE_ANALYST
+
+    @property
+    def is_engineer(self) -> bool:
+        return self.role == self.ROLE_ENGINEER
+
+    @property
+    def avatar_emoji(self) -> str:
+        """Возвращает эмодзи-аватар по ключу (с фоллбэком на 🦊)."""
+        return self.AVATAR_EMOJI.get(self.avatar_key, "🦊")
 
 
 class BrakeParametersMixin(models.Model):
@@ -42,6 +153,16 @@ class CalculationRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=200, unique=True, blank=False)
     input_file = models.FileField(upload_to="uploads/")
+    # Владелец расчёта. Null допустим для legacy-расчётов (до введения auth),
+    # но миграция назначает их первому суперпользователю; после миграции у новых
+    # расчётов owner всегда заполнен (view ставит request.user).
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="calculation_runs",
+    )
 
     mass = models.FloatField()
     angle_deg = models.FloatField(default=70.0)
@@ -213,6 +334,15 @@ class BrakeCatalog(BrakeParametersMixin):
 
     name = models.CharField(max_length=200, unique=True)
     description = models.TextField(blank=True, default="")
+    # Владелец записи каталога. admin/analyst могут редактировать любые,
+    # engineer — только свои. Null для legacy записей (до auth).
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="brake_catalog_entries",
+    )
 
     model_type = models.CharField(
         max_length=16,

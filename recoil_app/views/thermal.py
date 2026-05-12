@@ -18,6 +18,7 @@ from ..forms import (
     ThermalUserSimpleRunForm,
 )
 from ..models import CalculationRun, CalculationSnapshot, ThermalRun
+from ..services.permissions import can_delete_run, can_run_calc, can_view_run
 from ..services.thermal import (
     AssemblyGeometry,
     BrakeGeometry,
@@ -195,8 +196,27 @@ def _build_assembly(run_form: ThermalRunForm) -> AssemblyGeometry:
 # --- views ----------------------------------------------------------------------------
 
 
+def _enforce_run_view_access(request, run):
+    """Возвращает None, если можно смотреть; иначе HttpResponse (redirect/403)."""
+    if can_view_run(request.user, run):
+        return None
+    if not request.user.is_authenticated:
+        messages.warning(
+            request,
+            "Тепловые сценарии доступны только зарегистрированным пользователям.",
+        )
+        return redirect(f"/login/?next={request.path}")
+    from django.http import HttpResponseForbidden
+    return HttpResponseForbidden(
+        "У вас нет прав на этот расчёт — тепловые сценарии тоже недоступны."
+    )
+
+
 def thermal_list_view(request, run_id: int):
     run = get_object_or_404(CalculationRun, pk=run_id)
+    forbid = _enforce_run_view_access(request, run)
+    if forbid is not None:
+        return forbid
     thermal_runs = list(run.thermal_runs.order_by("-created_at"))
     return render(request, "recoil_app/thermal_list.html", {
         "run": run,
@@ -261,6 +281,14 @@ def _save_and_redirect(
 
 def thermal_new_view(request, run_id: int):
     run = get_object_or_404(CalculationRun, pk=run_id)
+    forbid = _enforce_run_view_access(request, run)
+    if forbid is not None:
+        return forbid
+    # Запуск нового теплового сценария — авторизация уже проверена через can_view_run,
+    # но дополнительно убедимся: гость не должен сюда попадать через POST с form-данными.
+    if not can_run_calc(request.user):
+        messages.warning(request, "Для запуска расчёта войдите или зарегистрируйтесь.")
+        return redirect(f"/login/?next={request.path}")
     brakes = list(run.brakes.order_by("index"))
     if not brakes:
         messages.error(request, "У расчёта нет тормозов — тепловой анализ невозможен.")
@@ -429,6 +457,9 @@ def thermal_new_view(request, run_id: int):
 
 def thermal_detail_view(request, run_id: int, thermal_id: int):
     run = get_object_or_404(CalculationRun, pk=run_id)
+    forbid = _enforce_run_view_access(request, run)
+    if forbid is not None:
+        return forbid
     thermal_run = get_object_or_404(ThermalRun, pk=thermal_id, run=run)
 
     chart_fields = [
@@ -503,7 +534,15 @@ def thermal_detail_view(request, run_id: int, thermal_id: int):
 @require_POST
 def thermal_delete_view(request, run_id: int, thermal_id: int):
     run = get_object_or_404(CalculationRun, pk=run_id)
+    # Удалить тепловой сценарий может только тот, кто может удалить родительский расчёт.
+    if not can_delete_run(request.user, run):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden(
+            "Удалить тепловой сценарий может только владелец расчёта или администратор."
+        )
     thermal_run = get_object_or_404(ThermalRun, pk=thermal_id, run=run)
-    thermal_run.delete()  # post_delete сигнал чистит файлы и папку
+    thermal_run.delete()
     messages.success(request, "Тепловой сценарий удалён.")
     return redirect("thermal_list", run_id=run.id)

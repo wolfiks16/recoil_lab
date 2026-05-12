@@ -1,0 +1,67 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+
+{% block title %}Регистрация — RecoilLab{% endblock %}
+{% block shell_crumb %}Регистрация{% endblock %}
+
+{% block head_extra %}
+<style>
+    .auth-card { max-width: 480px; margin: 40px auto; padding: 32px; background: white;
+                 border: 1px solid var(--rb-panel-border); border-radius: 8px;
+                 box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auth-title { font-size: 22px; font-weight: 600; color: var(--rb-text); margin-bottom: 8px; }
+    .auth-sub   { font-size: 13px; color: var(--rb-text-soft); margin-bottom: 24px; }
+    .auth-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .auth-field label { font-size: 12px; color: var(--rb-text-soft); }
+    .auth-field input { padding: 8px 10px; border: 1px solid var(--rb-panel-border); border-radius: 4px;
+                         font-family: var(--rb-font-mono, monospace); font-size: 13px; }
+    .auth-field .errors { color: var(--rb-danger-dark); font-size: 11px; }
+    .auth-field .helptext { font-size: 11px; color: var(--rb-text-soft); line-height: 1.4; }
+    .auth-field .helptext ul { padding-left: 18px; margin: 4px 0; }
+    .auth-actions { display: flex; gap: 8px; align-items: center; margin-top: 20px; }
+    .auth-actions .rb-btn { flex: 1; }
+    .auth-link { font-size: 12px; color: var(--rb-text-soft); text-align: center; margin-top: 16px; }
+    .auth-link a { color: var(--rb-accent, #3D73EB); text-decoration: none; }
+    .auth-link a:hover { text-decoration: underline; }
+    .auth-non-field { color: var(--rb-danger-dark); font-size: 12px; padding: 8px 12px;
+                       background: var(--rb-danger-soft); border-radius: 4px; margin-bottom: 12px; }
+    .role-note { font-size: 11px; color: var(--rb-text-soft); padding: 10px;
+                  background: var(--rb-bg-soft, #FAFBFC); border-left: 3px solid var(--rb-accent, #3D73EB);
+                  border-radius: 3px; margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="auth-title">Регистрация</div>
+    <div class="auth-sub">Создайте аккаунт, чтобы запускать расчёты и сохранять их.</div>
+
+    <div class="role-note">
+        После регистрации вы получите роль <b>Инженер</b>: сможете запускать расчёты,
+        видеть и удалять только свои. Расширенный доступ выдаёт администратор.
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="auth-non-field">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="auth-field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<span class="helptext">{{ field.help_text|safe }}</span>{% endif %}
+            {% if field.errors %}<span class="errors">{{ field.errors|join:", " }}</span>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="auth-actions">
+            <button type="submit" class="rb-btn rb-btn-grad">Создать аккаунт</button>
+        </div>
+    </form>
+
+    <div class="auth-link">
+        Уже есть аккаунт? <a href="{% url 'login' %}">Войти</a>
+    </div>
+</div>
+{% endblock %}

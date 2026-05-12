@@ -39,6 +39,11 @@
             <div class="rb-hero-sub">
                 Расчёт #{{ run.id }} · создан {{ run.created_at|date:"d.m.Y · H:i" }}
                 {% if brakes %} · тормозов: {{ brakes|length }}{% endif %}
+                {% if run.owner_id %}
+                    · автор <b>{{ run.owner.username }}</b>
+                {% else %}
+                    · <span style="font-style: italic; opacity: 0.7;">архив</span>
+                {% endif %}
             </div>
         </div>
         <div class="rb-hero-actions">
@@ -48,11 +53,13 @@
             {% if run.report_file %}
                 <a class="rb-btn" href="{{ run.report_file.url }}" download>⬇ Excel</a>
             {% endif %}
+            {% if perm_can_delete %}
             <form method="post" action="{% url 'delete_run' run.id %}" style="display:inline-block;"
                   onsubmit="return confirm('Удалить расчёт и все его файлы?');">
                 {% csrf_token %}
                 <button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
             </form>
+            {% endif %}
         </div>
     </div>
 </section>

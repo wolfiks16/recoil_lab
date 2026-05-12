@@ -1,0 +1,60 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+
+{% block title %}Вход — RecoilLab{% endblock %}
+{% block shell_crumb %}Вход{% endblock %}
+
+{% block head_extra %}
+<style>
+    .auth-card { max-width: 420px; margin: 40px auto; padding: 32px; background: white;
+                 border: 1px solid var(--rb-panel-border); border-radius: 8px;
+                 box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auth-title { font-size: 22px; font-weight: 600; color: var(--rb-text); margin-bottom: 8px; }
+    .auth-sub   { font-size: 13px; color: var(--rb-text-soft); margin-bottom: 24px; }
+    .auth-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .auth-field label { font-size: 12px; color: var(--rb-text-soft); }
+    .auth-field input { padding: 8px 10px; border: 1px solid var(--rb-panel-border); border-radius: 4px;
+                         font-family: var(--rb-font-mono, monospace); font-size: 13px; }
+    .auth-field .errors { color: var(--rb-danger-dark); font-size: 11px; }
+    .auth-actions { display: flex; gap: 8px; align-items: center; margin-top: 20px; }
+    .auth-actions .rb-btn { flex: 1; }
+    .auth-link { font-size: 12px; color: var(--rb-text-soft); text-align: center; margin-top: 16px; }
+    .auth-link a { color: var(--rb-accent, #3D73EB); text-decoration: none; }
+    .auth-link a:hover { text-decoration: underline; }
+    .auth-non-field { color: var(--rb-danger-dark); font-size: 12px; padding: 8px 12px;
+                       background: var(--rb-danger-soft); border-radius: 4px; margin-bottom: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="auth-title">Вход в RecoilLab</div>
+    <div class="auth-sub">Войдите, чтобы запускать расчёты и смотреть результаты.</div>
+
+    {% if form.non_field_errors %}
+        <div class="auth-non-field">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="auth-field">
+            <label for="{{ form.username.id_for_label }}">Логин</label>
+            {{ form.username }}
+            {% if form.username.errors %}<span class="errors">{{ form.username.errors|join:", " }}</span>{% endif %}
+        </div>
+        <div class="auth-field">
+            <label for="{{ form.password.id_for_label }}">Пароль</label>
+            {{ form.password }}
+            {% if form.password.errors %}<span class="errors">{{ form.password.errors|join:", " }}</span>{% endif %}
+        </div>
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <div class="auth-actions">
+            <button type="submit" class="rb-btn rb-btn-grad">Войти</button>
+        </div>
+    </form>
+
+    <div class="auth-link">
+        Нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться</a>
+    </div>
+</div>
+{% endblock %}

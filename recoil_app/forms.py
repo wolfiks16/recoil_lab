@@ -3,11 +3,13 @@ from __future__ import annotations
 import re
 
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.forms import BaseFormSet, formset_factory
 
-from .models import CalculationRun, MagneticBrakeConfig
+from .models import CalculationRun, MagneticBrakeConfig, UserProfile
 from .services.curve_parser import parse_force_curve_file
 
 
@@ -725,4 +727,105 @@ ThermalUserSimpleBrakeFormSet = formset_factory(
     min_num=1,
     validate_min=True,
 )
+
+
+class UserRegistrationForm(UserCreationForm):
+    """Расширенная регистрация: + имя, фамилия, дата рождения.
+
+    UserCreationForm даёт username + password1 + password2; добавляем личные
+    данные. first_name/last_name пишутся на User, birth_date — на UserProfile
+    (профиль создаёт сигнал post_save). save() здесь возвращает User, как ждёт
+    стандартный flow `auth_login(request, user)`.
+    """
+
+    first_name = forms.CharField(
+        required=True,
+        max_length=150,
+        label="Имя",
+        widget=forms.TextInput(attrs={"autocomplete": "given-name"}),
+    )
+    last_name = forms.CharField(
+        required=True,
+        max_length=150,
+        label="Фамилия",
+        widget=forms.TextInput(attrs={"autocomplete": "family-name"}),
+    )
+    birth_date = forms.DateField(
+        required=True,
+        label="Дата рождения",
+        widget=forms.DateInput(attrs={"type": "date", "autocomplete": "bday"}),
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ("username", "first_name", "last_name", "birth_date")
+
+    def save(self, commit: bool = True):
+        user = super().save(commit=False)
+        user.first_name = self.cleaned_data["first_name"]
+        user.last_name = self.cleaned_data["last_name"]
+        if commit:
+            user.save()
+            # Сигнал post_save уже создал UserProfile с ролью engineer.
+            # Дописываем туда дату рождения.
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.birth_date = self.cleaned_data.get("birth_date")
+            profile.save(update_fields=["birth_date", "updated_at"])
+        return user
+
+
+class UserProfileEditForm(forms.Form):
+    """Редактирование персональных данных и аватара. Роль сюда не входит —
+    её меняет только admin через `/users/`. Поля имени/фамилии живут на User,
+    дата рождения и аватар — на UserProfile, сохранение оба фиксирует."""
+
+    first_name = forms.CharField(
+        required=False,
+        max_length=150,
+        label="Имя",
+        widget=forms.TextInput(attrs={"placeholder": "Например, Сергей"}),
+    )
+    last_name = forms.CharField(
+        required=False,
+        max_length=150,
+        label="Фамилия",
+        widget=forms.TextInput(attrs={"placeholder": "Например, Рубцов"}),
+    )
+    birth_date = forms.DateField(
+        required=False,
+        label="Дата рождения",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    avatar_key = forms.ChoiceField(
+        required=True,
+        choices=UserProfile.AVATAR_CHOICES,
+        label="Аватар",
+        widget=forms.RadioSelect,
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        self._user = user
+        initial = kwargs.pop("initial", None) or {}
+        if user is not None:
+            profile = getattr(user, "profile", None)
+            initial.setdefault("first_name", user.first_name)
+            initial.setdefault("last_name", user.last_name)
+            if profile is not None:
+                initial.setdefault("birth_date", profile.birth_date)
+                initial.setdefault("avatar_key", profile.avatar_key)
+        kwargs["initial"] = initial
+        super().__init__(*args, **kwargs)
+
+    def save(self) -> None:
+        if self._user is None:
+            raise RuntimeError("UserProfileEditForm.save вызван без user.")
+        user = self._user
+        cd = self.cleaned_data
+        user.first_name = cd.get("first_name", "") or ""
+        user.last_name = cd.get("last_name", "") or ""
+        user.save(update_fields=["first_name", "last_name"])
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.birth_date = cd.get("birth_date") or None
+        profile.avatar_key = cd.get("avatar_key") or "fox"
+        profile.save(update_fields=["birth_date", "avatar_key", "updated_at"])
 

@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 
 from ..forms import CalculationForm, MagneticBrakeFormSet
 from ..models import BrakeCatalog, CalculationRun, CalculationSnapshot
+from ..services.permissions import can_delete_run, can_run_calc, can_view_run
 from ..services.analysis import enrich_with_basic_analysis
 from ..services.charting import save_interactive_charts
 from ..services.dynamics import RecoilParams, simulate_recoil
@@ -27,6 +28,16 @@ from ..services.snapshot import extract_snapshot_parts
 
 
 def index_view(request):
+    # Гость может ВИДЕТЬ форму, но не сабмитить расчёт.
+    # GET без логина — показать форму + плашка (см. шаблон).
+    # POST без логина — редирект на login с next=.
+    if request.method == "POST" and not can_run_calc(request.user):
+        messages.warning(
+            request,
+            "Для запуска расчёта войдите или зарегистрируйтесь.",
+        )
+        return redirect(f"{settings.LOGIN_URL}?next={request.path}" if settings.LOGIN_URL.startswith('/') else f"/login/?next={request.path}")
+
     if request.method == "POST":
         form = CalculationForm(request.POST, request.FILES)
         brake_formset = MagneticBrakeFormSet(request.POST, request.FILES, prefix="brakes")
@@ -46,6 +57,7 @@ def index_view(request):
                         x0=form.cleaned_data["x0"],
                         t_max=form.cleaned_data["t_max"],
                         dt=form.cleaned_data["dt"],
+                        owner=request.user,        # auth: владелец = автор формы
                     )
 
                     brake_objects, runtime_brakes = create_brake_objects_and_runtime_models(
@@ -151,7 +163,9 @@ def index_view(request):
         else:
             brake_formset = MagneticBrakeFormSet(initial=[{}, {}], prefix="brakes")
 
-    runs = CalculationRun.objects.order_by("-created_at")[:20]
+    # Список «недавних» на форме — то же ограничение видимости, что и на дашборде.
+    from ..services.permissions import runs_visible_to
+    runs = runs_visible_to(request.user).order_by("-created_at")[:20]
 
     # Срез 3b: каталог тормозов для выбора в форме.
     catalog_qs = BrakeCatalog.objects.order_by("name")
@@ -198,8 +212,25 @@ def run_detail_v2_view(request, run_id):
     """Страница результата расчёта.
 
     KPI-карточки, аннотированный главный график x(t), энергобаланс, табы графиков.
+
+    Доступ:
+      гость           → 403 (вообще не пускать)
+      engineer        → только свои
+      analyst/admin   → любые
     """
     run = get_object_or_404(CalculationRun, pk=run_id)
+    if not can_view_run(request.user, run):
+        if not request.user.is_authenticated:
+            messages.warning(
+                request,
+                "Результаты доступны только зарегистрированным пользователям. "
+                "Войдите или создайте аккаунт.",
+            )
+            return redirect(f"/login/?next={request.path}")
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden(
+            "У вас нет прав на просмотр этого расчёта. Расчёт создан другим инженером."
+        )
     brakes = list(run.brakes.order_by("index"))
 
     chart_fields = [
@@ -289,6 +320,8 @@ def run_detail_v2_view(request, run_id):
             "engineering_metrics": snapshot_parts["engineering_metrics"],
             "thermal_runs_preview": thermal_runs_preview,
             "thermal_runs_total": thermal_runs_total,
+            # --- Permission flags для шаблона ---
+            "perm_can_delete": can_delete_run(request.user, run),
         },
     )
 
@@ -296,6 +329,13 @@ def run_detail_v2_view(request, run_id):
 @require_POST
 def delete_run_view(request, run_id):
     run = get_object_or_404(CalculationRun, pk=run_id)
+    if not can_delete_run(request.user, run):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden(
+            "Удаление этого расчёта недоступно: он принадлежит другому пользователю."
+        )
 
     folder_path: Path | None = None
     if run.report_file and run.report_file.name:

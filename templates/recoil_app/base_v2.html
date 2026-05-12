@@ -9,6 +9,28 @@
     <link rel="stylesheet" href="{% static 'recoil_app/css/design_system.css' %}">
 
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        /* Flash messages (Django messages framework). Inline-блок шаблон рендерит сам
+           вверху контента — никакого fixed-тоста в углу. */
+        .rb-flash { padding: 10px 14px; border-radius: 6px; font-size: 13px;
+            background: white; border: 1px solid var(--rb-panel-border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .rb-flash.rb-flash-success { border-left: 3px solid #2EA043; }
+        .rb-flash.rb-flash-info, .rb-flash.rb-flash-debug { border-left: 3px solid var(--rb-accent, #3D73EB); }
+        .rb-flash.rb-flash-warning { border-left: 3px solid #DDAA00; background: #FFFBEC; }
+        .rb-flash.rb-flash-error { border-left: 3px solid #C03030; background: #FFEFEF; }
+
+        /* Auth chip в топбаре — простейшая дополнительная разметка. */
+        .rb-auth-chip { display: flex; align-items: center; gap: 8px; font-size: 12px;
+            color: var(--rb-text-soft); padding: 4px 10px; }
+        .rb-auth-chip a { color: var(--rb-accent, #3D73EB); text-decoration: none; }
+        .rb-auth-chip a:hover { text-decoration: underline; }
+        .rb-auth-role { font-size: 10px; padding: 1px 6px; border-radius: 3px;
+            text-transform: uppercase; letter-spacing: 0.5px; }
+        .rb-auth-role-admin { background: #FEE; color: #C03030; }
+        .rb-auth-role-analyst { background: #F0F4FF; color: var(--rb-accent, #3D73EB); }
+        .rb-auth-role-engineer { background: var(--rb-bg-soft, #FAFBFC); color: var(--rb-text-soft); }
+    </style>
     {% block head_extra %}{% endblock %}
 </head>
 <body class="rb-app">
@@ -25,7 +47,17 @@
          data-results-url="{% url 'results' %}"
          data-compare-url="{% url 'compare' %}"
          data-catalog-url="{% url 'catalog_list' %}"
-         data-user-initials="{% block user_initials %}—{% endblock %}">
+         data-login-url="{% url 'login' %}"
+         data-register-url="{% url 'register' %}"
+         data-logout-url="{% url 'logout' %}"
+         data-users-url="{% url 'users_list' %}"
+         data-profile-url="{% url 'profile' %}"
+         data-user-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}"
+         data-user-name="{% if request.user.is_authenticated %}{{ request.user.username }}{% endif %}"
+         data-user-role="{% if request.user.is_authenticated and request.user.profile %}{{ request.user.profile.role }}{% endif %}"
+         data-user-role-label="{% if request.user.is_authenticated and request.user.profile %}{{ request.user.profile.get_role_display }}{% endif %}"
+         data-user-avatar-emoji="{% if request.user.is_authenticated and request.user.profile %}{{ request.user.profile.avatar_emoji }}{% endif %}"
+         data-user-initials="{% block user_initials %}{% if request.user.is_authenticated %}{{ request.user.username|slice:':2'|upper }}{% else %}—{% endif %}{% endblock %}">
     </div>
 
     <main class="rb-content">

@@ -91,3 +91,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+
+# === Auth ===
+# Django auth по умолчанию редиректит на /accounts/login/. У нас свой URL.
+LOGIN_URL = "login"                  # имя URL (resolves via reverse)
+LOGIN_REDIRECT_URL = "dashboard"     # куда отправлять после успешного логина
+LOGOUT_REDIRECT_URL = "dashboard"    # куда после выхода

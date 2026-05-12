@@ -234,14 +234,18 @@
             </div>
         </div>
         <div class="rb-hero-actions">
-            <a class="rb-btn rb-btn-primary" href="{% url 'catalog_edit' object.pk %}">✎ Редактировать</a>
+            {% if perm_can_edit %}
+                <a class="rb-btn rb-btn-primary" href="{% url 'catalog_edit' object.pk %}">✎ Редактировать</a>
+            {% endif %}
             <a class="rb-btn" href="{% url 'index' %}">↗ Использовать в расчёте</a>
             <a class="rb-btn" href="{% url 'catalog_list' %}">← К списку</a>
+            {% if perm_can_delete %}
             <form method="post" action="{% url 'catalog_delete' object.pk %}" style="display:inline-block;"
                   onsubmit="return confirm('Удалить тормоз «{{ object.name|escapejs }}» из каталога?');">
                 {% csrf_token %}
                 <button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
             </form>
+            {% endif %}
         </div>
     </div>
 </section>

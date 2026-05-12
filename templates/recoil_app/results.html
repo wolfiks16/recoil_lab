@@ -202,6 +202,11 @@
 
         <div class="rb-run-card-meta">
             #{{ run.id }} · {{ run.created_at|date:"d.m.Y · H:i" }}
+            {% if run.owner_id %}
+                · автор <b>{{ run.owner.username }}</b>
+            {% else %}
+                · <span style="color: var(--rb-text-soft); font-style: italic;">архив</span>
+            {% endif %}
         </div>
 
         <div class="rb-run-card-metrics">

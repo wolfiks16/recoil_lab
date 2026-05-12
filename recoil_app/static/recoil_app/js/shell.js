@@ -74,6 +74,18 @@
         const catalogUrl    = mountEl.dataset.catalogUrl || '#';
         const userInit      = mountEl.dataset.userInitials || 'ИК';
 
+        // --- Auth state -----
+        const loginUrl       = mountEl.dataset.loginUrl    || '/login/';
+        const registerUrl    = mountEl.dataset.registerUrl || '/register/';
+        const logoutUrl      = mountEl.dataset.logoutUrl   || '/logout/';
+        const usersUrl       = mountEl.dataset.usersUrl    || '/users/';
+        const profileUrl     = mountEl.dataset.profileUrl  || '/profile/';
+        const isAuthed       = mountEl.dataset.userAuthenticated === '1';
+        const userName       = mountEl.dataset.userName     || '';
+        const userRole       = mountEl.dataset.userRole     || '';
+        const userRoleLabel  = mountEl.dataset.userRoleLabel|| '';
+        const userAvatar     = mountEl.dataset.userAvatarEmoji || '';
+
         const railUrls = {
             dashboard: dashboardUrl,
             workspace: indexUrl,
@@ -82,6 +94,52 @@
             compare:   compareUrl,
             catalog:   catalogUrl
         };
+
+        // Auth chip (правая часть топбара).
+        let authChip;
+        if (isAuthed) {
+            const isAdmin = userRole === 'admin';
+            const roleBadge = userRoleLabel
+                ? `<span class="rb-auth-role rb-auth-role-${escapeHtml(userRole)}">${escapeHtml(userRoleLabel)}</span>`
+                : '';
+            const usersLink = isAdmin
+                ? `<a href="${usersUrl}" title="Управление пользователями">Пользователи</a><span style="opacity:.4">·</span>`
+                : '';
+            authChip = `
+                <div class="rb-auth-chip">
+                    <span><b>${escapeHtml(userName)}</b></span>
+                    ${roleBadge}
+                    ${usersLink}
+                    <form method="post" action="${logoutUrl}" style="display:inline; margin:0; padding:0;">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="${getCsrf()}">
+                        <button type="submit" style="background:none;border:none;color:var(--rb-accent,#3D73EB);
+                                cursor:pointer;font-size:12px;padding:0;">Выйти</button>
+                    </form>
+                </div>`;
+        } else {
+            authChip = `
+                <div class="rb-auth-chip">
+                    <a href="${loginUrl}">Войти</a>
+                    <span style="opacity:.4">·</span>
+                    <a href="${registerUrl}">Регистрация</a>
+                </div>`;
+        }
+
+        // Аватар-кружок справа: если залогинен и есть эмодзи — кликабельная мордочка
+        // ведёт на /profile/. Для гостей — статичный кружок с прочерком.
+        let avatarBlock;
+        if (isAuthed) {
+            const avatarChar = userAvatar || escapeHtml(userInit);
+            avatarBlock = `
+                <a class="rb-user rb-user-link" href="${profileUrl}" title="Профиль">
+                    <div class="rb-avatar rb-avatar-emoji">${escapeHtml(avatarChar)}</div>
+                </a>`;
+        } else {
+            avatarBlock = `
+                <div class="rb-user">
+                    <div class="rb-avatar">${escapeHtml(userInit)}</div>
+                </div>`;
+        }
 
         // Topbar HTML
         const topbar = `
@@ -96,18 +154,21 @@
                 </nav>
                 <div class="rb-status-pill">Solver v2 · Ready</div>
                 <div class="rb-topbar-spacer"></div>
-                <div class="rb-user">
-                    <div class="rb-avatar">${escapeHtml(userInit)}</div>
-                </div>
+                ${authChip}
+                ${avatarBlock}
             </header>`;
 
-        // Rail HTML
+        // Rail HTML. Нативный `title` не используем — рендерим красивый CSS-tooltip
+        // через `data-tip`; справа от иконки появляется тёмная плашка с названием.
         const railItems = RAIL_ITEMS.map(item => {
             const url = railUrls[item.key] || '#';
             const cls = active === item.key ? 'rb-rail-item active' : 'rb-rail-item';
+            const tip = url === '#'
+                ? `${item.title} — в разработке`
+                : item.title;
             const link = url === '#'
-                ? `<span class="${cls}" title="${escapeHtml(item.title)} — в разработке" data-disabled="1">${item.icon}</span>`
-                : `<a class="${cls}" href="${url}" title="${escapeHtml(item.title)}">${item.icon}</a>`;
+                ? `<span class="${cls}" data-tip="${escapeHtml(tip)}" data-disabled="1">${item.icon}</span>`
+                : `<a class="${cls}" href="${url}" data-tip="${escapeHtml(tip)}">${item.icon}</a>`;
             return link;
         }).join('');
 
@@ -124,6 +185,12 @@
         parent.insertBefore(fragment, mountEl);
         // Скрываем сам mount, он больше не нужен
         mountEl.style.display = 'none';
+    }
+
+    function getCsrf() {
+        // Стандартный Django CSRF cookie (если CsrfViewMiddleware включён).
+        const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        return match ? match[1] : '';
     }
 
     function escapeHtml(s) {

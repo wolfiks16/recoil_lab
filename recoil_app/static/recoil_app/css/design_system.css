@@ -303,6 +303,25 @@
     line-height: 1;
 }
 
+/* Аватар-эмодзи: на пастельном фоне, чтобы цветной emoji не сливался с градиентом */
+.rb-avatar-emoji {
+    background: linear-gradient(135deg, rgba(61,115,235,0.12), rgba(180,77,122,0.12));
+    border: 1px solid rgba(15, 23, 36, 0.08);
+    font-family: inherit;
+    font-size: 18px;
+}
+
+.rb-user-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: transform .15s ease;
+}
+.rb-user-link:hover .rb-avatar {
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px rgba(61,115,235,0.25);
+}
+
 /* Rail (левая панель навигации) */
 .rb-rail {
     grid-row: 2;
@@ -357,6 +376,51 @@
 .rb-rail-item svg {
     width: 20px;
     height: 20px;
+}
+
+/* Tooltip справа от иконки рейла. Появляется при hover/focus на data-tip. */
+.rb-rail-item[data-tip] { overflow: visible; }
+.rb-rail-item[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 14px);
+    top: 50%;
+    transform: translateY(-50%) translateX(-6px);
+    background: #0F1724;
+    color: white;
+    font-family: Manrope, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+    z-index: 100;
+}
+.rb-rail-item[data-tip]::before {
+    /* стрелочка-треугольник слева от плашки */
+    content: '';
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%) translateX(-6px);
+    width: 0; height: 0;
+    border: 5px solid transparent;
+    border-right-color: #0F1724;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+    z-index: 100;
+}
+.rb-rail-item[data-tip]:hover::after,
+.rb-rail-item[data-tip]:focus-visible::after,
+.rb-rail-item[data-tip]:hover::before,
+.rb-rail-item[data-tip]:focus-visible::before {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
 }
 
 /* Контент */

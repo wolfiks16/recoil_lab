@@ -1,0 +1,122 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+
+{% block title %}Пользователи — RecoilLab{% endblock %}
+{% block shell_active %}users{% endblock %}
+{% block shell_crumb %}Пользователи{% endblock %}
+
+{% block head_extra %}
+<style>
+    .users-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .users-table th, .users-table td { padding: 10px 12px; text-align: left;
+        border-bottom: 1px solid var(--rb-panel-border); font-size: 13px; }
+    .users-table th { font-weight: 600; color: var(--rb-text-soft); background: var(--rb-bg-soft, #FAFBFC); }
+    .users-table .role-cell select { padding: 5px 8px; font-size: 12px;
+        border: 1px solid var(--rb-panel-border); border-radius: 4px; background: white; }
+    .users-table .role-cell button { font-size: 11px; padding: 5px 10px;
+        margin-left: 6px; cursor: pointer; }
+    .users-table .self { color: var(--rb-text-soft); font-style: italic; }
+    .users-table .muted { color: var(--rb-text-muted, #888); }
+    .users-table .user-cell { display: inline-flex; align-items: center; gap: 10px; }
+    .users-table .user-avatar {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 32px; height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, rgba(61,115,235,0.10), rgba(180,77,122,0.10));
+        border: 1px solid var(--rb-panel-border);
+        font-size: 18px; line-height: 1;
+        flex-shrink: 0;
+    }
+    .users-table .badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+    .badge-admin { background: #FEE; color: #C03030; }
+    .badge-analyst { background: #F0F4FF; color: var(--rb-accent, #3D73EB); }
+    .badge-engineer { background: var(--rb-bg-soft, #FAFBFC); color: var(--rb-text-soft); }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title"><h1>Пользователи</h1></div>
+            <div class="rb-hero-sub">Управление ролями. Доступно только администратору.</div>
+        </div>
+    </div>
+</section>
+
+<div class="rb-card" style="padding: 20px;">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="rb-flash rb-flash-{{ message.tags|default:'info' }}" style="margin-bottom: 12px;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <table class="users-table">
+        <thead>
+            <tr>
+                <th>Пользователь</th>
+                <th>ФИО</th>
+                <th>Email</th>
+                <th>Дата рождения</th>
+                <th>Текущая роль</th>
+                <th>Регистрация</th>
+                <th>Изменить роль</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users_list %}
+            <tr>
+                <td>
+                    <span class="user-cell">
+                        <span class="user-avatar">{{ u.profile.avatar_emoji }}</span>
+                        <span>
+                            <b>{{ u.username }}</b>
+                            {% if u.is_superuser %} <span class="badge badge-admin">superuser</span>{% endif %}
+                        </span>
+                    </span>
+                </td>
+                <td>
+                    {% if u.first_name or u.last_name %}
+                        {{ u.last_name }} {{ u.first_name }}
+                    {% else %}
+                        <span class="muted">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ u.email|default:"—" }}</td>
+                <td>
+                    {% if u.profile.birth_date %}
+                        {{ u.profile.birth_date|date:"d.m.Y" }}
+                    {% else %}
+                        <span class="muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% with role=u.profile.role %}
+                        <span class="badge badge-{{ role }}">{{ u.profile.get_role_display }}</span>
+                    {% endwith %}
+                </td>
+                <td>{{ u.date_joined|date:"d.m.Y" }}</td>
+                <td class="role-cell">
+                    {% if u.id == request.user.id %}
+                        <span class="self">(вы)</span>
+                    {% else %}
+                        <form method="post" action="{% url 'users_set_role' u.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            <select name="role">
+                                {% for value, label in role_choices %}
+                                    <option value="{{ value }}" {% if u.profile.role == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="rb-btn rb-btn-sm">Применить</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

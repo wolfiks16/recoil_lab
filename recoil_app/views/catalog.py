@@ -14,6 +14,11 @@ from ..forms import BrakeCatalogForm
 from ..models import BrakeCatalog, MagneticBrakeConfig
 from ..services.charting import make_brake_curve_fragment
 from ..services.curve_parser import parse_force_curve_sheet
+from ..services.permissions import (
+    can_create_catalog,
+    can_delete_catalog,
+    can_edit_catalog,
+)
 
 
 def catalog_list_view(request):
@@ -69,11 +74,21 @@ def catalog_list_view(request):
 
 
 def catalog_new_view(request):
-    """Создание нового тормоза в каталоге."""
+    """Создание нового тормоза в каталоге.
+
+    Доступно всем авторизованным. owner = request.user (engineer сможет потом
+    редактировать/удалять только свои; admin/analyst — любые).
+    """
+    if not can_create_catalog(request.user):
+        messages.warning(request, "Для создания тормоза в каталоге войдите или зарегистрируйтесь.")
+        return redirect(f"/login/?next={request.path}")
+
     if request.method == "POST":
         form = BrakeCatalogForm(request.POST, request.FILES)
         if form.is_valid():
-            obj = form.save()
+            obj = form.save(commit=False)
+            obj.owner = request.user
+            obj.save()
             messages.success(request, f"Тормоз «{obj.name}» добавлен в каталог.")
             return redirect("catalog_list")
     else:
@@ -180,13 +195,22 @@ def catalog_detail_view(request, pk):
             "curve_stats": curve_stats,
             "curve_error": curve_error,
             "usage_count": usage_count,
+            "perm_can_edit": can_edit_catalog(request.user, obj),
+            "perm_can_delete": can_delete_catalog(request.user, obj),
         },
     )
 
 
 def catalog_edit_view(request, pk):
-    """Редактирование существующей записи каталога."""
+    """Редактирование записи каталога. Engineer — только свои, admin/analyst — любые."""
     obj = get_object_or_404(BrakeCatalog, pk=pk)
+    if not can_edit_catalog(request.user, obj):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden(
+            "Редактировать эту запись каталога может только её владелец, аналитик или администратор."
+        )
 
     if request.method == "POST":
         form = BrakeCatalogForm(request.POST, request.FILES, instance=obj)
@@ -210,8 +234,15 @@ def catalog_edit_view(request, pk):
 
 @require_POST
 def catalog_delete_view(request, pk):
-    """Удаление тормоза из каталога."""
+    """Удаление тормоза из каталога. Те же правила, что и для редактирования."""
     obj = get_object_or_404(BrakeCatalog, pk=pk)
+    if not can_delete_catalog(request.user, obj):
+        if not request.user.is_authenticated:
+            return redirect(f"/login/?next={request.path}")
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden(
+            "Удалить эту запись может только её владелец, аналитик или администратор."
+        )
     name = obj.name
     if obj.curve_file:
         try:
@@ -230,6 +261,11 @@ def catalog_save_from_brake_form_view(request):
     Принимает form-encoded данные с параметрами тормоза.
     Возвращает JSON: {"ok": true, "id": N, "name": "..."} или {"ok": false, "error": "..."}.
     """
+    if not can_create_catalog(request.user):
+        return JsonResponse(
+            {"ok": False, "error": "Для сохранения в каталог войдите или зарегистрируйтесь."},
+            status=401,
+        )
 
     def _f(key):
         v = (request.POST.get(key) or "").strip()
@@ -290,6 +326,7 @@ def catalog_save_from_brake_form_view(request):
             name=name,
             description=description,
             model_type=model_type,
+            owner=request.user,
             **params,
         )
     else:
@@ -311,6 +348,7 @@ def catalog_save_from_brake_form_view(request):
                 description=description,
                 model_type=model_type,
                 curve_file=curve_file,
+                owner=request.user,
             )
         else:
             try:
@@ -324,6 +362,7 @@ def catalog_save_from_brake_form_view(request):
                 name=name,
                 description=description,
                 model_type=model_type,
+                owner=request.user,
             )
             if source.curve_file:
                 source.curve_file.open("rb")

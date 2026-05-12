@@ -9,6 +9,12 @@
 Re-export сохраняет совместимость с `urls.py`, который ссылается на `views.<name>_view`.
 """
 
+from .auth import (  # noqa: F401
+    profile_view,
+    register_view,
+    users_list_view,
+    users_set_role_view,
+)
 from .catalog import (  # noqa: F401
     catalog_delete_view,
     catalog_detail_view,
