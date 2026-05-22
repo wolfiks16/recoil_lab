@@ -175,6 +175,7 @@ def build_result_snapshot(
             "temp_nodes":    combined.temp_nodes[keep, :].tolist(),
             "power_nodes":   combined.power_nodes[keep, :].tolist(),
             "power_brakes":  combined.power_brakes[keep, :].tolist(),
+            "heat_brakes":   combined.heat_brakes[keep, :].tolist() if combined.heat_brakes.size else [],
             "cycle_index":   combined.cycle_index[keep].tolist(),
             "segment":       [str(s) for s in combined.segment[keep]],
             "n_full":        int(n),

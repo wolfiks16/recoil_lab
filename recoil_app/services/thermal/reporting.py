@@ -85,18 +85,21 @@ def export_thermal_results_to_excel(thermal_run) -> BytesIO:
     t_list = timeline.get("t") or []
     temp_nodes = timeline.get("temp_nodes") or []    # [[T_node0, T_node1, …], …]
     power_brakes = timeline.get("power_brakes") or []  # [[P_brake0, …], …]
+    heat_brakes = timeline.get("heat_brakes") or []   # [[Q_brake0, …], …]
     cycle_idx = timeline.get("cycle_index") or []
     segment = timeline.get("segment") or []
 
     if t_list:
         n_nodes = len(node_names)
         n_brakes = len(power_brakes[0]) if power_brakes else 0
+        has_heat = bool(heat_brakes)
 
         display = [node_display_names[i] if i < len(node_display_names) else node_names[i] for i in range(n_nodes)]
         tl_headers = (
             ["t, с"]
             + [f"T {d}, °C" for d in display]
             + [f"P тормоза {j + 1}, Вт" for j in range(n_brakes)]
+            + ([f"Q тормоза {j + 1}, кДж" for j in range(n_brakes)] if has_heat else [])
             + ["Цикл", "Сегмент"]
         )
 
@@ -107,6 +110,9 @@ def export_thermal_results_to_excel(thermal_run) -> BytesIO:
             row: list = [t]
             row.extend(temp_nodes[i] if i < len(temp_nodes) else [None] * n_nodes)
             row.extend(power_brakes[i] if i < len(power_brakes) else [None] * n_brakes)
+            if has_heat:
+                raw = heat_brakes[i] if i < len(heat_brakes) else [None] * n_brakes
+                row.extend([v / 1000.0 if v is not None else None for v in raw])
             row.append(cycle_idx[i] if i < len(cycle_idx) else None)
             row.append(segment[i] if i < len(segment) else "")
             ws_tl.append(row)
