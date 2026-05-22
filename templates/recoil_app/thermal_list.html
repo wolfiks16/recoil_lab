@@ -87,6 +87,11 @@
 
         <div class="rb-run-card-actions">
             <a class="rb-btn rb-btn-primary rb-btn-sm" href="{% url 'thermal_detail' run.id tr.id %}">Открыть</a>
+            <form method="post" action="{% url 'thermal_copy' run.id tr.id %}" style="display:inline-block;" id="copy-form-{{ tr.id }}">
+                {% csrf_token %}
+                <input type="hidden" name="name" id="copy-name-{{ tr.id }}">
+                <button type="button" class="rb-btn rb-btn-sm" onclick="thermalCopyPrompt({{ tr.id }}, '{{ tr.name|escapejs }}')">Копировать</button>
+            </form>
             <form method="post" action="{% url 'thermal_delete' run.id tr.id %}" onsubmit="return confirm('Удалить сценарий «{{ tr.name|escapejs }}»?');">
                 {% csrf_token %}
                 <button type="submit" class="rb-btn rb-btn-danger rb-btn-sm">×</button>
@@ -106,4 +111,17 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block body_extra %}
+<script>
+function thermalCopyPrompt(id, sourceName) {
+    var name = prompt('Имя копии:', sourceName + ' (копия)');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) { alert('Имя не может быть пустым.'); return; }
+    document.getElementById('copy-name-' + id).value = name;
+    document.getElementById('copy-form-' + id).submit();
+}
+</script>
 {% endblock %}

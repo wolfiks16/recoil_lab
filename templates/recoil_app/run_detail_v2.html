@@ -357,6 +357,51 @@
 
 {# Блок «Анализ фаз» удалён — графики фаз теперь в hero, в верхних табах Откат/Накат #}
 
+{# --- ГЕОМЕТРИЯ ТОРМОЗОВ · 3D --- #}
+{% if brakes_geometry %}
+<section class="rb-module-section rb-section" data-module="geometry-3d">
+    <div class="rb-section-head">
+        <div class="rb-section-title">Геометрия тормозов · 3D</div>
+    </div>
+    <div class="rb-card">
+        {% if brakes_geometry|length == 1 %}
+            {% with item=brakes_geometry.0 %}
+                {% if item.html %}
+                    {{ item.html|safe }}
+                {% else %}
+                    <div class="rb-text-muted" style="padding: 40px; text-align: center; font-size: 13px;">
+                        Для тормоза «{{ item.brake.display_name }}» 3D-модель недоступна:
+                        нужна параметрическая модель с заполненными n, x_m, y_m, Δh₁, Δh₂, d_m.
+                    </div>
+                {% endif %}
+            {% endwith %}
+        {% else %}
+            <div class="rb-tabs" data-tab-group="brake-3d">
+                {% for item in brakes_geometry %}
+                <button class="rb-tab{% if forloop.first %} is-active{% endif %}"
+                        data-tab="b{{ forloop.counter0 }}" type="button">
+                    {{ item.brake.display_name }}
+                </button>
+                {% endfor %}
+            </div>
+            {% for item in brakes_geometry %}
+            <div class="rb-tab-panel{% if forloop.first %} is-active{% endif %}"
+                 data-tab-group="brake-3d" data-tab="b{{ forloop.counter0 }}">
+                {% if item.html %}
+                    {{ item.html|safe }}
+                {% else %}
+                    <div class="rb-text-muted" style="padding: 40px; text-align: center; font-size: 13px;">
+                        3D-модель недоступна для «{{ item.brake.display_name }}»:
+                        нужна параметрическая модель с заполненными n, x_m, y_m, Δh₁, Δh₂, d_m.
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
 {# --- ТЕПЛОВЫЕ СЦЕНАРИИ --- #}
 <section class="rb-module-section rb-section" data-module="thermal">
     <div class="rb-section-head">
@@ -430,6 +475,13 @@
     <label class="rb-module-toggle">
         <input type="checkbox" class="rb-module-checkbox" data-module="energy" checked>
         <span>Энергобаланс</span>
+    </label>
+    {% endif %}
+
+    {% if brakes_geometry %}
+    <label class="rb-module-toggle">
+        <input type="checkbox" class="rb-module-checkbox" data-module="geometry-3d" checked>
+        <span>Геометрия тормозов · 3D</span>
     </label>
     {% endif %}
 

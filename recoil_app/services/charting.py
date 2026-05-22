@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -1275,3 +1276,232 @@ def make_compare_forces_main_recoil_fragment(
         "t, c", "F, Н",
     )
     return _to_html_fragment(fig)
+
+
+# ============================================================================
+# СРЕЗ 8a: 3D-визуализация геометрии параметрического тормоза
+#
+# Цилиндрическая компоновка: внутри — медная шина-труба (неподвижна), снаружи
+# — кольцевые магниты, движутся вдоль оси отката. Параметрическая модель
+# Тулупова исходно плоская, мы её визуализируем как цилиндр: ym трактуется как
+# дуговая длина магнита-кольца, отсюда радиус шины R = ym / (2π).
+# ============================================================================
+
+# Медный цвет шины (PMS-подобный медный, нейтральный к синей/розовой палитре).
+_BUS_COPPER_COLOR = "#B87333"
+
+# Цвета магнитов — чередуем для наглядности (полярность для модели не важна:
+# в формуле сила пропорциональна B², знак не входит).
+_MAGNET_COLORS = (RB_BLUE, RB_ACCENT)
+
+# Число сегментов окружности при триангуляции трубы. 48 — компромисс между
+# гладкостью и весом HTML-фрагмента.
+_CYL_SEGMENTS = 48
+
+
+def _cylinder_mesh3d(
+    x0: float, x1: float,
+    r_inner: float, r_outer: float,
+    color: str, opacity: float, name: str,
+    n_segments: int = _CYL_SEGMENTS,
+) -> go.Mesh3d:
+    """Полая труба вдоль оси X как Mesh3d (4 поверхности: внешн., внутр., 2 торца).
+
+    Если r_inner ≤ 0 — превращается в сплошной цилиндр без отверстия (торцы
+    схлопываются, но Mesh3d остаётся валидным).
+    """
+    n = max(int(n_segments), 6)
+
+    cos = [math.cos(2 * math.pi * idx / n) for idx in range(n)]
+    sin = [math.sin(2 * math.pi * idx / n) for idx in range(n)]
+
+    # Точки (4 кольца по n штук = 4n всего):
+    #   0..n-1       : back  · outer  (x=x0, r=r_outer)
+    #   n..2n-1      : front · outer  (x=x1, r=r_outer)
+    #   2n..3n-1     : back  · inner  (x=x0, r=r_inner)
+    #   3n..4n-1     : front · inner  (x=x1, r=r_inner)
+    xs: list[float] = []
+    ys: list[float] = []
+    zs: list[float] = []
+
+    for x_val, r in ((x0, r_outer), (x1, r_outer), (x0, r_inner), (x1, r_inner)):
+        for idx in range(n):
+            xs.append(x_val)
+            ys.append(r * cos[idx])
+            zs.append(r * sin[idx])
+
+    i_idx: list[int] = []
+    j_idx: list[int] = []
+    k_idx: list[int] = []
+
+    # Внешняя поверхность: пары точек (i, next) на back/front
+    for idx in range(n):
+        nxt = (idx + 1) % n
+        # Треугольник 1: back[i], front[i], front[next]
+        i_idx.append(idx);           j_idx.append(idx + n);      k_idx.append(nxt + n)
+        # Треугольник 2: back[i], front[next], back[next]
+        i_idx.append(idx);           j_idx.append(nxt + n);      k_idx.append(nxt)
+
+    # Внутренняя поверхность — обратная ориентация (нормаль внутрь трубы)
+    for idx in range(n):
+        nxt = (idx + 1) % n
+        i_idx.append(2 * n + idx);   j_idx.append(3 * n + nxt);  k_idx.append(3 * n + idx)
+        i_idx.append(2 * n + idx);   j_idx.append(2 * n + nxt);  k_idx.append(3 * n + nxt)
+
+    # Передний торец (x=x1): кольцо между front · outer и front · inner
+    for idx in range(n):
+        nxt = (idx + 1) % n
+        i_idx.append(idx + n);       j_idx.append(idx + 3 * n);  k_idx.append(nxt + n)
+        i_idx.append(nxt + n);       j_idx.append(idx + 3 * n);  k_idx.append(nxt + 3 * n)
+
+    # Задний торец (x=x0): обратная ориентация
+    for idx in range(n):
+        nxt = (idx + 1) % n
+        i_idx.append(idx);           j_idx.append(nxt);          k_idx.append(idx + 2 * n)
+        i_idx.append(nxt);           j_idx.append(nxt + 2 * n);  k_idx.append(idx + 2 * n)
+
+    return go.Mesh3d(
+        x=xs, y=ys, z=zs,
+        i=i_idx, j=j_idx, k=k_idx,
+        color=color, opacity=opacity,
+        name=name,
+        flatshading=True,
+        hoverinfo="name",
+    )
+
+
+def build_brake_geometry_3d(brake) -> str | None:
+    """3D-визуализация цилиндрической геометрии параметрического тормоза.
+
+    Принимает `MagneticBrakeConfig` или `BrakeCatalog`.
+
+    Возвращает HTML-фрагмент Plotly (без plotly.js) либо None, если тормоз
+    curve-типа или не заполнены нужные размеры.
+
+    Координаты сцены:
+      X — ось отката (длина тормоза);
+      Y, Z — плоскость сечения (магниты — кольца вокруг шины).
+    """
+    if getattr(brake, "model_type", None) != "parametric":
+        return None
+
+    required = ("n", "xm", "ym", "dh1", "dh2", "dm")
+    raw = {key: getattr(brake, key, None) for key in required}
+    if any(v is None for v in raw.values()):
+        return None
+
+    try:
+        n = int(raw["n"])
+        xm = float(raw["xm"])
+        ym = float(raw["ym"])
+        dh1 = float(raw["dh1"])
+        dh2 = float(raw["dh2"])
+        dm = float(raw["dm"])
+    except (TypeError, ValueError):
+        return None
+
+    if n < 1 or xm <= 0 or ym <= 0:
+        return None
+
+    # --- Радиальные размеры ---
+    # ym — дуговая длина кольцевого магнита (периметр окружности),
+    # отсюда срединный радиус шины R = ym / (2π).
+    r_bus_mid = ym / (2.0 * math.pi)
+
+    # Толщина стенки шины — визуальный дефолт (в модели нет). Пропорционально
+    # радиусу: ~10%, но не меньше 2 мм.
+    t_bus = max(r_bus_mid * 0.10, 0.002)
+    r_bus_inner = max(r_bus_mid - t_bus / 2.0, t_bus * 0.1)
+    r_bus_outer = r_bus_mid + t_bus / 2.0
+
+    # Зазор шина — магнит. Визуальный дефолт.
+    gap = max(r_bus_mid * 0.04, 0.0005)
+
+    # Толщина магнита (радиальная) — визуальный дефолт. Берём такую, чтобы
+    # магнит выглядел заметно толще шины, но не громоздко.
+    t_magnet = max(r_bus_mid * 0.25, 0.003)
+
+    r_magnet_inner = r_bus_outer + gap
+    r_magnet_outer = r_magnet_inner + t_magnet
+
+    # --- Продольные размеры ---
+    # Общая длина блока магнитов = n·xm + (n-1)·dm.
+    l_magnets = n * xm + max(n - 1, 0) * dm
+
+    # Шина выступает за крайние магниты на dh1 (с начала) и dh2 (с конца).
+    x_bus_0 = -max(dh1, 0.0)
+    x_bus_1 = l_magnets + max(dh2, 0.0)
+
+    traces: list[go.Mesh3d] = []
+
+    # Шина (медь) — внутренний цилиндр
+    traces.append(_cylinder_mesh3d(
+        x_bus_0, x_bus_1,
+        r_bus_inner, r_bus_outer,
+        color=_BUS_COPPER_COLOR, opacity=0.95,
+        name="Шина (медь)",
+    ))
+
+    # n магнитов-колец, чередующимся цветом для наглядности
+    for idx in range(n):
+        x0 = idx * (xm + dm)
+        x1 = x0 + xm
+        traces.append(_cylinder_mesh3d(
+            x0, x1,
+            r_magnet_inner, r_magnet_outer,
+            color=_MAGNET_COLORS[idx % len(_MAGNET_COLORS)],
+            opacity=0.92,
+            name=f"Магнит {idx + 1}",
+        ))
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"Геометрия тормоза · магнитов: {n} · "
+                f"L_магн={l_magnets * 1000:.0f} мм · R_шины={r_bus_mid * 1000:.1f} мм"
+            ),
+            font=dict(family=FONT_FAMILY_UI, size=14, color="#1B2430"),
+        ),
+        template="plotly_white",
+        font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
+        margin=dict(l=0, r=0, t=50, b=0),
+        scene=dict(
+            xaxis=dict(
+                title=dict(text="X · ось отката, м",
+                           font=dict(family=FONT_FAMILY_MONO, size=11)),
+                tickfont=dict(family=FONT_FAMILY_MONO, size=10),
+                backgroundcolor="rgba(245, 247, 250, 1)",
+                gridcolor="#E1E5EC",
+                zerolinecolor="#C5CDD8",
+            ),
+            yaxis=dict(
+                title=dict(text="Y, м",
+                           font=dict(family=FONT_FAMILY_MONO, size=11)),
+                tickfont=dict(family=FONT_FAMILY_MONO, size=10),
+                backgroundcolor="rgba(245, 247, 250, 1)",
+                gridcolor="#E1E5EC",
+                zerolinecolor="#C5CDD8",
+            ),
+            zaxis=dict(
+                title=dict(text="Z, м",
+                           font=dict(family=FONT_FAMILY_MONO, size=11)),
+                tickfont=dict(family=FONT_FAMILY_MONO, size=10),
+                backgroundcolor="rgba(245, 247, 250, 1)",
+                gridcolor="#E1E5EC",
+                zerolinecolor="#C5CDD8",
+            ),
+            aspectmode="data",
+            camera=dict(eye=dict(x=1.9, y=1.1, z=0.9)),
+        ),
+        showlegend=False,
+    )
+
+    return pio.to_html(
+        fig,
+        include_plotlyjs=False,
+        full_html=False,
+        default_width="100%",
+        default_height="520px",
+        validate=True,
+    )

@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 
 from ..forms import BrakeCatalogForm
 from ..models import BrakeCatalog, MagneticBrakeConfig
-from ..services.charting import make_brake_curve_fragment
+from ..services.charting import build_brake_geometry_3d, make_brake_curve_fragment
 from ..services.curve_parser import parse_force_curve_sheet
 from ..services.permissions import (
     can_create_catalog,
@@ -184,6 +184,8 @@ def catalog_detail_view(request, pk):
     # но мы можем показать сколько раз он был использован — по совпадению имени.
     usage_count = MagneticBrakeConfig.objects.filter(name=obj.name).count()
 
+    brake_3d_html = build_brake_geometry_3d(obj)
+
     return render(
         request,
         "recoil_app/catalog_detail.html",
@@ -195,6 +197,7 @@ def catalog_detail_view(request, pk):
             "curve_stats": curve_stats,
             "curve_error": curve_error,
             "usage_count": usage_count,
+            "brake_3d_html": brake_3d_html,
             "perm_can_edit": can_edit_catalog(request.user, obj),
             "perm_can_delete": can_delete_catalog(request.user, obj),
         },

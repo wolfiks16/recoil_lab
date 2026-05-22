@@ -46,5 +46,7 @@ urlpatterns = [
     path("run/<int:run_id>/thermal/", views.thermal_list_view, name="thermal_list"),
     path("run/<int:run_id>/thermal/new/", views.thermal_new_view, name="thermal_new"),
     path("run/<int:run_id>/thermal/<int:thermal_id>/", views.thermal_detail_view, name="thermal_detail"),
+    path("run/<int:run_id>/thermal/<int:thermal_id>/export.xlsx", views.thermal_export_view, name="thermal_export"),
+    path("run/<int:run_id>/thermal/<int:thermal_id>/copy/", views.thermal_copy_view, name="thermal_copy"),
     path("run/<int:run_id>/thermal/<int:thermal_id>/delete/", views.thermal_delete_view, name="thermal_delete"),
 ]

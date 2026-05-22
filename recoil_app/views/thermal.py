@@ -531,6 +531,90 @@ def thermal_detail_view(request, run_id: int, thermal_id: int):
     })
 
 
+def thermal_export_view(request, run_id: int, thermal_id: int):
+    """Генерирует и отдаёт XLSX-отчёт по тепловому сценарию."""
+    from django.http import HttpResponse
+
+    from ..services.thermal.reporting import export_thermal_results_to_excel
+
+    run = get_object_or_404(CalculationRun, pk=run_id)
+    forbid = _enforce_run_view_access(request, run)
+    if forbid is not None:
+        return forbid
+    thermal_run = get_object_or_404(ThermalRun, pk=thermal_id, run=run)
+
+    buf = export_thermal_results_to_excel(thermal_run)
+    safe_name = f"thermal_{thermal_run.id}_{thermal_run.name[:40]}"
+    filename = safe_name.replace(" ", "_") + ".xlsx"
+
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@require_POST
+def thermal_copy_view(request, run_id: int, thermal_id: int):
+    """Клонирует тепловой сценарий: копирует snapshot'ы и медиа-файлы графиков."""
+    import shutil
+    from pathlib import Path as _Path
+
+    from django.conf import settings as _settings
+
+    run = get_object_or_404(CalculationRun, pk=run_id)
+    forbid = _enforce_run_view_access(request, run)
+    if forbid is not None:
+        return forbid
+    if not can_run_calc(request.user):
+        messages.warning(request, "Для копирования войдите или зарегистрируйтесь.")
+        return redirect(f"/login/?next={request.path}")
+
+    source = get_object_or_404(ThermalRun, pk=thermal_id, run=run)
+    new_name = request.POST.get("name", "").strip() or f"{source.name} (копия)"
+
+    new_tr = ThermalRun.objects.create(
+        run=run,
+        name=new_name,
+        network_preset=source.network_preset,
+        repetitions=source.repetitions,
+        pause_s=source.pause_s,
+        config_snapshot=source.config_snapshot,
+        result_snapshot=source.result_snapshot,
+        warnings_text=source.warnings_text,
+        max_temp_c=source.max_temp_c,
+        max_temp_node_name=source.max_temp_node_name,
+        total_heat_j=source.total_heat_j,
+    )
+
+    src_folder = _Path(_settings.MEDIA_ROOT) / source.report_folder
+    dst_folder = _Path(_settings.MEDIA_ROOT) / new_tr.report_folder
+    chart_fields = ["chart_temperatures", "chart_power_brakes", "chart_heat_brakes", "chart_cycle_envelope"]
+    update_fields = []
+
+    if src_folder.exists():
+        dst_folder.mkdir(parents=True, exist_ok=True)
+        for field_name in chart_fields:
+            src_ff = getattr(source, field_name)
+            if src_ff and src_ff.name:
+                src_path = _Path(_settings.MEDIA_ROOT) / src_ff.name
+                if src_path.exists():
+                    new_filename = src_path.name.replace(
+                        f"thermal_{source.id}_", f"thermal_{new_tr.id}_", 1
+                    )
+                    dst_path = dst_folder / new_filename
+                    shutil.copy2(src_path, dst_path)
+                    setattr(new_tr, field_name, f"{new_tr.report_folder}/{new_filename}")
+                    update_fields.append(field_name)
+
+    if update_fields:
+        new_tr.save(update_fields=update_fields)
+
+    messages.success(request, f"Сценарий «{source.name}» скопирован как «{new_name}».")
+    return redirect("thermal_detail", run_id=run.id, thermal_id=new_tr.id)
+
+
 @require_POST
 def thermal_delete_view(request, run_id: int, thermal_id: int):
     run = get_object_or_404(CalculationRun, pk=run_id)

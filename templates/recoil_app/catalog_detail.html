@@ -287,6 +287,23 @@
     </tbody>
 </table>
 
+{# 3D-визуализация геометрии — только для параметрических тормозов
+   с полным набором размеров (n, xm, ym, dh1, dh2, dm, lya). #}
+{% if brake_3d_html %}
+<div class="rb-section-anchor">3D-модель геометрии</div>
+<div class="rb-card" style="padding: 4px;">
+    {{ brake_3d_html|safe }}
+</div>
+{% else %}
+<div class="rb-section-anchor">3D-модель геометрии</div>
+<div class="rb-card">
+    <div class="rb-text-muted" style="padding: 24px; text-align: center; font-size: 13px;">
+        Для построения 3D-модели нужны геометрические размеры: n, x_m, y_m, Δh₁, Δh₂, d_m.
+        <br>Заполните недостающие параметры в редакторе.
+    </div>
+</div>
+{% endif %}
+
 {# === ТАБЛИЧНАЯ МОДЕЛЬ === #}
 {% else %}
 

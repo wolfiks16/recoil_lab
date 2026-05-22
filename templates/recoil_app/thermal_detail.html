@@ -42,6 +42,12 @@
         <div class="rb-hero-actions">
             <a class="rb-btn" href="{% url 'thermal_list' run.id %}">← К сценариям</a>
             <a class="rb-btn" href="{% url 'thermal_new' run.id %}">+ Новый</a>
+            <a class="rb-btn" href="{% url 'thermal_export' run.id thermal_run.id %}">↓ XLSX</a>
+            <form method="post" action="{% url 'thermal_copy' run.id thermal_run.id %}" style="display:inline-block;" id="thermal-copy-form">
+                {% csrf_token %}
+                <input type="hidden" name="name" id="thermal-copy-name">
+                <button type="button" class="rb-btn" onclick="thermalCopyPrompt('{{ thermal_run.name|escapejs }}')">Клонировать</button>
+            </form>
             <form method="post" action="{% url 'thermal_delete' run.id thermal_run.id %}" style="display:inline-block;"
                   onsubmit="return confirm('Удалить сценарий «{{ thermal_run.name|escapejs }}»?');">
                 {% csrf_token %}
@@ -361,4 +367,14 @@
 
 {% block body_extra %}
 <script src="{% static 'recoil_app/js/modules.js' %}"></script>
+<script>
+function thermalCopyPrompt(sourceName) {
+    var name = prompt('Имя копии:', sourceName + ' (копия)');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) { alert('Имя не может быть пустым.'); return; }
+    document.getElementById('thermal-copy-name').value = name;
+    document.getElementById('thermal-copy-form').submit();
+}
+</script>
 {% endblock %}

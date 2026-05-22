@@ -14,7 +14,7 @@ from ..forms import CalculationForm, MagneticBrakeFormSet
 from ..models import BrakeCatalog, CalculationRun, CalculationSnapshot
 from ..services.permissions import can_delete_run, can_run_calc, can_view_run
 from ..services.analysis import enrich_with_basic_analysis
-from ..services.charting import save_interactive_charts
+from ..services.charting import build_brake_geometry_3d, save_interactive_charts
 from ..services.dynamics import RecoilParams, simulate_recoil
 from ..services.kpi import build_kpi_groups
 from ..services.modeling import build_calculation_model
@@ -299,6 +299,14 @@ def run_detail_v2_view(request, run_id):
     thermal_runs_preview = list(run.thermal_runs.order_by("-created_at")[:3])
     thermal_runs_total = run.thermal_runs.count()
 
+    # Срез 8a: 3D-геометрия каждого тормоза. Для curve-тормозов и параметрических
+    # без полного набора размеров вернётся None — шаблон покажет placeholder.
+    brakes_geometry = [
+        {"brake": b, "html": build_brake_geometry_3d(b)}
+        for b in brakes
+    ]
+    has_brakes_geometry_3d = any(item["html"] for item in brakes_geometry)
+
     return render(
         request,
         "recoil_app/run_detail_v2.html",
@@ -320,6 +328,8 @@ def run_detail_v2_view(request, run_id):
             "engineering_metrics": snapshot_parts["engineering_metrics"],
             "thermal_runs_preview": thermal_runs_preview,
             "thermal_runs_total": thermal_runs_total,
+            "brakes_geometry": brakes_geometry,
+            "has_brakes_geometry_3d": has_brakes_geometry_3d,
             # --- Permission flags для шаблона ---
             "perm_can_delete": can_delete_run(request.user, run),
         },
