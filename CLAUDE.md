@@ -69,7 +69,7 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 
 Раздроблен на тематические модули; `__init__.py` re-export'ит всё, чтобы `urls.py` ссылался на `views.<name>_view` без изменений.
 
-- `views/run.py` — `index_view`, `run_detail_v2_view`, `delete_run_view`. + private `_read_chart_fragment`.
+- `views/run.py` — `index_view`, `free_fall_new_view`, `run_detail_v2_view`, `delete_run_view`. + private хелперы `_read_chart_fragment`, `_build_catalog_items`, `_persist_result_and_snapshot` (общий хвост «сохранить результат + графики + XLSX + snapshot» для обоих режимов расчёта).
 - `views/dashboard.py` — `dashboard_view` (stat-карточки, фильтр, поиск, пагинация).
 - `views/compare.py` — `compare_view` (тонкий, всё в `services/compare_data.py`).
 - `views/catalog.py` — 5 catalog views + AJAX `catalog_save_from_brake_form_view`.
@@ -129,6 +129,7 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 6. UX-полировка формы: HTML5-валидация (mass>0, 0≤angle≤90, v0≥0, x0≥0, 0<t_max≤10) + индикаторы заполненности тормозов в sidebar (✓ ⚠ ○ ✗)
 7. Production-конфигурация: split-settings + .env + gunicorn + nginx (см. `deploy/`)
 8. Тепловой модуль: отдельная сущность `ThermalRun`, неявный Эйлер по 9-узловой/упрощённой сети, формы с авто-геометрией через prefill-кнопку, 4 графика (T/P/Q/огибающая по циклам), страницы `/run/<id>/thermal/{,/new/,/<id>/}`. Кинематика берётся из готового снапшота — не пересчитывается.
+9. Режим «Свободное падение» (`/free-fall/new/`, отдельная вкладка в rail): тело падает под гравитацией, тормоза противодействуют, без входного файла (F_вход=0, F_пруж=0), угол по умолчанию 90° (редактируемый), t_max без верхнего предела. Хранится как `CalculationRun` с `mode='free_fall'` (`input_file` nullable). Симулятор `simulate_free_fall` (в `dynamics.py`) устойчив к малой массе (до грамма): на каждом шаге dt замораживает состояние тормоза `wn` и интегрирует (x,v) адаптивным дроблением шага (step-doubling), избегая RK4-неустойчивости при жёсткой динамике (малая v_терм). Страница результата — та же `run_detail_v2`, mode-aware (нет фаз отката/наката/пружины, бейдж «свободное падение»).
 
 После Срезов 1–7 проведён большой рефакторинг (6 пассов): удалён legacy, разделён `views.py` на пакет, выделены сервисы, abstract base mixin, inline CSS/JS вынесены в файлы.
 
@@ -166,6 +167,9 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - **Деплой-конфиги** в `deploy/`: [`gunicorn.service`](deploy/gunicorn.service) (systemd unit, Unix socket `/run/recoil.sock`), [`nginx.conf`](deploy/nginx.conf) (proxy + static + media, `client_max_body_size 25M`, `proxy_read_timeout 300s` для долгих расчётов), [`deploy/README.md`](deploy/README.md) — пошаговая инструкция установки.
 - **`requirements.txt`** в UTF-8 (был UTF-16 LE с BOM, артефакт PowerShell — пересохранён при Срезе 7).
 - **Бэкапы** (Срез 7c) пока не сделаны — отложено до запроса.
+- **Режим `free_fall`**: `CalculationRun.input_file` теперь nullable — для свободного падения файла нет. Не полагаться на `run.input_file.path` без проверки режима (`run.is_free_fall`). `simulate_free_fall` требует минимум 1 тормоз (как и `simulate_recoil`); фаз отката/наката не создаёт (`recoil_end_index`/`return_end_index` = None) — `modeling`/`analysis`/`kpi`/`charting` это уже переносят. termination_reason = `"free_fall"`.
+- **Численная жёсткость свободного падения**: при очень малой массе шаг dt дробится адаптивно; если упёрлись в предел (`_FREE_FALL_MAX_SUBSTEPS`), в `warnings` добавляется заметка — уменьшить dt. Семантика `wn` (одно продвижение на dt) сохранена в точности, поэтому нельзя заменить на общий адаптивный ODE-решатель.
+- **Миграции**: `makemigrations` тянет паразитный `~ Alter field id` на всех моделях (расхождение `DEFAULT_AUTO_FIELD`, не настроен) — это НЕ относится к текущим правкам. Новые миграции писать точечно (см. `0025_calculationrun_free_fall_mode` — только `mode` + nullable `input_file`), не бандлить id-churn.
 
 ## Static / templatetags
 

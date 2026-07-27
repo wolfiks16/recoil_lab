@@ -26,7 +26,12 @@ from .catalog import (  # noqa: F401
 from .compare import compare_view  # noqa: F401
 from .dashboard import dashboard_view  # noqa: F401
 from .results import results_view  # noqa: F401
-from .run import delete_run_view, index_view, run_detail_v2_view  # noqa: F401
+from .run import (  # noqa: F401
+    delete_run_view,
+    free_fall_new_view,
+    index_view,
+    run_detail_v2_view,
+)
 from .thermal import (  # noqa: F401
     thermal_copy_view,
     thermal_delete_view,

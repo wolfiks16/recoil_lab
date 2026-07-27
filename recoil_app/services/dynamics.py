@@ -412,6 +412,211 @@ def simulate_recoil(
     return sim_result
 
 
+# ============================================================================
+# Режим «Свободное падение»
+# ============================================================================
+#
+# Тело падает под гравитацией вдоль оси, вихретоковый тормоз(а) ему
+# противодействуют. Внешней (выстрел) силы и пружины нет:
+#     m·dv/dt = m·g·sin(α) − F_торм(v)
+# Разворота (v=0) и возврата (x=0) нет — тело монотонно разгоняется до
+# установившейся (терминальной) скорости, где F_торм = m·g·sin(α).
+#
+# Численная тонкость (гвоздь задачи «правильно учитывать малую массу»):
+# при малой терминальной скорости жёсткость λ = g/v_терм велика, и RK4 с
+# фиксированным dt расходится, когда v_терм ≲ dt·g/2.78. Просто взять
+# адаптивный ODE-решатель нельзя — он разрушит дискретное состояние тормоза
+# `wn` (оно продвигается ровно раз на шаг dt). Поэтому на каждом шаге dt мы
+# ЗАМОРАЖИВАЕМ wn и интегрируем (x, v) адаптивным дроблением шага
+# (step-doubling): семантика тормоза сохраняется в точности (wn продвигается
+# один раз за dt по конечной скорости шага), а (x, v) становится устойчивым
+# при любой массе. Тяжёлая масса → 1 подшаг, без накладных расходов.
+
+_FREE_FALL_MAX_SUBSTEPS = 8192
+_FREE_FALL_SUBSTEP_TOL = 1e-8
+
+
+def _free_fall_sum_magnetic(
+    v: float,
+    brake_list: Sequence[BrakeModel],
+    brake_states: np.ndarray,
+) -> float:
+    """Сумма знаковых магнитных сил при замороженном состоянии тормозов wn."""
+    fmag_each_signed, _ = _evaluate_brake_force_components(v, brake_list, brake_states)
+    return float(np.sum(fmag_each_signed))
+
+
+def _free_fall_rhs(
+    v: float,
+    mass: float,
+    fa_const: float,
+    brake_list: Sequence[BrakeModel],
+    brake_states: np.ndarray,
+) -> tuple[float, float]:
+    """Правая часть (dx/dt, dv/dt) для свободного падения (F_вход=0, F_пруж=0)."""
+    ftotal = fa_const + _free_fall_sum_magnetic(v, brake_list, brake_states)
+    return v, ftotal / mass
+
+
+def _free_fall_rk4(
+    x: float,
+    v: float,
+    h: float,
+    mass: float,
+    fa_const: float,
+    brake_list: Sequence[BrakeModel],
+    brake_states: np.ndarray,
+) -> tuple[float, float]:
+    k1x, k1v = _free_fall_rhs(v, mass, fa_const, brake_list, brake_states)
+    k2x, k2v = _free_fall_rhs(v + h * k1v / 2, mass, fa_const, brake_list, brake_states)
+    k3x, k3v = _free_fall_rhs(v + h * k2v / 2, mass, fa_const, brake_list, brake_states)
+    k4x, k4v = _free_fall_rhs(v + h * k3v, mass, fa_const, brake_list, brake_states)
+
+    x_new = x + h * (k1x + 2 * k2x + 2 * k3x + k4x) / 6
+    v_new = v + h * (k1v + 2 * k2v + 2 * k3v + k4v) / 6
+    return x_new, v_new
+
+
+def _free_fall_advance(
+    x0: float,
+    v0: float,
+    dt: float,
+    mass: float,
+    fa_const: float,
+    brake_list: Sequence[BrakeModel],
+    brake_states: np.ndarray,
+) -> tuple[float, float, int]:
+    """Интегрирует (x, v) на окне dt при замороженном wn.
+
+    Адаптивное дробление шага (step-doubling): сравниваем результат на n и 2n
+    подшагах; при малой массе (жёсткость) n растёт, пока шаг не станет
+    устойчивым. Возвращает (x, v, число_подшагов).
+    """
+    def integrate(n_steps: int) -> tuple[float, float]:
+        h = dt / n_steps
+        x, v = x0, v0
+        for _ in range(n_steps):
+            x, v = _free_fall_rk4(x, v, h, mass, fa_const, brake_list, brake_states)
+        return x, v
+
+    n = 1
+    x_coarse, v_coarse = integrate(n)
+
+    while n < _FREE_FALL_MAX_SUBSTEPS:
+        n2 = n * 2
+        x_fine, v_fine = integrate(n2)
+
+        finite = np.isfinite(x_fine) and np.isfinite(v_fine)
+        err_v = abs(v_fine - v_coarse)
+        err_x = abs(x_fine - x_coarse)
+        scale_v = _FREE_FALL_SUBSTEP_TOL * (1.0 + abs(v_fine))
+        scale_x = _FREE_FALL_SUBSTEP_TOL * (1.0 + abs(x_fine))
+
+        if finite and err_v <= scale_v and err_x <= scale_x:
+            return x_fine, v_fine, n2
+
+        x_coarse, v_coarse = x_fine, v_fine
+        n = n2
+
+    return x_coarse, v_coarse, n
+
+
+def simulate_free_fall(
+    recoil: RecoilParams,
+    brake_list: Sequence[BrakeModel],
+) -> SimulationResult:
+    """Симуляция свободного падения с вихретоковыми тормозами.
+
+    В отличие от `simulate_recoil`, не читает входной Excel-файл: внешняя сила
+    и пружина отсутствуют. Интегрирует до t_max (без авто-останова), устойчиво
+    к малой массе за счёт адаптивного дробления шага (см. модуль выше).
+    """
+    if not brake_list:
+        raise ValueError("Не задано ни одного тормоза.")
+
+    t = np.arange(0.0, recoil.t_max + recoil.dt, recoil.dt)
+    n = len(t)
+
+    x = np.zeros_like(t)
+    v = np.zeros_like(t)
+    a = np.zeros_like(t)
+
+    f_total = np.zeros_like(t)
+    f_ext = np.zeros_like(t)      # выстрела нет → 0
+    f_spring = np.zeros_like(t)   # пружины нет → 0
+    f_magnetic = np.zeros_like(t)
+
+    fa_const = angle_force_si(recoil.mass, recoil.angle_deg)
+    f_angle = np.full_like(t, fa_const)
+
+    n_brakes = len(brake_list)
+    f_magnetic_each = np.zeros((n, n_brakes), dtype=float)
+    wn_each = np.zeros((n, n_brakes), dtype=float)
+
+    x[0] = recoil.x0
+    v[0] = recoil.v0
+    wn_each[0, :] = np.array([initial_brake_state(brake) for brake in brake_list], dtype=float)
+
+    substep_limit_hit = False
+
+    for i in range(n - 1):
+        fmag_each, _ = _evaluate_brake_force_components(v[i], brake_list, wn_each[i, :])
+        f_magnetic_each[i, :] = fmag_each
+        f_magnetic[i] = float(np.sum(fmag_each))
+        f_total[i] = fa_const + f_magnetic[i]
+        a[i] = f_total[i] / recoil.mass
+
+        x_new, v_new, n_sub = _free_fall_advance(
+            x[i], v[i], recoil.dt, recoil.mass, fa_const, brake_list, wn_each[i, :],
+        )
+        if n_sub >= _FREE_FALL_MAX_SUBSTEPS:
+            substep_limit_hit = True
+
+        x[i + 1] = x_new
+        v[i + 1] = v_new
+        wn_each[i + 1, :] = _advance_brake_states(v_new, brake_list, wn_each[i, :])
+
+    # Последняя точка — досчитываем силы/ускорение.
+    fmag_each, _ = _evaluate_brake_force_components(v[-1], brake_list, wn_each[-1, :])
+    f_magnetic_each[-1, :] = fmag_each
+    f_magnetic[-1] = float(np.sum(fmag_each))
+    f_total[-1] = fa_const + f_magnetic[-1]
+    a[-1] = f_total[-1] / recoil.mass
+
+    warnings: list[str] = []
+    if substep_limit_hit:
+        warnings.append(
+            "Численная жёсткость: достигнут предел дробления шага интегрирования. "
+            "Результат может быть слегка неточным при очень малой массе — "
+            "уменьшите dt для повышения точности."
+        )
+
+    sim_result = SimulationResult(
+        t=t,
+        x=x,
+        v=v,
+        a=a,
+        f_total=f_total,
+        f_ext=f_ext,
+        f_spring=f_spring,
+        f_magnetic=f_magnetic,
+        f_angle=f_angle,
+        f_magnetic_each=f_magnetic_each,
+        wn_each=wn_each,
+        recoil_end_time=None,
+        recoil_end_index=None,
+        return_end_time=None,
+        return_end_index=None,
+        termination_reason="free_fall",
+        spring_out_of_range=False,
+        warnings=warnings,
+    )
+
+    compute_energy_balance(sim_result, mass=recoil.mass)
+
+    return sim_result
+
+
 def compute_energy_balance(result: SimulationResult, mass: float) -> None:
     """
     Заполняет поля энергобаланса прямо в SimulationResult.

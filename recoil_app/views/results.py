@@ -59,7 +59,10 @@ def results_view(request):
 
     cards = []
     for run in page.object_list:
-        if run.termination_reason == "returned_to_zero":
+        if run.is_free_fall:
+            status = "free_fall"
+            status_label = "свободное падение"
+        elif run.termination_reason == "returned_to_zero":
             status = "ok"
             status_label = "завершён"
         elif run.termination_reason == "time_limit":

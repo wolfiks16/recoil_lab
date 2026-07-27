@@ -10,12 +10,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
-from ..forms import CalculationForm, MagneticBrakeFormSet
+from ..forms import CalculationForm, FreeFallForm, MagneticBrakeFormSet
 from ..models import BrakeCatalog, CalculationRun, CalculationSnapshot
 from ..services.permissions import can_delete_run, can_run_calc, can_view_run
 from ..services.analysis import enrich_with_basic_analysis
 from ..services.charting import build_brake_geometry_3d, save_interactive_charts
-from ..services.dynamics import RecoilParams, simulate_recoil
+from ..services.dynamics import RecoilParams, simulate_free_fall, simulate_recoil
 from ..services.kpi import build_kpi_groups
 from ..services.modeling import build_calculation_model
 from ..services.reporting import export_results_to_excel
@@ -76,79 +76,7 @@ def index_view(request):
 
                     result = simulate_recoil(run.input_file.path, recoil, runtime_brakes)
 
-                    run.x_max = float(result.x.max())
-                    run.v_max = float(result.v.max())
-                    run.x_final = float(result.x[-1])
-                    run.v_final = float(result.v[-1])
-                    run.a_final = float(result.a[-1])
-                    run.recoil_end_time = result.recoil_end_time
-                    run.return_end_time = result.return_end_time
-                    run.termination_reason = result.termination_reason
-                    run.spring_out_of_range = result.spring_out_of_range
-                    run.warnings_text = "\n".join(result.warnings)
-
-                    safe_name = slugify(run.name) or f"run-{run.id}"
-                    run_folder_name = f"{safe_name}_{run.id}"
-                    prefix = run_folder_name
-
-                    run_reports_dir = Path(settings.MEDIA_ROOT) / "reports" / run_folder_name
-                    run_reports_dir.mkdir(parents=True, exist_ok=True)
-
-                    chart_paths = save_interactive_charts(result, run_reports_dir, prefix=prefix)
-
-                    field_map = {
-                        "chart_x_t": "chart_x_t",
-                        "chart_v_a_t": "chart_v_a_t",
-                        "chart_v_x": "chart_v_x",
-                        "chart_fmag_v": "chart_fmag_v",
-                        "chart_forces_secondary": "chart_forces_secondary",
-                        "chart_x_t_recoil": "chart_x_t_recoil",
-                        "chart_v_a_t_recoil": "chart_v_a_t_recoil",
-                        "chart_forces_main_recoil": "chart_forces_main_recoil",
-                        "chart_forces_secondary_recoil": "chart_forces_secondary_recoil",
-                        "chart_x_t_return": "chart_x_t_return",
-                        "chart_v_a_t_return": "chart_v_a_t_return",
-                        "chart_forces_secondary_return": "chart_forces_secondary_return",
-                        # --- v2 ---
-                        "chart_x_t_annotated": "chart_x_t_annotated",
-                        "chart_energy": "chart_energy",
-                    }
-
-                    for chart_key, model_field in field_map.items():
-                        if chart_key in chart_paths:
-                            setattr(
-                                run,
-                                model_field,
-                                f"reports/{run_folder_name}/{Path(chart_paths[chart_key]).name}",
-                            )
-
-                    if result.energy_residual_pct is not None:
-                        run.energy_residual_pct = float(result.energy_residual_pct)
-                    if result.energy_input_cum is not None and len(result.energy_input_cum):
-                        run.energy_input_total = float(result.energy_input_cum[-1])
-                    if result.energy_brake_cum is not None and len(result.energy_brake_cum):
-                        run.energy_brake_total = float(result.energy_brake_cum[-1])
-
-                    report_name = f"{prefix}_report.xlsx"
-                    report_path = run_reports_dir / report_name
-                    export_results_to_excel(result, report_path)
-                    run.report_file.name = f"reports/{run_folder_name}/{report_name}"
-
-                    run.save()
-
-                    calculation_model = build_calculation_model(run, brake_objects, result)
-                    calculation_model, analysis_snapshot = enrich_with_basic_analysis(calculation_model)
-
-                    CalculationSnapshot.objects.update_or_create(
-                        run=run,
-                        defaults={
-                            "model_version": calculation_model.model_version,
-                            "input_snapshot": calculation_model.input_snapshot(),
-                            "result_snapshot": calculation_model.result_snapshot(),
-                            "analysis_snapshot": analysis_snapshot,
-                            "thermal_snapshot": {},
-                        },
-                    )
+                    _persist_result_and_snapshot(run, brake_objects, result)
 
                 return redirect("run_detail_v2", run_id=run.id)
 
@@ -168,9 +96,115 @@ def index_view(request):
     runs = runs_visible_to(request.user).order_by("-created_at")[:20]
 
     # Срез 3b: каталог тормозов для выбора в форме.
-    catalog_qs = BrakeCatalog.objects.order_by("name")
-    catalog_items = []
-    for c in catalog_qs:
+    catalog_items = _build_catalog_items()
+
+    return render(
+        request,
+        "recoil_app/index.html",
+        {
+            "form": form,
+            "brake_formset": brake_formset,
+            "runs": runs,
+            "catalog_items": catalog_items,
+            "catalog_count": len(catalog_items),
+        },
+    )
+
+
+def free_fall_new_view(request):
+    """Создание расчёта в режиме свободного падения.
+
+    Зеркалит `index_view`, но без входного Excel-файла: гравитация задаётся
+    углом, выстрел и пружина отсутствуют. Использует `simulate_free_fall`.
+    """
+    if request.method == "POST" and not can_run_calc(request.user):
+        messages.warning(
+            request,
+            "Для запуска расчёта войдите или зарегистрируйтесь.",
+        )
+        return redirect(
+            f"{settings.LOGIN_URL}?next={request.path}"
+            if settings.LOGIN_URL.startswith("/")
+            else f"/login/?next={request.path}"
+        )
+
+    if request.method == "POST":
+        form = FreeFallForm(request.POST)
+        brake_formset = MagneticBrakeFormSet(request.POST, request.FILES, prefix="brakes")
+
+        forms_valid = form.is_valid() and brake_formset.is_valid()
+        curve_sources_valid = resolve_curve_sources(brake_formset) if forms_valid else False
+
+        if forms_valid and curve_sources_valid:
+            try:
+                with transaction.atomic():
+                    run = CalculationRun.objects.create(
+                        name=form.cleaned_data["name"],
+                        mode=CalculationRun.MODE_FREE_FALL,
+                        input_file=None,        # свободное падение не требует файла
+                        mass=form.cleaned_data["mass"],
+                        angle_deg=form.cleaned_data["angle_deg"],
+                        v0=form.cleaned_data["v0"],
+                        x0=form.cleaned_data["x0"],
+                        t_max=form.cleaned_data["t_max"],
+                        dt=form.cleaned_data["dt"],
+                        owner=request.user,
+                    )
+
+                    brake_objects, runtime_brakes = create_brake_objects_and_runtime_models(
+                        run,
+                        brake_formset,
+                    )
+
+                    recoil = RecoilParams(
+                        mass=run.mass,
+                        angle_deg=run.angle_deg,
+                        v0=run.v0,
+                        x0=run.x0,
+                        t_max=run.t_max,
+                        dt=run.dt,
+                    )
+
+                    result = simulate_free_fall(recoil, runtime_brakes)
+
+                    _persist_result_and_snapshot(run, brake_objects, result)
+
+                return redirect("run_detail_v2", run_id=run.id)
+
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+    else:
+        # Поддержка ?from_run= — префилл параметров из существующего расчёта.
+        initial_main, brakes_initial = build_initial_from_run(request.GET.get("from_run"))
+        form = FreeFallForm(initial=initial_main)
+
+        if brakes_initial:
+            brake_formset = MagneticBrakeFormSet(initial=brakes_initial, prefix="brakes")
+        else:
+            brake_formset = MagneticBrakeFormSet(initial=[{}], prefix="brakes")
+
+    from ..services.permissions import runs_visible_to
+    runs = runs_visible_to(request.user).order_by("-created_at")[:20]
+
+    catalog_items = _build_catalog_items()
+
+    return render(
+        request,
+        "recoil_app/free_fall.html",
+        {
+            "form": form,
+            "brake_formset": brake_formset,
+            "runs": runs,
+            "catalog_items": catalog_items,
+            "catalog_count": len(catalog_items),
+        },
+    )
+
+
+def _build_catalog_items() -> list[dict]:
+    """Каталог тормозов для выбора в форме расчёта (общий для index/free_fall)."""
+    catalog_items: list[dict] = []
+    for c in BrakeCatalog.objects.order_by("name"):
         catalog_items.append({
             "id": c.pk,
             "name": c.name,
@@ -194,16 +228,86 @@ def index_view(request):
                 "wn0":   c.wn0,
             },
         })
+    return catalog_items
 
-    return render(
-        request,
-        "recoil_app/index.html",
-        {
-            "form": form,
-            "brake_formset": brake_formset,
-            "runs": runs,
-            "catalog_items": catalog_items,
-            "catalog_count": len(catalog_items),
+
+def _persist_result_and_snapshot(run, brake_objects, result) -> None:
+    """Сохраняет результат симуляции: метрики, графики, XLSX, snapshot.
+
+    Общий хвост для обоих режимов (`index_view` и `free_fall_new_view`).
+    None-safe к отсутствию фаз отката/наката (свободное падение).
+    """
+    run.x_max = float(result.x.max())
+    run.v_max = float(result.v.max())
+    run.x_final = float(result.x[-1])
+    run.v_final = float(result.v[-1])
+    run.a_final = float(result.a[-1])
+    run.recoil_end_time = result.recoil_end_time
+    run.return_end_time = result.return_end_time
+    run.termination_reason = result.termination_reason
+    run.spring_out_of_range = result.spring_out_of_range
+    run.warnings_text = "\n".join(result.warnings)
+
+    safe_name = slugify(run.name) or f"run-{run.id}"
+    run_folder_name = f"{safe_name}_{run.id}"
+    prefix = run_folder_name
+
+    run_reports_dir = Path(settings.MEDIA_ROOT) / "reports" / run_folder_name
+    run_reports_dir.mkdir(parents=True, exist_ok=True)
+
+    chart_paths = save_interactive_charts(result, run_reports_dir, prefix=prefix)
+
+    field_map = {
+        "chart_x_t": "chart_x_t",
+        "chart_v_a_t": "chart_v_a_t",
+        "chart_v_x": "chart_v_x",
+        "chart_fmag_v": "chart_fmag_v",
+        "chart_forces_secondary": "chart_forces_secondary",
+        "chart_x_t_recoil": "chart_x_t_recoil",
+        "chart_v_a_t_recoil": "chart_v_a_t_recoil",
+        "chart_forces_main_recoil": "chart_forces_main_recoil",
+        "chart_forces_secondary_recoil": "chart_forces_secondary_recoil",
+        "chart_x_t_return": "chart_x_t_return",
+        "chart_v_a_t_return": "chart_v_a_t_return",
+        "chart_forces_secondary_return": "chart_forces_secondary_return",
+        # --- v2 ---
+        "chart_x_t_annotated": "chart_x_t_annotated",
+        "chart_energy": "chart_energy",
+    }
+
+    for chart_key, model_field in field_map.items():
+        if chart_key in chart_paths:
+            setattr(
+                run,
+                model_field,
+                f"reports/{run_folder_name}/{Path(chart_paths[chart_key]).name}",
+            )
+
+    if result.energy_residual_pct is not None:
+        run.energy_residual_pct = float(result.energy_residual_pct)
+    if result.energy_input_cum is not None and len(result.energy_input_cum):
+        run.energy_input_total = float(result.energy_input_cum[-1])
+    if result.energy_brake_cum is not None and len(result.energy_brake_cum):
+        run.energy_brake_total = float(result.energy_brake_cum[-1])
+
+    report_name = f"{prefix}_report.xlsx"
+    report_path = run_reports_dir / report_name
+    export_results_to_excel(result, report_path)
+    run.report_file.name = f"reports/{run_folder_name}/{report_name}"
+
+    run.save()
+
+    calculation_model = build_calculation_model(run, brake_objects, result)
+    calculation_model, analysis_snapshot = enrich_with_basic_analysis(calculation_model)
+
+    CalculationSnapshot.objects.update_or_create(
+        run=run,
+        defaults={
+            "model_version": calculation_model.model_version,
+            "input_snapshot": calculation_model.input_snapshot(),
+            "result_snapshot": calculation_model.result_snapshot(),
+            "analysis_snapshot": analysis_snapshot,
+            "thermal_snapshot": {},
         },
     )
 

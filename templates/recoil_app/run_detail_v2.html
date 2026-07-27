@@ -25,7 +25,9 @@
         <div>
             <div class="rb-hero-title">
                 <h1>{{ run.name }}</h1>
-                {% if run.termination_reason == "returned_to_zero" %}
+                {% if run.is_free_fall %}
+                    <span class="rb-badge rb-badge-blue">свободное падение</span>
+                {% elif run.termination_reason == "returned_to_zero" %}
                     <span class="rb-badge rb-badge-ok">завершён</span>
                 {% elif run.termination_reason == "time_limit" %}
                     <span class="rb-badge rb-badge-warn">по времени</span>
@@ -47,7 +49,11 @@
             </div>
         </div>
         <div class="rb-hero-actions">
+            {% if run.is_free_fall %}
+            <a class="rb-btn" href="{% url 'free_fall_new' %}?from_run={{ run.id }}">↗ Скопировать</a>
+            {% else %}
             <a class="rb-btn" href="{% url 'index' %}?from_run={{ run.id }}">↗ Скопировать</a>
+            {% endif %}
             <a class="rb-btn" href="{% url 'compare' %}?run_a={{ run.id }}">≡ Сравнить</a>
             <a class="rb-btn rb-btn-grad" href="{% url 'thermal_list' run.id %}">🔥 Тепло{% if thermal_runs_total %} · {{ thermal_runs_total }}{% endif %}</a>
             {% if run.report_file %}
@@ -71,7 +77,23 @@
 
 {# --- Status banner --- #}
 <section class="rb-module-section" data-module="status">
-{% if run.termination_reason == "returned_to_zero" %}
+{% if run.is_free_fall %}
+<div class="rb-status-banner rb-status-banner-ok">
+    <div class="rb-status-banner-icon">↓</div>
+    <div>
+        <div class="rb-status-banner-title">Свободное падение</div>
+        <div class="rb-status-banner-sub">
+            Проинтегрировано до t_max = {{ run.t_max|smart_num }} с (без входной силы и пружины)
+            {% if run.v_final is not None %}
+                · скорость в конце ≈ {{ run.v_final|smart_num }} м/с
+            {% endif %}
+            {% if energy_summary and energy_summary.residual_pct is not None %}
+                · энергобаланс невязка {{ energy_summary.residual_pct|smart_num }}%
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% elif run.termination_reason == "returned_to_zero" %}
 <div class="rb-status-banner rb-status-banner-ok">
     <div class="rb-status-banner-icon">✓</div>
     <div>
@@ -247,7 +269,7 @@
                 <span class="rb-card-title-text">Параметры</span>
             </div>
             <table class="rb-params-table">
-                <tr><td>Масса</td><td class="num">{{ run.mass|floatformat:1 }} кг</td></tr>
+                <tr><td>Масса</td><td class="num">{{ run.mass|smart_num }} кг</td></tr>
                 <tr><td>Угол α</td><td class="num">{{ run.angle_deg|floatformat:1 }}°</td></tr>
                 <tr><td>v₀</td><td class="num">{{ run.v0|floatformat:2 }} м/с</td></tr>
                 <tr><td>x₀</td><td class="num">{{ run.x0|floatformat:3 }} м</td></tr>

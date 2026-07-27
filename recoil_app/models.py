@@ -150,9 +150,25 @@ def brake_curve_upload_to(instance, filename: str) -> str:
 
 
 class CalculationRun(models.Model):
+    MODE_RECOIL = "recoil"
+    MODE_FREE_FALL = "free_fall"
+    MODE_CHOICES = [
+        (MODE_RECOIL, "Откат"),
+        (MODE_FREE_FALL, "Свободное падение"),
+    ]
+
     created_at = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=200, unique=True, blank=False)
-    input_file = models.FileField(upload_to="uploads/")
+    # Режим расчёта. 'recoil' — обычный откат (нужен input_file с F(t)/F(x)).
+    # 'free_fall' — свободное падение под гравитацией + тормоза, без выстрела и пружины
+    # (input_file не требуется). Существующие записи → 'recoil' (default).
+    mode = models.CharField(
+        max_length=16,
+        choices=MODE_CHOICES,
+        default=MODE_RECOIL,
+    )
+    # null/blank: в режиме свободного падения входной Excel-файл не нужен.
+    input_file = models.FileField(upload_to="uploads/", null=True, blank=True)
     # Владелец расчёта. Null допустим для legacy-расчётов (до введения auth),
     # но миграция назначает их первому суперпользователю; после миграции у новых
     # расчётов owner всегда заполнен (view ставит request.user).
@@ -217,6 +233,10 @@ class CalculationRun(models.Model):
 
     def __str__(self):
         return self.name or f"Расчёт #{self.pk}"
+
+    @property
+    def is_free_fall(self) -> bool:
+        return self.mode == self.MODE_FREE_FALL
 
 
 class CalculationSnapshot(models.Model):

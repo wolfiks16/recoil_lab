@@ -28,6 +28,11 @@
             icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
         },
         {
+            key: 'free_fall',
+            title: 'Свободное падение',
+            icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7"/><path d="m8 12 4 4 4-4"/><path d="M5 21h14"/></svg>'
+        },
+        {
             key: 'result',
             title: 'Результаты',
             icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>'
@@ -68,6 +73,7 @@
         const active        = mountEl.dataset.active || 'workspace';
         const crumb         = mountEl.dataset.crumb || '';
         const indexUrl      = mountEl.dataset.indexUrl || '/';
+        const freeFallUrl   = mountEl.dataset.freeFallUrl || '#';
         const dashboardUrl  = mountEl.dataset.dashboardUrl || indexUrl;
         const resultsUrl    = mountEl.dataset.resultsUrl || '#';
         const compareUrl    = mountEl.dataset.compareUrl || '/compare/';
@@ -89,6 +95,7 @@
         const railUrls = {
             dashboard: dashboardUrl,
             workspace: indexUrl,
+            free_fall: freeFallUrl,
             result:    resultsUrl,
             optimize:  '#',
             compare:   compareUrl,

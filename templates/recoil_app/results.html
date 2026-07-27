@@ -193,6 +193,8 @@
                     <span class="rb-badge rb-badge-ok">{{ c.status_label }}</span>
                 {% elif c.status == 'warn' %}
                     <span class="rb-badge rb-badge-warn">{{ c.status_label }}</span>
+                {% elif c.status == 'free_fall' %}
+                    <span class="rb-badge rb-badge-blue">{{ c.status_label }}</span>
                 {% endif %}
                 {% if c.has_warnings %}
                     <span class="rb-badge rb-badge-warn" title="Есть предупреждения">!</span>

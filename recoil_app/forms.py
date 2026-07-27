@@ -75,6 +75,75 @@ class CalculationForm(forms.Form):
         return name
 
 
+class FreeFallForm(forms.Form):
+    """Форма расчёта в режиме свободного падения.
+
+    Отличия от `CalculationForm`:
+    - нет `input_file` (выстрел/пружина отсутствуют, гравитация задаётся углом);
+    - `t_max` без верхнего предела (свободное падение может длиться долго);
+    - угол по умолчанию 90° (ось вертикальна, gravity действует полностью),
+      но остаётся редактируемым (можно задать наклонное падение).
+    Тормоза задаются тем же `MagneticBrakeFormSet` (обязателен минимум один).
+    """
+
+    name = forms.CharField(
+        required=True,
+        label="Название расчёта",
+        widget=forms.TextInput(attrs={
+            "pattern": "[A-Za-z0-9_-]+",
+            "title": "Только английские буквы, цифры, дефис и подчёркивание",
+        }),
+    )
+
+    mass = forms.FloatField(
+        label="Масса",
+        validators=[MinValueValidator(1e-6, "Масса должна быть положительной.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    angle_deg = forms.FloatField(
+        initial=90.0,
+        label="Угол, град",
+        validators=[
+            MinValueValidator(0.0, "Угол должен быть неотрицательным."),
+            MaxValueValidator(90.0, "Угол не должен превышать 90°."),
+        ],
+        widget=forms.NumberInput(attrs={"min": "0", "max": "90", "step": "any"}),
+    )
+    v0 = forms.FloatField(
+        initial=0.0,
+        label="Начальная скорость",
+        validators=[MinValueValidator(0.0, "Начальная скорость должна быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    x0 = forms.FloatField(
+        initial=0.0,
+        label="Начальное перемещение",
+        validators=[MinValueValidator(0.0, "Начальное перемещение должно быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    t_max = forms.FloatField(
+        initial=1.0,
+        label="Время расчёта",
+        # Без MaxValueValidator: время свободного падения не ограничиваем.
+        validators=[MinValueValidator(1e-6, "Время расчёта должно быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    dt = forms.FloatField(initial=1e-4, label="Шаг dt")
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise forms.ValidationError(
+                "Название должно содержать только английские буквы, цифры, дефис и подчёркивание."
+            )
+
+        if CalculationRun.objects.filter(name=name).exists():
+            raise forms.ValidationError("Расчёт с таким названием уже существует.")
+
+        return name
+
+
 class MagneticBrakeForm(forms.Form):
     model_type = forms.ChoiceField(
         label="Тип задания тормоза",
