@@ -707,6 +707,79 @@ def make_brake_curve_fragment(
     )
 
 
+def make_pareto_fragment(
+    candidates: list[dict],
+    title: str = "Кандидаты: близость к цели ↔ робастность",
+) -> str:
+    """Парето-плоскость кандидатов мультистарта обратного проектирования.
+
+    Ось X — макс. отклонение от цели, % (ближе к 0 = точнее в цель).
+    Ось Y — R (робастность, меньше = устойчивее к разбросу параметров).
+    Оба «меньше — лучше», поэтому Парето-фронт — левый-нижний угол.
+    Размер маркера — запас до ΣF_max в σ (крупнее = безопаснее). Цвет: допустимые
+    (в цель + ΣF) синие, недопустимые серые-полые, выбранный — акцентная звезда.
+
+    candidates: list of dicts {label, feasible, R, max_abs_err, sigma_f_margin, is_best}.
+    """
+    pts = [c for c in (candidates or [])
+           if c.get("R") is not None and c.get("max_abs_err") is not None
+           and math.isfinite(c["R"]) and math.isfinite(c["max_abs_err"])]
+    if len(pts) < 2:
+        return ""
+
+    def _size(margin) -> float:
+        if margin is None or not math.isfinite(margin):
+            return 20.0  # ∞ запас — самый крупный
+        return float(min(22.0, max(8.0, 8.0 + 1.4 * margin)))
+
+    def _hover(c) -> str:
+        m = c.get("sigma_f_margin")
+        m_s = "∞" if (m is None or not math.isfinite(m)) else f"{m:.1f}σ"
+        return (f"<b>{c['label']}</b><br>R = {c['R']:.4g}"
+                f"<br>откл. от цели = {c['max_abs_err'] * 100:.1f}%"
+                f"<br>запас ΣF = {m_s}"
+                f"<br>{'в цели' if c.get('feasible') else 'вне цели'}")
+
+    feasible = [c for c in pts if c.get("feasible") and not c.get("is_best")]
+    infeasible = [c for c in pts if not c.get("feasible")]
+    best = next((c for c in pts if c.get("is_best")), None)
+
+    fig = go.Figure()
+
+    if infeasible:
+        fig.add_trace(go.Scatter(
+            x=[c["max_abs_err"] * 100 for c in infeasible],
+            y=[c["R"] for c in infeasible],
+            mode="markers", name="вне цели",
+            marker=dict(color=RB_GRAY, size=10, symbol="circle-open", line=dict(width=2)),
+            text=[_hover(c) for c in infeasible], hoverinfo="text",
+        ))
+
+    if feasible:
+        fig.add_trace(go.Scatter(
+            x=[c["max_abs_err"] * 100 for c in feasible],
+            y=[c["R"] for c in feasible],
+            mode="markers", name="в цели",
+            marker=dict(color=RB_BLUE, size=[_size(c.get("sigma_f_margin")) for c in feasible],
+                        opacity=0.8, line=dict(color="white", width=1.5)),
+            text=[_hover(c) for c in feasible], hoverinfo="text",
+        ))
+
+    if best is not None:
+        fig.add_trace(go.Scatter(
+            x=[best["max_abs_err"] * 100], y=[best["R"]],
+            mode="markers+text", name="выбран (min R)",
+            marker=dict(color=RB_ACCENT, size=_size(best.get("sigma_f_margin")) + 6,
+                        symbol="star", line=dict(color="white", width=1.5)),
+            text=[f"  {best['label']}"], textposition="middle right",
+            textfont=dict(color=RB_ACCENT, size=12, family=FONT_FAMILY_MONO),
+            hovertext=[_hover(best)], hoverinfo="text",
+        ))
+
+    _apply_layout(fig, title, "макс. отклонение от цели, %", "R — робастность (меньше = лучше)")
+    return _to_html_fragment(fig, height="440px")
+
+
 # ============================================================================
 # СРЕЗ 5: Overlay-графики для страницы сравнения
 # ============================================================================

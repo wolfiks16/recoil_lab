@@ -484,3 +484,88 @@ class ThermalRun(models.Model):
     @property
     def report_folder(self) -> str:
         return f"thermal_reports/run_{self.run_id}_thermal_{self.pk}"
+
+
+# ============================================================================
+# Обратное проектирование тормозов: исследование (DesignStudy)
+# ============================================================================
+
+
+class DesignStudy(models.Model):
+    """Одно исследование обратного проектирования тормоза.
+
+    По донору-расчёту (привод/масса/угол) и конечным условиям (T, x_max, v_end,
+    потолок ΣF) синтезирует характеристику и подбирает реализуемые параметры
+    (`services/design/`). Считается в фоновом потоке — статус хранится здесь,
+    страница опрашивает его AJAX-ом. Победителя можно «отпочковать» в обычный
+    `CalculationRun` (полная страница результата/тепло/сравнение).
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_RUNNING = "running"
+    STATUS_DONE = "done"
+    STATUS_ERROR = "error"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "В очереди"),
+        (STATUS_RUNNING, "Считается"),
+        (STATUS_DONE, "Готово"),
+        (STATUS_ERROR, "Ошибка"),
+    ]
+
+    name = models.CharField(max_length=200, unique=True)
+    # Донор привода (F(t)/F(x), масса, угол, dt). SET_NULL: результат самодостаточен
+    # после расчёта, но отпочкование потребует существующего донора.
+    source_run = models.ForeignKey(
+        CalculationRun,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="design_studies",
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="design_studies",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # --- Вход ---
+    target_T = models.FloatField(help_text="Целевое время цикла, с")
+    target_x_max = models.FloatField(help_text="Целевой откат, м")
+    target_v_end = models.FloatField(help_text="Целевая |скорость| при x=0, м/с")
+    rel_tol = models.FloatField(default=0.05)
+    sigma_f_max = models.FloatField(help_text="Потолок суммарного усилия, Н")
+    n_nodes = models.PositiveIntegerField(default=4)
+    n_brakes = models.PositiveIntegerField(default=1)
+    param_tol_rel = models.FloatField(default=0.02)
+    do_parametric = models.BooleanField(default=True, help_text="Подбирать физ. параметры (Stage 2)")
+    multistart = models.BooleanField(default=False)
+
+    # --- Состояние/результат ---
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    error_text = models.TextField(blank=True, default="")
+    result_snapshot = models.JSONField(default=dict, blank=True)
+
+    # Денормализованные итоги для списка.
+    feasible = models.BooleanField(null=True, blank=True)
+    best_R = models.FloatField(null=True, blank=True)
+
+    # Отпочкованный расчёт (создаётся по кнопке на странице результата).
+    spawned_run = models.ForeignKey(
+        CalculationRun,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Исследование дизайна"
+        verbose_name_plural = "Исследования дизайна"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def is_finished(self) -> bool:
+        return self.status in (self.STATUS_DONE, self.STATUS_ERROR)

@@ -34,6 +34,14 @@ urlpatterns = [
     # Сравнение
     path("compare/", views.compare_view, name="compare"),
 
+    # Оптимизация / обратное проектирование (DesignStudy)
+    path("optimize/", views.optimize_list_view, name="optimize_list"),
+    path("optimize/new/", views.optimize_new_view, name="optimize_new"),
+    path("optimize/<int:study_id>/", views.optimize_detail_view, name="optimize_detail"),
+    path("optimize/<int:study_id>/status/", views.optimize_status_view, name="optimize_status"),
+    path("optimize/<int:study_id>/spawn/", views.optimize_spawn_view, name="optimize_spawn"),
+    path("optimize/<int:study_id>/delete/", views.optimize_delete_view, name="optimize_delete"),
+
     # Каталог тормозов (Срез 3a + 3c)
     path("catalog/", views.catalog_list_view, name="catalog_list"),
     path("catalog/new/", views.catalog_new_view, name="catalog_new"),

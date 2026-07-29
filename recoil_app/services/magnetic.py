@@ -73,19 +73,14 @@ class CurveRangeError(Exception):
 BrakeModel: TypeAlias = MagneticParams | CurveBrakeParams
 
 
-def magnetic_force_si(
-    v: float,
-    wn: float,
-    params: MagneticParams,
-) -> tuple[float, float]:
-    """
-    Возвращает модуль силы одного параметрического магнитного тормоза в Н
-    и обновлённое wn. Сила возвращается без знака направления.
-    """
-    v_abs = abs(v)
-    if v_abs < DEFAULT_V_EPS:
-        return 0.0, wn
+def _magnetic_core(v_abs: float, params: MagneticParams) -> tuple[float, float, float, float, float]:
+    """wn-НЕЗАВИСИМАЯ часть формулы тормоза.
 
+    Возвращает (pre, ex, ed, tp, xm), где итоговая сила ft = pre · kb², а kb
+    зависит только от wn (через wn_next). Вся дорогая геометрия считается здесь
+    один раз — это позволяет и обычному (переходному) вызову, и квазистатике
+    (закрытая форма wn*) переиспользовать её без дублирования формулы.
+    """
     gamma = params.gamma
     delta = params.delta
     xm = params.xm
@@ -198,19 +193,59 @@ def magnetic_force_si(
     tp = (delta / math.pi) ** 2 * gamma * 4 * math.pi * 1e-7 * mu * lya
     ex = (8 / math.pi**2) * math.exp(-xm / (v_abs * tp)) if tp != 0 else 0.0
     ed = (8 / math.pi**2) * math.exp(-dm / (v_abs * tp)) if tp != 0 else 0.0
-    wn_next = ed**2 * ex * (wn * ex + 1 - ex) + ed * (ex - 1)
 
-    kb = 1 + (v_abs * tp / (2 * xm)) * (8 / math.pi**2 - ex) * (
-        wn_next * (1 - ex * ed) - 2 + ed * (ex - 1)
-    )
-    ft = (
+    pre = (
         bz**2
         * (ya1 + ya2) ** 2
         * v_abs
         * (2 * tettak / rk + 4 * (2 * n - 1) * tettac / rc)
-        * kb**2
     )
+    return pre, ex, ed, tp, xm
+
+
+def _kb(v_abs: float, tp: float, xm: float, ex: float, ed: float, wn_next: float) -> float:
+    return 1 + (v_abs * tp / (2 * xm)) * (8 / math.pi**2 - ex) * (
+        wn_next * (1 - ex * ed) - 2 + ed * (ex - 1)
+    )
+
+
+def magnetic_force_si(
+    v: float,
+    wn: float,
+    params: MagneticParams,
+) -> tuple[float, float]:
+    """
+    Возвращает модуль силы одного параметрического магнитного тормоза в Н
+    и обновлённое wn. Сила возвращается без знака направления.
+    """
+    v_abs = abs(v)
+    if v_abs < DEFAULT_V_EPS:
+        return 0.0, wn
+
+    pre, ex, ed, tp, xm = _magnetic_core(v_abs, params)
+    wn_next = ed**2 * ex * (wn * ex + 1 - ex) + ed * (ex - 1)
+    ft = pre * _kb(v_abs, tp, xm, ex, ed, wn_next) ** 2
     return ft, wn_next
+
+
+def magnetic_force_quasistatic(v: float, params: MagneticParams) -> float:
+    """Квазистатическая (установившаяся) сила: wn взято в неподвижной точке.
+
+    Рекуррента wn линейна: wn_next = A·wn + B, где A = ed²·ex², так что
+    wn* = B/(1−A) (закрытая форма; A ≤ 0.43 гарантированно, т.к. ex,ed ≤ 8/π²).
+    Это «статическая» F(v) параметрической модели — для подгона под целевую
+    кривую в обратной задаче (Stage 2).
+    """
+    v_abs = abs(v)
+    if v_abs < DEFAULT_V_EPS:
+        return 0.0
+
+    pre, ex, ed, tp, xm = _magnetic_core(v_abs, params)
+    a = (ed**2) * (ex**2)
+    b = ed**2 * ex * (1 - ex) + ed * (ex - 1)
+    denom = 1.0 - a
+    wn_star = b / denom if abs(denom) > 1e-15 else b
+    return pre * _kb(v_abs, tp, xm, ex, ed, wn_star) ** 2
 
 
 def _curve_force_abs_from_speed(v_abs: float, params: CurveBrakeParams) -> float:

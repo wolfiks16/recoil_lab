@@ -77,6 +77,7 @@
         const dashboardUrl  = mountEl.dataset.dashboardUrl || indexUrl;
         const resultsUrl    = mountEl.dataset.resultsUrl || '#';
         const compareUrl    = mountEl.dataset.compareUrl || '/compare/';
+        const optimizeUrl   = mountEl.dataset.optimizeUrl || '#';
         const catalogUrl    = mountEl.dataset.catalogUrl || '#';
         const userInit      = mountEl.dataset.userInitials || 'ИК';
 
@@ -97,7 +98,7 @@
             workspace: indexUrl,
             free_fall: freeFallUrl,
             result:    resultsUrl,
-            optimize:  '#',
+            optimize:  optimizeUrl,
             compare:   compareUrl,
             catalog:   catalogUrl
         };

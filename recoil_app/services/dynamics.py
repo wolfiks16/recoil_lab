@@ -220,10 +220,33 @@ def simulate_recoil(
     recoil: RecoilParams,
     brake_list: Sequence[BrakeModel],
 ) -> SimulationResult:
+    """Загружает привод (F(t)/F(x)) из Excel и запускает интегрирование.
+
+    Тонкая обёртка над `simulate_recoil_core` — сохранена ради обратной
+    совместимости (её зовёт `index_view`).
+    """
+    ext_force, spring_force, t_ext_max, x_range = load_recoil_characteristics(xlsx_path)
+    return simulate_recoil_core(
+        ext_force, spring_force, t_ext_max, x_range, recoil, brake_list,
+    )
+
+
+def simulate_recoil_core(
+    ext_force,
+    spring_force,
+    t_ext_max: float,
+    x_range: tuple[float, float],
+    recoil: RecoilParams,
+    brake_list: Sequence[BrakeModel],
+) -> SimulationResult:
+    """RK4-интегрирование отката/наката по УЖЕ загруженному приводу.
+
+    Вынесено из `simulate_recoil`, чтобы обратная задача (`services/design`)
+    могла прогонять модель сотни раз без перечитывания Excel на каждом вызове:
+    привод грузится один раз, дальше дёргается только `_core`.
+    """
     if not brake_list:
         raise ValueError("Не задано ни одного тормоза.")
-
-    ext_force, spring_force, t_ext_max, x_range = load_recoil_characteristics(xlsx_path)
 
     x_min_tab, x_max_tab = x_range
     spring_out_of_range = False

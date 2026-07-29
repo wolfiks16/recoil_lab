@@ -1,0 +1,79 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load recoil_extras %}
+
+{% block title %}Оптимизация · RecoilLab{% endblock %}
+{% block shell_active %}optimize{% endblock %}
+{% block shell_crumb %}Оптимизация{% endblock %}
+
+{% block content %}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title"><h1>Обратное проектирование</h1></div>
+            <div class="rb-hero-sub">
+                Из конечных условий цикла (время, откат, скорость наката) и потолка ΣF —
+                синтез характеристики и подбор реализуемых параметров тормозов, с отбором по робастности
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            {% if can_create %}
+            <a class="rb-btn rb-btn-grad" href="{% url 'optimize_new' %}">+ Новое исследование</a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% if messages %}
+<section class="rb-module-section">
+    {% for m in messages %}<div class="rb-flash rb-flash-{{ m.tags }}">{{ m }}</div>{% endfor %}
+</section>
+{% endif %}
+
+<section class="rb-module-section">
+<div class="rb-card">
+{% if studies %}
+    <table class="rb-params-table" style="width:100%;">
+        <thead>
+            <tr style="text-align:left;">
+                <th>Название</th><th>Донор</th><th>Тормозов</th>
+                <th>Статус</th><th>Достижимо</th><th class="num">R</th><th>Создано</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in studies %}
+            <tr>
+                <td><a class="rb-run-card-name" href="{% url 'optimize_detail' s.id %}">{{ s.name }}</a></td>
+                <td class="rb-text-muted">{% if s.source_run %}{{ s.source_run.name }}{% else %}<em>удалён</em>{% endif %}</td>
+                <td class="num">{{ s.n_brakes }}{% if s.multistart %} · MS{% endif %}</td>
+                <td>
+                    {% if s.status == 'done' %}<span class="rb-badge rb-badge-ok">готово</span>
+                    {% elif s.status == 'running' %}<span class="rb-badge rb-badge-blue">считается…</span>
+                    {% elif s.status == 'pending' %}<span class="rb-badge rb-badge-blue">в очереди</span>
+                    {% else %}<span class="rb-badge rb-badge-warn">ошибка</span>{% endif %}
+                </td>
+                <td>
+                    {% if s.status == 'done' %}
+                        {% if s.feasible %}<span class="rb-badge rb-badge-ok">да</span>
+                        {% else %}<span class="rb-badge rb-badge-warn">нет</span>{% endif %}
+                    {% else %}—{% endif %}
+                </td>
+                <td class="num">{{ s.best_R|smart_num }}</td>
+                <td class="rb-text-muted">{{ s.created_at|date:"d.m.Y · H:i" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <div style="padding:32px; text-align:center;">
+        <div class="rb-text-muted" style="margin-bottom:12px;">Исследований ещё нет.</div>
+        {% if can_create %}
+        <a class="rb-btn rb-btn-grad" href="{% url 'optimize_new' %}">+ Создать первое</a>
+        {% else %}
+        <div class="rb-text-muted">Войдите, чтобы запускать подбор дизайна.</div>
+        {% endif %}
+    </div>
+{% endif %}
+</div>
+</section>
+{% endblock %}

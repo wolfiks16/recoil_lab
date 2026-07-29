@@ -843,6 +843,87 @@ class UserRegistrationForm(UserCreationForm):
         return user
 
 
+from .models import DesignStudy  # noqa: E402
+
+
+class DesignStudyForm(forms.Form):
+    """Форма запуска исследования обратного проектирования тормоза."""
+
+    name = forms.CharField(
+        required=True,
+        label="Название исследования",
+        widget=forms.TextInput(attrs={
+            "pattern": "[A-Za-z0-9_-]+",
+            "title": "Только английские буквы, цифры, дефис и подчёркивание",
+        }),
+    )
+    source_run = forms.ModelChoiceField(
+        queryset=CalculationRun.objects.filter(mode=CalculationRun.MODE_RECOIL)
+        .exclude(input_file="").exclude(input_file__isnull=True).order_by("-created_at"),
+        label="Донор привода (расчёт отката)",
+        help_text="Из него берутся выстрел F(t), пружина F(x), масса, угол, dt.",
+    )
+
+    target_x_max = forms.FloatField(
+        label="Целевой откат x_max, м",
+        validators=[MinValueValidator(1e-6, "Должен быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    target_T = forms.FloatField(
+        label="Целевое время цикла T, с",
+        validators=[MinValueValidator(1e-6, "Должно быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    target_v_end = forms.FloatField(
+        label="Целевая |скорость| в конце наката, м/с",
+        validators=[MinValueValidator(0.0, "Должна быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    sigma_f_max = forms.FloatField(
+        label="Потолок суммарного усилия ΣF_max, Н",
+        validators=[MinValueValidator(1e-6, "Должен быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    rel_tol = forms.FloatField(
+        initial=0.05,
+        label="Допуск попадания в цель (доля)",
+        validators=[MinValueValidator(1e-3, "Минимум 0.001."),
+                    MaxValueValidator(0.5, "Максимум 0.5.")],
+        widget=forms.NumberInput(attrs={"min": "0.001", "max": "0.5", "step": "any"}),
+    )
+    n_brakes = forms.IntegerField(
+        initial=1,
+        label="Число тормозов N",
+        validators=[MinValueValidator(1, "Минимум 1."), MaxValueValidator(4, "Максимум 4.")],
+        widget=forms.NumberInput(attrs={"min": "1", "max": "4", "step": "1"}),
+    )
+    do_parametric = forms.BooleanField(
+        initial=True, required=False,
+        label="Подбирать физические параметры (Stage 2)",
+    )
+    multistart = forms.BooleanField(
+        initial=False, required=False,
+        label="Мультистарт + отбор по робастности (дольше)",
+    )
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise forms.ValidationError(
+                "Название: только английские буквы, цифры, дефис и подчёркивание."
+            )
+        if DesignStudy.objects.filter(name=name).exists():
+            raise forms.ValidationError("Исследование с таким названием уже существует.")
+        return name
+
+    def clean(self):
+        cleaned = super().clean()
+        # N≥2 требует Stage 2 (иначе подбирать нечего — только кривая одна).
+        if cleaned.get("n_brakes", 1) >= 2 and not cleaned.get("do_parametric"):
+            cleaned["do_parametric"] = True
+        return cleaned
+
+
 class UserProfileEditForm(forms.Form):
     """Редактирование персональных данных и аватара. Роль сюда не входит —
     её меняет только admin через `/users/`. Поля имени/фамилии живут на User,

@@ -25,6 +25,14 @@ from .catalog import (  # noqa: F401
 )
 from .compare import compare_view  # noqa: F401
 from .dashboard import dashboard_view  # noqa: F401
+from .optimize import (  # noqa: F401
+    optimize_delete_view,
+    optimize_detail_view,
+    optimize_list_view,
+    optimize_new_view,
+    optimize_spawn_view,
+    optimize_status_view,
+)
 from .results import results_view  # noqa: F401
 from .run import (  # noqa: F401
     delete_run_view,

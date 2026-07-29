@@ -57,6 +57,9 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 /run/<id>/              → run_detail_v2_view (имя 'run_detail_v2')
 /run/<id>/delete/       → delete_run_view (POST)
 /compare/               → compare_view
+/optimize/              → optimize_list_view (обратное проектирование)
+/optimize/new/          → optimize_new_view (запуск в фоне)
+/optimize/<id>/         → optimize_detail_view (+ /status/ AJAX, /spawn/ POST, /delete/ POST)
 /catalog/               → catalog_list_view
 /catalog/new/           → catalog_new_view
 /catalog/<pk>/          → catalog_detail_view
@@ -73,12 +76,13 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - `views/dashboard.py` — `dashboard_view` (stat-карточки, фильтр, поиск, пагинация).
 - `views/compare.py` — `compare_view` (тонкий, всё в `services/compare_data.py`).
 - `views/catalog.py` — 5 catalog views + AJAX `catalog_save_from_brake_form_view`.
+- `views/optimize.py` — обратное проектирование: список/форма/результат исследований, AJAX-статус, `spawn` (отпочкование дизайна в `CalculationRun`), удаление.
 
 ### Слой services (`recoil_app/services/`)
 
 **Доменные:**
-- `dynamics.py` — `RecoilParams`, `SimulationResult` (с energy fields), `simulate_recoil`, `compute_energy_balance`. Симулятор синхронный, чистый NumPy.
-- `magnetic.py` — `MagneticParams` (parametric), `CurveBrakeParams` + `ForceCurvePoint` (табличный F(v)), `evaluate_brake_force_si`, `initial_brake_state`. Формула параметрической модели: `F_T = (B̄₃·k̄_B·Ȳ_a)² · V · [2θ_κ/R_κ + 4(2N-1)θ_y/R_y]`.
+- `dynamics.py` — `RecoilParams`, `SimulationResult` (с energy fields), `simulate_recoil` (= `load_recoil_characteristics` + `simulate_recoil_core`), `simulate_recoil_core` (интегрирование по уже загруженному приводу — чтобы обратная задача не перечитывала Excel на каждом из сотен прогонов), `simulate_free_fall`, `compute_energy_balance`. Симулятор синхронный, чистый NumPy.
+- `magnetic.py` — `MagneticParams` (parametric), `CurveBrakeParams` + `ForceCurvePoint` (табличный F(v)), `evaluate_brake_force_si`, `initial_brake_state`. Формула параметрической модели: `F_T = (B̄₃·k̄_B·Ȳ_a)² · V · [2θ_κ/R_κ + 4(2N-1)θ_y/R_y]`. Геометрия вынесена в `_magnetic_core` (wn-независимая часть, `ft = pre·kb²`) — её переиспользуют и `magnetic_force_si` (переходный вызов, байт-в-байт как раньше), и `magnetic_force_quasistatic(v, params)` (установившаяся сила: рекуррента wn линейна → `wn* = B/(1−A)` в закрытой форме; нужна Stage 2 обратной задачи для подгона под статическую кривую). Не дублировать формулу — только через `_magnetic_core`.
 - `io_utils.py` — `load_recoil_characteristics(xlsx_path)`. Входной файл расчёта — Excel с двумя обязательными листами:
   - `сила от времени` — колонки `t (с)`, `F (кН)` (умножается на 1000)
   - `сила от перемещения` — колонки `X (м)`, `F (кН)` (берётся `abs`, умножается на 1000)
@@ -94,6 +98,32 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - `kpi.py` — `build_kpi_groups(run, snapshot_parts)` для страницы результата + `kpi_format(value)` (диапазонное форматирование, отличается от templatetag `smart_num` — не путать).
 - `snapshot.py` — `extract_snapshot_parts(run)` (для KPI/сравнения) и `extract_overlay_data(run)` (для overlay-графиков).
 - `compare_data.py` — `build_compare_overlay_charts(run_a, run_b)` (4 фрагмента Plotly) + `build_compare_metrics_table(...)` (дельта-таблица 12 метрик).
+
+**Обратное проектирование тормоза (`services/design/`, MVP — Срез 10):**
+Синтез характеристики одиночного curve-тормоза `F(|v|)` под конечные условия цикла (время `T`, откат `x_max`, |скорость| в момент возврата `x=0`) при ограничении `ΣF ≤ ΣF_max`, с оценкой робастности. Прямая модель — `simulate_recoil_core` (привод грузится один раз). Кривая параметризована монотонно-насыщающейся формой `f_i = f_max·(1−exp(−cumsum(softplus(u))))` (узел v=0 закреплён на F=0, потолок ΣF соблюдён структурно). Оптимизатор — `least_squares` (LM, method='trf') по 3 нормированным невязкам со сканом старта; всё на едином рабочем `work_dt` (мельче донорского не нужно). Робастность — чувствительность метрик к индивидуальным допускам узлов (центральная разность) → свёртка `R` + запас до `ΣF_max` в σ. Диагностика достижимости через envelope (без торможения / макс. торможение).
+- `targets.py` — `DesignTargets` / `DesignConstraints` / `ToleranceModel` (допуск на каждый узел).
+- `forward.py` — `evaluate(drive, base, v_nodes, f_nodes) → Metrics` (ValueError/выход за curve-диапазон → «не завершился», а не исключение).
+- `synthesis.py` — Stage 1 (`synthesize_curve`, `f_nodes_from_u`).
+- `robustness.py` — `score_robustness` → `RobustnessReport`.
+- `study.py` — оркестрация `run_design_study` → `DesignResult` (Stage 1 + опц. Stage 2 через `fit_parametric=True`).
+- `param_fit.py` — **Stage 2, один тормоз**: `ParamSpace` (границы конструкции: непрерывные `delta,xm,ym,dh1,dh2,dm,bz` + целое `n`; фиксированные `gamma,mu,lya,wn0`), `fit_parametric_to_curve` (DE по квазистатической RMSE — без симуляции в цикле, только алгебра силы → тысячи прогонов дёшевы), `refine_parametric_end_to_end` (LM-доводка непрерывных параметров под МЕТРИКИ полной динамикой — закрывает переходный зазор `wn`, координаты нормированы), `_param_robustness` (чувствительность метрик к индивидуальным допускам параметров + доминирующий параметр, обычно `bz` — он в квадрате), `run_parametric_stage` → `ParametricResult`.
+- `multi_brake.py` — **Stage 2, N тормозов**: динамика видит только СУММУ сил, поэтому Stage 1 даёт кривую-тотал, а здесь: раскладка по весам `w_i·F_total` → подгон каждой доли (дедуп одинаковых весов) → **совместная доводка под метрики**. Равные веса → `symmetric` путь (один общий набор 7 параметров, N ОДИНАКОВЫХ тормозов; well-posed, робастность масштабируется на √N — N независимых по производству источников разброса). Неравные веса → независимые N·7 параметров, тормоза РАЗНЫЕ. `run_multi_brake_stage` → `MultiBrakeResult`. Потолок ΣF применяется к сумме.
+- `multistart.py` — **мультистарт + отбор по робастности**: подбор не единственен, поэтому генерируем семейство кандидатов (1 тормоз → разные `n`; N → разные раскладки ΣF) и среди подходящих выбираем min-R (робастность как отборщик по многообразию решений). **Двухфидельно**: дешёвый скрининг ВСЕХ кандидатов на грубом `dt` (`base.t_max/400`) → точная доводка только победителя на рабочем `dt`. **Важно**: отбор на скрининге по РАСШИРЕННОМУ допуску (`2×rel_tol`) — грубый dt смещает метрики, и строгий допуск ложно отсеивал бы почти-достижимые кандидаты; истинную достижимость решает доводка победителя на точном dt. `candidates` в `MultistartResult` — ВСЕ грубые (единая шкала для Парето), `best` — точная запись, `best_coarse` — его грубая (для ★ на графике). Флаг `--multistart` (при N перебирает раскладки, `--weights` игнорируется).
+- `persist.py` — `serialize_design(DesignResult) → dict` (JSON-снапшот для `DesignStudy`: stage1/stage2/candidates + buildable `design`) + `create_brakes_from_design(run, design)` (создаёт `MagneticBrakeConfig`(и) дизайна — параметрические или curve — для отпочкования).
+- `runner.py` — `start_study(study_id)`: запускает `run_design_study` в демон-**потоке** (расчёт 20–200 с — слишком долго для HTTP), пишет статус/результат в `DesignStudy`, закрывает DB-connection в finally. Страница опрашивает статус AJAX-ом.
+
+**Рабочий шаг подбора**: `work_dt = t_sim/1200` (RK4 4-го порядка, проектной точности хватает; 2× быстрее прежних 2500 шагов). Тайминги исследования сильно зависят от целей: ~20–90 с (Stage 1/2, один тормоз), до ~2–3 мин (N тормозов + мультистарт).
+
+### UI обратного проектирования (Срез 11: rail «Оптимизация»)
+
+`DesignStudy` (модель, миграция `0026`) — одно исследование: донор-расчёт (`source_run`), вход (цели/ΣF/N/флаги), `status` (`pending`/`running`/`done`/`error`), `result_snapshot` (JSON от `serialize_design`), денормализованные `feasible`/`best_R`, `spawned_run` (отпочкованный `CalculationRun`). Считается в фоне (`runner.start_study`).
+
+Страницы `views/optimize.py` (rail-пункт «Оптимизация» активирован в shell.js): `/optimize/` список, `/optimize/new/` форма (`DesignStudyForm`), `/optimize/<id>/` результат с AJAX-опросом `/status/` (спиннер → авто-reload), `/spawn/` (POST — из победителя собрать реальный `CalculationRun` через тот же pipeline: копия входного файла донора + `create_brakes_from_design` + `simulate_recoil` + `_persist_result_and_snapshot` → полная страница результата/тепло/сравнение), `/delete/`. Валидировано e2e: Stage 1 (curve-дизайн), Stage 2 (параметрический) и мультистарт+Парето — все создают рабочие расчёты.
+
+**Парето-визуализация** (`charting.make_pareto_fragment`) — для мультистарт-исследований на странице результата: плоскость «макс. отклонение от цели, %» (X) ↔ «R робастность» (Y), оба «меньше — лучше» → Парето-фронт слева-снизу; размер точки — запас до ΣF_max, цвет — допустимость, ★ — выбранный (min R). Точки — грубые (единая шкала), таблицы параметров/робастности — точный победитель. Строится через общие хелперы charting (`_apply_layout`, `_to_html_fragment`, палитра RB_*).
+
+**Дальше**: тепловой отсев кандидатов, перф интегратора (numba/vectorize — чистый Python RK4 узкое место), опц. температурный дрейф в допусках, устойчивость фона к рестарту воркера (heartbeat/очередь).
+- Вход: `python manage.py design_brake --from-run <id> --T .. --xmax .. --vend .. --sigma-f-max .. [--tol .. --nodes 4 --plot --parametric --param-tol 0.02 --brakes N --weights w1,.. --multistart]` (донор — recoil-расчёт с входным файлом; `--parametric`/`--brakes≥2`/`--multistart` включают Stage 2; `--brakes` ≤4 для MVP). Валидировано round-trip: Stage 1 восстанавливает достижимую кривую точно; Stage 2 (1 тормоз) при параметрически-достижимой цели попадает ~0.1–0.2%; N тормозов — симметрия и асимметрия; мультистарт — отбор min-R и для n (1 тормоз), и для раскладок ΣF (N; слишком скошенные раскладки корректно отсеиваются как недостижимые). **Статический F(v) не воспроизводит динамику параметрических тормозов с переходником `wn`** — поэтому Stage 2 = подгон под кривую (нач. приближение) + end-to-end доводка под метрики. Тайминги: Stage 1 ~15–25с, Stage 2 (1) ~50–90с, N=2 ~130–170с (в UI будет async). Дальше (не в MVP): модель `DesignStudy` + отпочкование победителя в `CalculationRun`, вкладка «Оптимизация», Парето-страница, тепловой отсев.
 
 ### Модели (`recoil_app/models.py`)
 
@@ -169,7 +199,8 @@ DJANGO_SETTINGS_MODULE=recoil_project.settings.prod python manage.py check --dep
 - **Бэкапы** (Срез 7c) пока не сделаны — отложено до запроса.
 - **Режим `free_fall`**: `CalculationRun.input_file` теперь nullable — для свободного падения файла нет. Не полагаться на `run.input_file.path` без проверки режима (`run.is_free_fall`). `simulate_free_fall` требует минимум 1 тормоз (как и `simulate_recoil`); фаз отката/наката не создаёт (`recoil_end_index`/`return_end_index` = None) — `modeling`/`analysis`/`kpi`/`charting` это уже переносят. termination_reason = `"free_fall"`.
 - **Численная жёсткость свободного падения**: при очень малой массе шаг dt дробится адаптивно; если упёрлись в предел (`_FREE_FALL_MAX_SUBSTEPS`), в `warnings` добавляется заметка — уменьшить dt. Семантика `wn` (одно продвижение на dt) сохранена в точности, поэтому нельзя заменить на общий адаптивный ODE-решатель.
-- **Миграции**: `makemigrations` тянет паразитный `~ Alter field id` на всех моделях (расхождение `DEFAULT_AUTO_FIELD`, не настроен) — это НЕ относится к текущим правкам. Новые миграции писать точечно (см. `0025_calculationrun_free_fall_mode` — только `mode` + nullable `input_file`), не бандлить id-churn.
+- **Миграции**: `makemigrations` тянет паразитный `~ Alter field id` на всех моделях (расхождение `DEFAULT_AUTO_FIELD`, не настроен) — это НЕ относится к текущим правкам. Новые миграции писать точечно (см. `0025_calculationrun_free_fall_mode`, `0026_designstudy` — руками, только нужная операция), не бандлить id-churn.
+- **Фоновый поток `DesignStudy`**: исследование дизайна считается в демон-`threading.Thread` (`runner.start_study`) — синхронный view не подходит (20–200 с). Поток берёт свою per-thread DB-connection и закрывает её в `finally` (SQLite). Статус в БД, страница опрашивает `/optimize/<id>/status/` и делает авто-reload. Единственный async-паттерн в проекте (Celery нет); при рестарте воркера незавершённое исследование зависнет в `running` — перезапустить. Отпочкование (`spawn`) копирует входной файл донора и гоняет полный `simulate_recoil` синхронно (это быстро, ~секунды).
 
 ## Static / templatetags
 

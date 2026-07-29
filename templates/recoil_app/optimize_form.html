@@ -1,0 +1,60 @@
+{% extends "recoil_app/base_v2.html" %}
+
+{% block title %}Новое исследование · RecoilLab{% endblock %}
+{% block shell_active %}optimize{% endblock %}
+{% block shell_crumb %}Новое исследование{% endblock %}
+
+{% block content %}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title"><h1>Новое исследование</h1></div>
+            <div class="rb-hero-sub">Задайте конечные условия цикла и ограничения — подбор запустится в фоне</div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn" href="{% url 'optimize_list' %}">← К списку</a>
+        </div>
+    </div>
+</section>
+
+{% if form.non_field_errors %}
+<div class="notice" style="background: var(--rb-danger-soft); color: var(--rb-danger-dark);">
+    {{ form.non_field_errors }}
+</div>
+{% endif %}
+
+<section class="rb-module-section">
+<form method="post" class="rb-card" style="max-width:720px;">
+    {% csrf_token %}
+
+    <div class="rb-card-title"><span class="rb-card-title-text">Параметры исследования</span></div>
+
+    {% for field in form %}
+    <div class="rb-cad-field" style="margin-bottom:14px;">
+        <label for="{{ field.id_for_label }}" class="rb-cad-field-label" style="display:block;">
+            {{ field.label }}
+        </label>
+        {{ field }}
+        {% if field.help_text %}<div class="rb-text-muted" style="font-size:11px; margin-top:3px;">{{ field.help_text }}</div>{% endif %}
+        {% if field.errors %}<div class="rb-cad-field-error">{{ field.errors|join:"; " }}</div>{% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="rb-text-muted" style="font-size:12px; margin:8px 0 16px;">
+        Подбор идёт в фоне ~15 с (только синтез) … ~1–3 мин (Stage 2 / N тормозов / мультистарт).
+        Можно уйти со страницы — результат сохранится.
+    </div>
+
+    <button type="submit" class="rb-btn rb-btn-grad">⏵ Запустить подбор</button>
+</form>
+</section>
+
+<style>
+    .rb-card input[type=number], .rb-card input[type=text], .rb-card select {
+        width:100%; padding:8px 10px; border:1px solid var(--rb-panel-border);
+        border-radius:6px; font-size:13px; box-sizing:border-box;
+    }
+    .rb-card input[type=checkbox] { width:auto; margin-right:8px; }
+</style>
+{% endblock %}

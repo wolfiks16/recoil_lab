@@ -1,4 +1,5 @@
 import json
+import math
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django import template
@@ -53,6 +54,18 @@ def fmt5(value):
 
     quantized = number.quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
     return format(quantized, "f")
+
+@register.filter(name="pct")
+def pct(value):
+    """Дробь → проценты со знаком: 0.0123 → '+1.23%'. None/нечисло → '—'."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if not math.isfinite(f):
+        return "—"
+    return f"{f * 100:+.2f}%"
+
 
 @register.filter(name="smart_num")
 def smart_num(value):
