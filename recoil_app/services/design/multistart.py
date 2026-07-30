@@ -20,6 +20,7 @@ import numpy as np
 
 from ..dynamics import RecoilParams
 from .multi_brake import run_multi_brake_stage
+from .objective import constraint_overshoot
 from .param_fit import ParamSpace, ParamTolerances, run_parametric_stage
 
 
@@ -72,9 +73,9 @@ def _evaluate_config(drive, base, v_nodes, f_nodes, targets, constraints,
                                     space=space, param_tol=param_tol, seed=seed)
     R = (res.robustness or {}).get("R", float("inf"))
     feasible = bool(res.within_tol and res.sigma_f_ok)
-    errs = [abs(v) for v in res.rel_error.values() if v == v]
-    max_err = max(errs) if errs else float("inf")
-    return res, R, feasible, max_err
+    # Мера «насколько нарушены пределы» (0 = всё под пределами) — для отбора/ранжирования.
+    overshoot = constraint_overshoot(res.achieved, targets)
+    return res, R, feasible, overshoot
 
 
 def run_multistart(drive, base_fine: RecoilParams, v_nodes, f_nodes, targets, constraints, *,

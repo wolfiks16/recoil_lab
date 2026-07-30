@@ -23,6 +23,7 @@ from scipy.optimize import differential_evolution, least_squares
 
 from ..magnetic import MagneticParams, magnetic_force_quasistatic
 from .forward import Metrics, evaluate_parametric
+from .objective import constraint_overshoot, design_residuals, within_limits
 from .targets import DesignConstraints, DesignTargets
 
 # Порядок свободных непрерывных параметров.
@@ -137,7 +138,8 @@ def fit_parametric_to_curve(v_grid, f_target, space: ParamSpace | None = None,
 
 
 def refine_parametric_end_to_end(drive, base, params0: MagneticParams, targets: DesignTargets,
-                                 space: ParamSpace, *, max_nfev: int = 60) -> MagneticParams:
+                                 space: ParamSpace, *, sigma_f_max: float | None = None,
+                                 max_nfev: int = 60) -> MagneticParams:
     """Доводит непрерывные параметры (от curve-подгона) под МЕТРИКИ цикла.
 
     Кривая-подгон даёт хорошее нач. приближение, но переходник wn уводит метрики
@@ -157,17 +159,7 @@ def refine_parametric_end_to_end(drive, base, params0: MagneticParams, targets: 
         return params_from_vec(x, params0.n, space)
 
     def _resid(u):
-        m = evaluate_parametric(drive, base, _params_from_u(u))
-        if not m.completed:
-            if np.isfinite(m.x_max) and targets.x_max > 0:
-                dx = np.clip((m.x_max - targets.x_max) / targets.x_max, -3.0, 3.0)
-                return np.array([5.0 + dx, 5.0, 5.0])
-            return np.array([8.0, 8.0, 8.0])
-        return np.array([
-            (m.x_max - targets.x_max) / targets.x_max,
-            (m.T - targets.T) / targets.T,
-            (m.v_end - targets.v_end) / max(targets.v_end, 1e-9),
-        ])
+        return design_residuals(evaluate_parametric(drive, base, _params_from_u(u)), targets, sigma_f_max)
 
     res = least_squares(_resid, u0, method="trf", bounds=(0.0, 1.0),
                         max_nfev=max_nfev, diff_step=0.03, xtol=1e-4, ftol=1e-4, gtol=1e-8)
@@ -252,7 +244,8 @@ def run_parametric_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
     fit = fit_parametric_to_curve(v_grid, f_target, space, seed=seed)
 
     # Stage 2b — доводка под метрики полной динамикой (закрывает переходный зазор wn).
-    params_final = refine_parametric_end_to_end(drive, base, fit.params, targets, space)
+    params_final = refine_parametric_end_to_end(
+        drive, base, fit.params, targets, space, sigma_f_max=constraints.sigma_f_max)
 
     # RMSE итоговых параметров к кривой (мог вырасти — метрики важнее формы).
     fq_final = quasistatic_curve(v_grid, params_final)
@@ -262,11 +255,11 @@ def run_parametric_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
     # Верификация полной переходной симуляцией (итоговые параметры).
     achieved = evaluate_parametric(drive, base, params_final)
     rel_error = _rel_error(achieved, targets)
-    within_tol = achieved.completed and all(
-        abs(rel_error[k]) <= targets.rel_tol for k in ("x_max", "T", "v_end")
-    )
+    within_tol = within_limits(achieved, targets)
     sigma_f_peak = achieved.sigma_f_peak if np.isfinite(achieved.sigma_f_peak) else float("nan")
-    sigma_f_ok = bool(np.isfinite(sigma_f_peak) and sigma_f_peak <= constraints.sigma_f_max)
+    # Малый допуск (как у пределов) на переходный заброс силы над потолком.
+    sigma_f_ok = bool(np.isfinite(sigma_f_peak)
+                      and sigma_f_peak <= constraints.sigma_f_max * (1.0 + targets.rel_tol))
 
     robustness = {}
     if achieved.completed:
@@ -311,5 +304,9 @@ def _diagnose(fit: ParametricFit, achieved: Metrics, within_tol, sigma_f_ok,
             f"(переходный заброс силы). Ужесточите целевую кривую или потолок."
         )
     if within_tol and sigma_f_ok:
-        msgs.append("Параметры обеспечивают цели и не превышают ΣF_max (в пределах допуска).")
+        msgs.append("Параметры укладываются во все пределы (x_max/T/v_end ≤ лимитов, ΣF ≤ ΣF_max); "
+                    "x_max минимизирован.")
+    elif not within_tol:
+        msgs.append("Не удаётся уложиться во все пределы одновременно — какой-то из T/v_end/x_max "
+                    "превышен. Ослабьте самый тесный предел или ΣF_max.")
     return msgs

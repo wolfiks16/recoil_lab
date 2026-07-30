@@ -21,8 +21,8 @@
             <div class="rb-hero-sub">
                 Донор: {% if study.source_run %}<b>{{ study.source_run.name }}</b>{% else %}<em>удалён</em>{% endif %}
                 · N={{ study.n_brakes }}{% if study.multistart %} · мультистарт{% endif %}
-                · цель: x_max={{ study.target_x_max|smart_num }} м, T={{ study.target_T|smart_num }} с, v_end={{ study.target_v_end|smart_num }} м/с
-                · ΣF≤{{ study.sigma_f_max|smart_num }} Н
+                · пределы: x_max≤{{ study.target_x_max|smart_num }} м, T≤{{ study.target_T|smart_num }} с, v_end≤{{ study.target_v_end|smart_num }} м/с
+                · ΣF≤{{ study.sigma_f_max|smart_num }} Н · <b>x_max минимизируется</b>
             </div>
         </div>
         <div class="rb-hero-actions">
@@ -105,13 +105,13 @@
         </div>
         <div>
             <div class="rb-card" style="margin-bottom:12px;">
-                <div class="rb-card-title"><span class="rb-card-title-text">Достигнуто (кривая) vs цель</span></div>
+                <div class="rb-card-title"><span class="rb-card-title-text">Достигнуто (кривая) vs пределы</span></div>
                 <table class="rb-params-table">
-                    <tr><td></td><td class="num">цель</td><td class="num">кривая</td><td class="num">откл.</td></tr>
-                    <tr><td>x_max, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage1.achieved.x_max|smart_num }}</td><td class="num">{{ stage1.rel_error.x_max|pct }}</td></tr>
-                    <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage1.achieved.T|smart_num }}</td><td class="num">{{ stage1.rel_error.T|pct }}</td></tr>
-                    <tr><td>v_end, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage1.achieved.v_end|smart_num }}</td><td class="num">{{ stage1.rel_error.v_end|pct }}</td></tr>
-                    <tr><td>ΣF пик, Н</td><td class="num">≤{{ study.sigma_f_max|smart_num }}</td><td class="num" colspan="2">{{ stage1.achieved.sigma_f_peak|smart_num }}</td></tr>
+                    <tr><td></td><td class="num">предел ≤</td><td class="num">кривая</td><td class="num">статус</td></tr>
+                    <tr><td>x_max, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage1.achieved.x_max|smart_num }}</td><td class="num">{% if stage1.achieved.x_max <= study.target_x_max %}✓{% else %}✗{% endif %}</td></tr>
+                    <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage1.achieved.T|smart_num }}</td><td class="num">{% if stage1.achieved.T <= study.target_T %}✓{% else %}✗{% endif %}</td></tr>
+                    <tr><td>v_end, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage1.achieved.v_end|smart_num }}</td><td class="num">{% if stage1.achieved.v_end <= study.target_v_end %}✓{% else %}✗{% endif %}</td></tr>
+                    <tr><td>ΣF пик, Н</td><td class="num">{{ study.sigma_f_max|smart_num }}</td><td class="num">{{ stage1.achieved.sigma_f_peak|smart_num }}</td><td class="num">{% if stage1.achieved.sigma_f_peak <= study.sigma_f_max %}✓{% else %}✗{% endif %}</td></tr>
                 </table>
             </div>
             <div class="rb-card">
@@ -143,16 +143,16 @@
             <div class="rb-status-banner-sub">Ослабьте цели/ΣF или расширьте границы параметров.</div></div>
         </div>
         <table class="rb-params-table" style="width:100%; margin-top:12px;">
-            <tr><td>кандидат</td><td>в цели</td><td class="num">R</td><td class="num">макс.откл</td></tr>
+            <tr><td>кандидат</td><td>под пределами</td><td class="num">R</td><td class="num">откат x_max</td><td class="num">превышение</td></tr>
             {% for c in stage2.candidates %}
             <tr><td>{{ c.label }}</td><td>{% if c.feasible %}да{% else %}нет{% endif %}</td>
-                <td class="num">{{ c.R|smart_num }}</td><td class="num">{{ c.max_abs_err|pct }}</td></tr>
+                <td class="num">{{ c.R|smart_num }}</td><td class="num">{{ c.x_max|smart_num }}</td><td class="num">{{ c.overshoot|pct }}</td></tr>
             {% endfor %}
         </table>
         {% if pareto_html %}
         <div style="margin-top:12px;">{{ pareto_html|safe }}</div>
         <div class="rb-text-muted" style="font-size:11px; margin-top:6px;">
-            Левее и ниже — лучше. Ни один не попал в цель (все серые-полые) — видно, насколько промахнулись.
+            Левее и ниже — лучше. Ни один не уложился в пределы (все серые-полые) — видно, насколько.
         </div>
         {% endif %}
     </div>
@@ -163,13 +163,14 @@
     <div class="rb-card" style="margin-bottom:12px;">
         <div class="rb-card-title"><span class="rb-card-title-text">Кандидаты мультистарта (★ — выбран по min R)</span></div>
         <table class="rb-params-table" style="width:100%;">
-            <tr><td>кандидат</td><td>в цели</td><td class="num">R (робастность)</td><td class="num">макс.откл</td></tr>
+            <tr><td>кандидат</td><td>под пределами</td><td class="num">R (робастность)</td><td class="num">откат x_max</td><td class="num">превышение</td></tr>
             {% for c in stage2.multistart.candidates %}
             <tr>
                 <td>{{ c.label }}{% if c.is_best %} ★{% endif %}</td>
                 <td>{% if c.feasible %}да{% else %}нет{% endif %}</td>
                 <td class="num">{{ c.R|smart_num }}</td>
-                <td class="num">{{ c.max_abs_err|pct }}</td>
+                <td class="num">{{ c.x_max|smart_num }}</td>
+                <td class="num">{{ c.overshoot|pct }}</td>
             </tr>
             {% endfor %}
         </table>
@@ -184,7 +185,7 @@
         <div class="rb-card-title"><span class="rb-card-title-text">Парето: близость к цели ↔ робастность</span></div>
         {{ pareto_html|safe }}
         <div class="rb-text-muted" style="font-size:11px; margin-top:6px;">
-            Левее и ниже — лучше (точнее в цель и робастнее). Размер точки — запас до ΣF_max (крупнее = безопаснее). ★ — выбранный по min R.
+            Левее и ниже — лучше (меньше откат и робастнее). Размер точки — запас до ΣF_max (крупнее = безопаснее). ★ — выбранный по min R.
         </div>
     </div>
     {% endif %}
@@ -204,12 +205,12 @@
         </div>
         <div>
             <div class="rb-card" style="margin-bottom:12px;">
-                <div class="rb-card-title"><span class="rb-card-title-text">Полная динамика vs цель</span></div>
+                <div class="rb-card-title"><span class="rb-card-title-text">Полная динамика vs пределы</span></div>
                 <table class="rb-params-table">
-                    <tr><td></td><td class="num">достигнуто</td><td class="num">откл.</td></tr>
-                    <tr><td>x_max, м</td><td class="num">{{ stage2.achieved.x_max|smart_num }}</td><td class="num">{{ stage2.rel_error.x_max|pct }}</td></tr>
-                    <tr><td>T, с</td><td class="num">{{ stage2.achieved.T|smart_num }}</td><td class="num">{{ stage2.rel_error.T|pct }}</td></tr>
-                    <tr><td>v_end, м/с</td><td class="num">{{ stage2.achieved.v_end|smart_num }}</td><td class="num">{{ stage2.rel_error.v_end|pct }}</td></tr>
+                    <tr><td></td><td class="num">предел ≤</td><td class="num">достигнуто</td><td class="num">статус</td></tr>
+                    <tr><td>x_max, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage2.achieved.x_max|smart_num }}</td><td class="num">{% if stage2.achieved.x_max <= study.target_x_max %}✓{% else %}✗{% endif %}</td></tr>
+                    <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage2.achieved.T|smart_num }}</td><td class="num">{% if stage2.achieved.T <= study.target_T %}✓{% else %}✗{% endif %}</td></tr>
+                    <tr><td>v_end, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage2.achieved.v_end|smart_num }}</td><td class="num">{% if stage2.achieved.v_end <= study.target_v_end %}✓{% else %}✗{% endif %}</td></tr>
                 </table>
                 <div style="margin-top:8px;">
                     {% if stage2.within_tol %}<span class="rb-badge rb-badge-ok">в допуске</span>{% else %}<span class="rb-badge rb-badge-warn">вне допуска</span>{% endif %}

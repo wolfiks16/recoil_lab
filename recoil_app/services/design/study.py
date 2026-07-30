@@ -13,6 +13,7 @@ import numpy as np
 from ..dynamics import RecoilParams, simulate_recoil_core
 from ..io_utils import load_recoil_characteristics
 from .forward import Metrics, build_curve, evaluate
+from .objective import within_limits
 from .param_fit import ParamTolerances, ParametricResult, run_parametric_stage
 from .multi_brake import MultiBrakeResult, run_multi_brake_stage
 from .multistart import MultistartResult, run_multistart
@@ -103,10 +104,7 @@ def run_design_study(
     # --- Верификация ---
     achieved = evaluate(drive, base, v_nodes, f_nodes)
     rel_error = _rel_error(achieved, targets)
-
-    within_tol = achieved.completed and all(
-        abs(rel_error[k]) <= targets.rel_tol for k in ("x_max", "T", "v_end")
-    )
+    within_tol = within_limits(achieved, targets)
 
     # --- Envelope (диагностика достижимости): без торможения / макс. торможение ---
     envelope = {
@@ -172,38 +170,38 @@ def _diagnose(within_tol, achieved: Metrics, targets: DesignTargets,
               rel_error: dict, envelope: dict) -> list:
     msgs: list[str] = []
 
-    if within_tol:
-        msgs.append("Цели достигнуты в пределах допуска.")
-        return msgs
-
     if not achieved.completed:
         msgs.append(
             "Синтез не нашёл характеристику, при которой накат доходит до x=0 за t_sim. "
-            "Вероятно, цель по времени/скорости конца наката недостижима при данном "
-            "потолке ΣF — ослабьте ΣF_max сверху или увеличьте целевое время цикла."
+            "Ослабьте пределы (T/v_end) или потолок ΣF."
         )
         return msgs
 
-    # Какая цель дальше всего от достигнутого.
-    worst = max(("x_max", "T", "v_end"), key=lambda k: abs(rel_error[k]))
-    msgs.append(
-        f"Цели не достигнуты в допуске. Дальше всего «{worst}» "
-        f"(отклонение {rel_error[worst] * 100:+.1f}%)."
-    )
-
-    # Откат x_max монотонен по силе торможения → даём осмысленный совет.
-    nb = envelope["no_brake"]
-    fb = envelope["full_brake"]
-    if nb.completed and targets.x_max > nb.x_max:
+    if within_tol:
         msgs.append(
-            f"Откат x_max={targets.x_max:.4g} м недостижим: даже без торможения "
-            f"откат меньше ({nb.x_max:.4g} м). Уменьшите целевой откат."
+            f"Все пределы соблюдены; откат сведён к x_max = {achieved.x_max:.4g} м "
+            f"(предел {targets.x_max:.4g} м). T={achieved.T:.4g} с и v_end={achieved.v_end:.4g} м/с "
+            f"оставлены под пределами — это сохраняет робастность."
         )
+        return msgs
+
+    # Что превышает свой предел (положительный rel_error = сверх лимита).
+    overs = {k: rel_error[k] for k in ("x_max", "T", "v_end")
+             if rel_error.get(k) is not None and rel_error[k] > targets.rel_tol}
+    if overs:
+        worst = max(overs, key=overs.get)
+        names = {"x_max": "откат x_max", "T": "время T", "v_end": "скорость наката v_end"}
+        msgs.append(
+            f"Предел «{names[worst]}» превышен на {overs[worst] * 100:+.1f}% — из-за конфликта "
+            f"(меньше откат/скорость требуют больше торможения, а оно растит T). "
+            f"Ослабьте самый тесный предел или ΣF_max."
+        )
+
+    fb = envelope["full_brake"]
     if fb.completed and targets.x_max < fb.x_max:
         msgs.append(
-            f"Откат x_max={targets.x_max:.4g} м недостижим: даже при максимальном "
-            f"торможении откат больше ({fb.x_max:.4g} м). Увеличьте целевой откат "
-            f"или потолок ΣF."
+            f"Предел отката x_max={targets.x_max:.4g} м недостижим: даже при максимальном "
+            f"торможении откат больше ({fb.x_max:.4g} м). Поднимите предел x_max или ΣF_max."
         )
 
     return msgs

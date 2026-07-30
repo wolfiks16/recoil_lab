@@ -865,17 +865,20 @@ class DesignStudyForm(forms.Form):
     )
 
     target_x_max = forms.FloatField(
-        label="Целевой откат x_max, м",
+        label="Макс. откат x_max (≤), м",
+        help_text="Верхний предел отката. Система минимизирует откат под этим пределом.",
         validators=[MinValueValidator(1e-6, "Должен быть положительным.")],
         widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
     )
     target_T = forms.FloatField(
-        label="Целевое время цикла T, с",
+        label="Макс. время цикла T (≤), с",
+        help_text="Верхний предел. Меньше — можно (не давим, чтобы сохранить робастность).",
         validators=[MinValueValidator(1e-6, "Должно быть положительным.")],
         widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
     )
     target_v_end = forms.FloatField(
-        label="Целевая |скорость| в конце наката, м/с",
+        label="Макс. |скорость| наката (≤), м/с",
+        help_text="Верхний предел скорости в момент возврата x=0. Меньше — допустимо.",
         validators=[MinValueValidator(0.0, "Должна быть ≥ 0.")],
         widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
     )
@@ -886,7 +889,8 @@ class DesignStudyForm(forms.Form):
     )
     rel_tol = forms.FloatField(
         initial=0.05,
-        label="Допуск попадания в цель (доля)",
+        label="Допуск превышения предела (доля)",
+        help_text="Насколько можно превысить предел из-за численного шума (напр. 0.05 = 5%).",
         validators=[MinValueValidator(1e-3, "Минимум 0.001."),
                     MaxValueValidator(0.5, "Максимум 0.5.")],
         widget=forms.NumberInput(attrs={"min": "0.001", "max": "0.5", "step": "any"}),

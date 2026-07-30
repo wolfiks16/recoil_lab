@@ -23,6 +23,7 @@ from scipy.optimize import least_squares
 
 from ..magnetic import MagneticParams
 from .forward import Metrics, evaluate_brakes
+from .objective import design_residuals, within_limits
 from .param_fit import (
     CONT_PARAMS,
     ParamSpace,
@@ -61,7 +62,7 @@ def _normalize_weights(weights, n: int) -> tuple:
 
 def refine_multi_end_to_end(drive, base, brakes0: list, targets: DesignTargets,
                             space: ParamSpace, *, symmetric: bool = False,
-                            max_nfev: int | None = None) -> list:
+                            sigma_f_max: float | None = None, max_nfev: int | None = None) -> list:
     """Совместная доводка непрерывных параметров тормозов под метрики цикла.
 
     symmetric=True (равные веса) → один общий набор из 7 параметров, N одинаковых
@@ -100,17 +101,7 @@ def refine_multi_end_to_end(drive, base, brakes0: list, targets: DesignTargets,
         dim = n * nc
 
     def _resid(u):
-        m = evaluate_brakes(drive, base, _brakes(u))
-        if not m.completed:
-            if np.isfinite(m.x_max) and targets.x_max > 0:
-                dx = np.clip((m.x_max - targets.x_max) / targets.x_max, -3.0, 3.0)
-                return np.array([5.0 + dx, 5.0, 5.0])
-            return np.array([8.0, 8.0, 8.0])
-        return np.array([
-            (m.x_max - targets.x_max) / targets.x_max,
-            (m.T - targets.T) / targets.T,
-            (m.v_end - targets.v_end) / max(targets.v_end, 1e-9),
-        ])
+        return design_residuals(evaluate_brakes(drive, base, _brakes(u)), targets, sigma_f_max)
 
     if max_nfev is None:
         max_nfev = min(90, 12 * dim) if symmetric else min(150, 10 * dim)
@@ -210,15 +201,16 @@ def run_multi_brake_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
         per_rmse.append(fit.curve_rmse)
 
     # Совместная доводка под метрики.
-    brakes = refine_multi_end_to_end(drive, base, brakes0, targets, space, symmetric=symmetric)
+    brakes = refine_multi_end_to_end(drive, base, brakes0, targets, space, symmetric=symmetric,
+                                     sigma_f_max=constraints.sigma_f_max)
 
     achieved = evaluate_brakes(drive, base, brakes)
     rel_error = _rel_error(achieved, targets)
-    within_tol = achieved.completed and all(
-        abs(rel_error[k]) <= targets.rel_tol for k in ("x_max", "T", "v_end")
-    )
+    within_tol = within_limits(achieved, targets)
     sigma_f_peak = achieved.sigma_f_peak if np.isfinite(achieved.sigma_f_peak) else float("nan")
-    sigma_f_ok = bool(np.isfinite(sigma_f_peak) and sigma_f_peak <= constraints.sigma_f_max)
+    # Малый допуск (как у пределов) на переходный заброс суммарной силы над потолком.
+    sigma_f_ok = bool(np.isfinite(sigma_f_peak)
+                      and sigma_f_peak <= constraints.sigma_f_max * (1.0 + targets.rel_tol))
 
     robustness = {}
     if achieved.completed:
@@ -255,5 +247,8 @@ def _diagnose(achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints, n_bra
             f"Суммарный пик ΣF={sigma_f_peak:.0f} Н превышает потолок {constraints.sigma_f_max:.0f} Н."
         )
     if within_tol and sigma_f_ok:
-        msgs.append(f"{n_brakes} тормоза обеспечивают цели и не превышают ΣF_max (в пределах допуска).")
+        msgs.append(f"{n_brakes} тормоза укладываются во все пределы (x_max/T/v_end ≤ лимитов, "
+                    f"ΣF ≤ ΣF_max); x_max минимизирован.")
+    elif not within_tol:
+        msgs.append("Не удаётся уложиться во все пределы одновременно — ослабьте самый тесный.")
     return msgs

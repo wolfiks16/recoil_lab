@@ -22,6 +22,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from .forward import evaluate
+from .objective import design_residuals
 from .targets import DesignTargets
 
 _U_BOUND = 8.0
@@ -45,19 +46,7 @@ def f_nodes_from_u(u, f_max: float) -> np.ndarray:
 def _residuals(u, drive, base, v_nodes, f_max, targets: DesignTargets) -> np.ndarray:
     f_nodes = f_nodes_from_u(u, f_max)
     m = evaluate(drive, base, v_nodes, f_nodes)
-
-    if not m.completed:
-        # Не завершил цикл: штраф с лёгким градиентом по x_max, чтобы LM мог выбраться.
-        if np.isfinite(m.x_max) and targets.x_max > 0:
-            dx = np.clip((m.x_max - targets.x_max) / targets.x_max, -3.0, 3.0)
-            return np.array([5.0 + dx, 5.0, 5.0])
-        return np.array([8.0, 8.0, 8.0])
-
-    return np.array([
-        (m.x_max - targets.x_max) / targets.x_max,
-        (m.T - targets.T) / targets.T,
-        (m.v_end - targets.v_end) / max(targets.v_end, 1e-9),
-    ])
+    return design_residuals(m, targets, f_max)
 
 
 def synthesize_curve(drive, base, v_nodes, f_max: float, targets: DesignTargets,

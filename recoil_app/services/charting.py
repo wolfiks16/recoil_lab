@@ -709,21 +709,21 @@ def make_brake_curve_fragment(
 
 def make_pareto_fragment(
     candidates: list[dict],
-    title: str = "Кандидаты: близость к цели ↔ робастность",
+    title: str = "Кандидаты: откат ↔ робастность",
 ) -> str:
     """Парето-плоскость кандидатов мультистарта обратного проектирования.
 
-    Ось X — макс. отклонение от цели, % (ближе к 0 = точнее в цель).
+    Ось X — достигнутый откат x_max, м (минимизируем → меньше = лучше).
     Ось Y — R (робастность, меньше = устойчивее к разбросу параметров).
     Оба «меньше — лучше», поэтому Парето-фронт — левый-нижний угол.
-    Размер маркера — запас до ΣF_max в σ (крупнее = безопаснее). Цвет: допустимые
-    (в цель + ΣF) синие, недопустимые серые-полые, выбранный — акцентная звезда.
+    Размер маркера — запас до ΣF_max в σ (крупнее = безопаснее). Цвет: под всеми
+    пределами — синие, с превышением — серые-полые, выбранный — акцентная звезда.
 
-    candidates: list of dicts {label, feasible, R, max_abs_err, sigma_f_margin, is_best}.
+    candidates: list of dicts {label, feasible, R, x_max, overshoot, sigma_f_margin, is_best}.
     """
     pts = [c for c in (candidates or [])
-           if c.get("R") is not None and c.get("max_abs_err") is not None
-           and math.isfinite(c["R"]) and math.isfinite(c["max_abs_err"])]
+           if c.get("R") is not None and c.get("x_max") is not None
+           and math.isfinite(c["R"]) and math.isfinite(c["x_max"])]
     if len(pts) < 2:
         return ""
 
@@ -735,31 +735,32 @@ def make_pareto_fragment(
     def _hover(c) -> str:
         m = c.get("sigma_f_margin")
         m_s = "∞" if (m is None or not math.isfinite(m)) else f"{m:.1f}σ"
-        return (f"<b>{c['label']}</b><br>R = {c['R']:.4g}"
-                f"<br>откл. от цели = {c['max_abs_err'] * 100:.1f}%"
+        ov = c.get("overshoot")
+        ov_s = "0%" if (ov is None or ov <= 0) else f"+{ov * 100:.1f}%"
+        return (f"<b>{c['label']}</b><br>откат x_max = {c['x_max']:.4g} м"
+                f"<br>R = {c['R']:.4g}"
+                f"<br>превышение пределов = {ov_s}"
                 f"<br>запас ΣF = {m_s}"
-                f"<br>{'в цели' if c.get('feasible') else 'вне цели'}")
+                f"<br>{'под пределами' if c.get('feasible') else 'превышает предел'}")
 
     feasible = [c for c in pts if c.get("feasible") and not c.get("is_best")]
-    infeasible = [c for c in pts if not c.get("feasible")]
+    infeasible = [c for c in pts if not c.get("feasible") and not c.get("is_best")]
     best = next((c for c in pts if c.get("is_best")), None)
 
     fig = go.Figure()
 
     if infeasible:
         fig.add_trace(go.Scatter(
-            x=[c["max_abs_err"] * 100 for c in infeasible],
-            y=[c["R"] for c in infeasible],
-            mode="markers", name="вне цели",
+            x=[c["x_max"] for c in infeasible], y=[c["R"] for c in infeasible],
+            mode="markers", name="превышает предел",
             marker=dict(color=RB_GRAY, size=10, symbol="circle-open", line=dict(width=2)),
             text=[_hover(c) for c in infeasible], hoverinfo="text",
         ))
 
     if feasible:
         fig.add_trace(go.Scatter(
-            x=[c["max_abs_err"] * 100 for c in feasible],
-            y=[c["R"] for c in feasible],
-            mode="markers", name="в цели",
+            x=[c["x_max"] for c in feasible], y=[c["R"] for c in feasible],
+            mode="markers", name="под пределами",
             marker=dict(color=RB_BLUE, size=[_size(c.get("sigma_f_margin")) for c in feasible],
                         opacity=0.8, line=dict(color="white", width=1.5)),
             text=[_hover(c) for c in feasible], hoverinfo="text",
@@ -767,7 +768,7 @@ def make_pareto_fragment(
 
     if best is not None:
         fig.add_trace(go.Scatter(
-            x=[best["max_abs_err"] * 100], y=[best["R"]],
+            x=[best["x_max"]], y=[best["R"]],
             mode="markers+text", name="выбран (min R)",
             marker=dict(color=RB_ACCENT, size=_size(best.get("sigma_f_margin")) + 6,
                         symbol="star", line=dict(color="white", width=1.5)),
@@ -776,7 +777,7 @@ def make_pareto_fragment(
             hovertext=[_hover(best)], hoverinfo="text",
         ))
 
-    _apply_layout(fig, title, "макс. отклонение от цели, %", "R — робастность (меньше = лучше)")
+    _apply_layout(fig, title, "откат x_max, м (меньше = лучше)", "R — робастность (меньше = лучше)")
     return _to_html_fragment(fig, height="440px")
 
 

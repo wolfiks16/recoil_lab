@@ -41,10 +41,11 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--from-run", type=int, required=True,
                             help="ID расчёта-донора привода (F(t)/F(x), масса, угол, dt).")
-        parser.add_argument("--T", type=float, required=True, help="Целевое время цикла, с.")
-        parser.add_argument("--xmax", type=float, required=True, help="Целевой откат x_max, м.")
+        parser.add_argument("--T", type=float, required=True, help="Предел времени цикла T (≤), с.")
+        parser.add_argument("--xmax", type=float, required=True,
+                            help="Предел отката x_max (≤); откат минимизируется под ним, м.")
         parser.add_argument("--vend", type=float, required=True,
-                            help="Целевая |скорость| в момент x=0 (конец наката), м/с.")
+                            help="Предел |скорости| в момент x=0 (конец наката) (≤), м/с.")
         parser.add_argument("--sigma-f-max", type=float, required=True,
                             help="Потолок суммарного усилия тормозов ΣF_max, Н.")
         parser.add_argument("--nodes", type=int, default=4,
@@ -87,8 +88,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_HEADING(
             f"\nОбратное проектирование тормоза · донор расчёт «{run.name}» (#{run.id})"))
         self.stdout.write(
-            f"Цели: T={_fmt(targets.T)} с · x_max={_fmt(targets.x_max)} м · "
-            f"v_end={_fmt(targets.v_end)} м/с · допуск ±{targets.rel_tol*100:.0f}%")
+            f"Пределы (≤): T={_fmt(targets.T)} с · x_max={_fmt(targets.x_max)} м · "
+            f"v_end={_fmt(targets.v_end)} м/с · x_max минимизируется · "
+            f"допуск превышения {targets.rel_tol*100:.0f}%")
         self.stdout.write(
             f"Ограничение: ΣF ≤ {_fmt(sigma_f_max)} Н · узлов={n_free} · "
             f"допуски узлов={[round(t, 1) for t in tol.node_tol]} Н")

@@ -94,13 +94,15 @@ def _stage2_multi(mr) -> dict:
 
 def _cand_dict(c, ms) -> dict:
     rob = getattr(c.result, "robustness", None) or {}
+    ach = getattr(c.result, "achieved", None)
     is_best = bool(getattr(ms, "best_coarse", None) is not None and c is ms.best_coarse)
-    # Позиция (R, err) — грубая (единая шкала Парето), но достижимость победителя
+    # Позиция (x_max, R) — грубая (единая шкала Парето), но достижимость победителя
     # берём точную (он доведён и проверен на рабочем dt), иначе таблица/цвет врут.
     feasible = bool(ms.best.feasible) if (is_best and ms.best is not None) else bool(c.feasible)
     return {
         "label": c.label, "feasible": feasible,
-        "R": _f(c.R), "max_abs_err": _f(c.max_abs_err), "fidelity": c.fidelity,
+        "R": _f(c.R), "overshoot": _f(c.max_abs_err), "fidelity": c.fidelity,
+        "x_max": _f(ach.x_max) if ach is not None else None,   # цель — минимизируем
         "sigma_f_margin": _f(rob.get("sigma_f_margin")),
         "is_best": is_best,
     }
