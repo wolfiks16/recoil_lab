@@ -97,10 +97,33 @@ def optimize_detail_view(request, study_id):
     if study.status == DesignStudy.STATUS_DONE:
         curve = (snap.get("stage1") or {}).get("curve") or {}
         vs, fs = curve.get("v_nodes") or [], curve.get("f_nodes") or []
+        design = snap.get("design") or {}
         if vs and fs:
-            from ..services.charting import make_brake_curve_fragment
-            points = [{"velocity": v, "force": f} for v, f in zip(vs, fs)]
-            curve_html = make_brake_curve_fragment(points, title="Синтезированная F(v)")
+            from ..services.charting import make_brake_curve_fragment, make_design_fv_fragment
+            if design.get("type") == "parametric" and design.get("brakes"):
+                # Реальная F(v) подобранного тормоза (сумма квазистатики по N) — что
+                # тормоз ДЕЙСТВИТЕЛЬНО делает, поверх идеала (цели синтеза).
+                import numpy as np
+                from ..services.magnetic import MagneticParams, magnetic_force_quasistatic
+                v_max = float(vs[-1]) if vs else 18.0
+                v_grid = list(np.linspace(0.0, v_max, 60))
+                f_actual = [0.0] * len(v_grid)
+                for pd in design["brakes"]:
+                    try:
+                        p = MagneticParams(**pd)
+                        for i, v in enumerate(v_grid):
+                            f_actual[i] += magnetic_force_quasistatic(float(v), p)
+                    except Exception:  # noqa: BLE001
+                        pass
+                curve_html = make_design_fv_fragment(
+                    ideal_v=vs, ideal_f=fs, actual_v=v_grid, actual_f=f_actual,
+                    sigma_f_max=study.sigma_f_max,
+                    title="Характеристика F(v): цель синтеза и реальный тормоз",
+                )
+            else:
+                points = [{"velocity": v, "force": f} for v, f in zip(vs, fs)]
+                curve_html = make_brake_curve_fragment(
+                    points, title="Синтезированная F(v) — табличный тормоз (реализуема как есть)")
 
         # Парето-плоскость кандидатов мультистарта (если он был).
         s2 = snap.get("stage2") or {}
@@ -116,6 +139,7 @@ def optimize_detail_view(request, study_id):
         "stage2": snap.get("stage2"),
         "curve_html": curve_html,
         "pareto_html": pareto_html,
+        "design_type": (snap.get("design") or {}).get("type"),
         "can_spawn": (study.status == DesignStudy.STATUS_DONE
                       and study.source_run_id is not None
                       and snap.get("design") is not None),

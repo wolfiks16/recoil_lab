@@ -102,6 +102,14 @@
     <div class="rb-plot-grid rb-plot-grid-main">
         <div class="rb-plot-card rb-plot-card-featured">
             {% if curve_html %}{{ curve_html|safe }}{% else %}<div class="rb-text-muted" style="padding:40px;">График недоступен</div>{% endif %}
+            {% if design_type == 'parametric' %}
+            <div class="rb-text-muted" style="font-size:11px; padding:4px 8px;">
+                Пунктир — идеал (цель синтеза: максимум торможения до ΣF_max для минимума отката).
+                Сплошная — что реально даёт подобранный вихретоковый тормоз: сила растёт со скоростью
+                и плавно насыщается (постоянную полку он держать не может — это нормально).
+                Итог считается по РЕАЛЬНОЙ динамике этого тормоза (таблица ниже).
+            </div>
+            {% endif %}
         </div>
         <div>
             <div class="rb-card" style="margin-bottom:12px;">

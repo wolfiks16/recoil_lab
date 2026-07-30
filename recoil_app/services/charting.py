@@ -668,6 +668,48 @@ def save_interactive_charts(result, output_dir: str | Path, prefix: str = "run")
 # СРЕЗ 3c: график F(v) для детальной страницы тормоза в каталоге
 # ============================================================================
 
+def make_design_fv_fragment(
+    ideal_v, ideal_f,
+    actual_v=None, actual_f=None,
+    sigma_f_max: float | None = None,
+    title: str = "Характеристика F(v): цель и реальный тормоз",
+) -> str:
+    """Синтезированная (идеальная) F(v) + РЕАЛЬНАЯ F(v) подобранного тормоза.
+
+    Идеал (цель синтеза) — плоская полка до ΣF_max для минимума отката; реальный
+    вихретоковый тормоз так не может (сила растёт с v и плавно насыщается), поэтому
+    показываем и цель (пунктир), и что реально даёт подобранный тормоз (сплошная).
+    """
+    fig = go.Figure()
+
+    if actual_v is not None and actual_f is not None and len(actual_v):
+        fig.add_trace(go.Scatter(
+            x=list(actual_v), y=list(actual_f), mode="lines",
+            name="реальный тормоз F(v)",
+            line=dict(color=RB_BLUE, width=LINE_WIDTH_PRIMARY),
+            fill="tozeroy", fillcolor=RB_BLUE_FILL,
+        ))
+
+    if ideal_v and ideal_f:
+        fig.add_trace(go.Scatter(
+            x=list(ideal_v), y=list(ideal_f), mode="lines+markers",
+            name="идеал (цель синтеза)",
+            line=dict(color=RB_GRAY, width=2.0, dash="dash"),
+            marker=dict(color=RB_GRAY, size=6),
+        ))
+
+    if sigma_f_max:
+        fig.add_hline(
+            y=float(sigma_f_max),
+            line=dict(color=RB_ACCENT, width=1.2, dash="dot"),
+            annotation_text="ΣF_max", annotation_position="top left",
+            annotation_font=dict(color=RB_ACCENT, size=10, family=FONT_FAMILY_MONO),
+        )
+
+    _apply_layout(fig, title, "v, м/с", "F, Н")
+    return _to_html_fragment(fig, height="480px")
+
+
 def make_brake_curve_fragment(
     points: list[dict],
     title: str = "Характеристика F(v)",
