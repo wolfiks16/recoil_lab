@@ -33,13 +33,10 @@ from ..services.thermal import (
     simulate_repeated_cycles,
 )
 from ..services.thermal.charting import save_thermal_charts
+from ..services.chart_files import read_chart_fields
 
 
 # --- helpers --------------------------------------------------------------------------
-
-
-def _read_chart_fragment(path: str | Path) -> str:
-    return Path(path).read_text(encoding="utf-8")
 
 
 def _brake_meta_list(run: CalculationRun) -> list[dict]:
@@ -462,19 +459,10 @@ def thermal_detail_view(request, run_id: int, thermal_id: int):
         return forbid
     thermal_run = get_object_or_404(ThermalRun, pk=thermal_id, run=run)
 
-    chart_fields = [
+    chart_html, chart_errors = read_chart_fields(thermal_run, [
         "chart_temperatures", "chart_power_brakes",
         "chart_heat_brakes", "chart_cycle_envelope",
-    ]
-    chart_html: dict[str, str] = {}
-    chart_errors: list[str] = []
-    for fname in chart_fields:
-        ff = getattr(thermal_run, fname, None)
-        if ff and getattr(ff, "name", ""):
-            try:
-                chart_html[fname] = _read_chart_fragment(ff.path)
-            except (FileNotFoundError, OSError) as exc:
-                chart_errors.append(f"{fname}: {exc}")
+    ])
 
     config = thermal_run.config_snapshot or {}
     result = thermal_run.result_snapshot or {}

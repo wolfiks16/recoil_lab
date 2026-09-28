@@ -1,0 +1,16 @@
+{# Индикатор фоновых задач пользователя (подбор тормоза, досчёт пошаговой сессии). #}
+{% if tasks %}
+<details class="rb-tasks-menu">
+    <summary>
+        <span class="rb-tasks-dot is-running" aria-hidden="true"></span>
+        Фоновых задач: {{ tasks|length }}
+    </summary>
+    <ul class="rb-tasks-list">
+        {% for t in tasks %}
+        <li><a href="{{ t.url }}">{{ t.label }}</a><span>{{ t.status }}</span></li>
+        {% endfor %}
+    </ul>
+</details>
+{% else %}
+<span class="rb-tasks-idle"><span class="rb-tasks-dot" aria-hidden="true"></span>Фоновых задач нет</span>
+{% endif %}

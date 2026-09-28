@@ -317,19 +317,19 @@ def _apply_layout(fig: go.Figure, title: str, x_title: str, y_title: str) -> go.
             bgcolor="rgba(255,255,255,0.92)",
             bordercolor="#E1E5EC",
             borderwidth=1,
-            font=dict(family=FONT_FAMILY_MONO, size=11),
+            font=dict(family=FONT_FAMILY_UI, size=12),
         ),
         margin=dict(l=60, r=40, t=80, b=55),
         plot_bgcolor="white",
     )
     fig.update_xaxes(
-        title=dict(text=x_title, font=dict(family=FONT_FAMILY_MONO, size=11)),
+        title=dict(text=x_title, font=dict(family=FONT_FAMILY_UI, size=12)),
         gridcolor="#E1E5EC",
         zerolinecolor="#C5CDD8",
         tickfont=dict(family=FONT_FAMILY_MONO, size=10),
     )
     fig.update_yaxes(
-        title=dict(text=y_title, font=dict(family=FONT_FAMILY_MONO, size=11)),
+        title=dict(text=y_title, font=dict(family=FONT_FAMILY_UI, size=12)),
         gridcolor="#E1E5EC",
         zerolinecolor="#C5CDD8",
         tickfont=dict(family=FONT_FAMILY_MONO, size=10),
@@ -364,7 +364,7 @@ def _make_dual_axis_figure(x, y_left, y_right, title: str, result=None) -> go.Fi
         font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
         plot_bgcolor="white",
         yaxis=dict(
-            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_MONO, size=11, color=RB_BLUE)),
+            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_UI, size=12, color=RB_BLUE)),
             range=left_range,
             zeroline=True,
             zerolinewidth=1.5,
@@ -373,7 +373,7 @@ def _make_dual_axis_figure(x, y_left, y_right, title: str, result=None) -> go.Fi
             tickfont=dict(family=FONT_FAMILY_MONO, size=10, color=RB_BLUE),
         ),
         yaxis2=dict(
-            title=dict(text="a, м/с²", font=dict(family=FONT_FAMILY_MONO, size=11, color=RB_ACCENT)),
+            title=dict(text="a, м/с²", font=dict(family=FONT_FAMILY_UI, size=12, color=RB_ACCENT)),
             overlaying="y",
             side="right",
             range=right_range,
@@ -390,12 +390,12 @@ def _make_dual_axis_figure(x, y_left, y_right, title: str, result=None) -> go.Fi
             bgcolor="rgba(255,255,255,0.92)",
             bordercolor="#E1E5EC",
             borderwidth=1,
-            font=dict(family=FONT_FAMILY_MONO, size=11),
+            font=dict(family=FONT_FAMILY_UI, size=12),
         ),
         margin=dict(l=60, r=60, t=80, b=55),
     )
     fig.update_xaxes(
-        title=dict(text="t, c", font=dict(family=FONT_FAMILY_MONO, size=11)),
+        title=dict(text="t, c", font=dict(family=FONT_FAMILY_UI, size=12)),
         gridcolor="#E1E5EC",
         zerolinecolor="#C5CDD8",
         tickfont=dict(family=FONT_FAMILY_MONO, size=10),
@@ -1281,14 +1281,14 @@ def make_compare_v_a_t_fragment(
         font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
         plot_bgcolor="white",
         yaxis=dict(
-            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_MONO, size=11)),
+            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_UI, size=12)),
             range=left_range,
             zeroline=True, zerolinewidth=1.5, zerolinecolor="#C5CDD8",
             gridcolor="#E1E5EC",
             tickfont=dict(family=FONT_FAMILY_MONO, size=10),
         ),
         yaxis2=dict(
-            title=dict(text="a, м/с² (dash)", font=dict(family=FONT_FAMILY_MONO, size=11)),
+            title=dict(text="a, м/с² (dash)", font=dict(family=FONT_FAMILY_UI, size=12)),
             overlaying="y", side="right",
             range=right_range,
             zeroline=True, zerolinewidth=1.5, zerolinecolor="#C5CDD8",
@@ -1298,12 +1298,12 @@ def make_compare_v_a_t_fragment(
             x=0.99, y=0.99, xanchor="right", yanchor="top",
             bgcolor="rgba(255,255,255,0.92)",
             bordercolor="#E1E5EC", borderwidth=1,
-            font=dict(family=FONT_FAMILY_MONO, size=10),
+            font=dict(family=FONT_FAMILY_UI, size=11),
         ),
         margin=dict(l=60, r=60, t=80, b=55),
     )
     fig.update_xaxes(
-        title=dict(text="t, c", font=dict(family=FONT_FAMILY_MONO, size=11)),
+        title=dict(text="t, c", font=dict(family=FONT_FAMILY_UI, size=12)),
         gridcolor="#E1E5EC", zerolinecolor="#C5CDD8",
         tickfont=dict(family=FONT_FAMILY_MONO, size=10),
     )
@@ -1573,14 +1573,14 @@ def _make_compare_v_a_t_overlay(
         font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
         plot_bgcolor="white",
         yaxis=dict(
-            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_MONO, size=11)),
+            title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_UI, size=12)),
             range=left_range,
             zeroline=True, zerolinewidth=1.5, zerolinecolor="#C5CDD8",
             gridcolor="#E1E5EC",
             tickfont=dict(family=FONT_FAMILY_MONO, size=10),
         ),
         yaxis2=dict(
-            title=dict(text="a, м/с² (dash)", font=dict(family=FONT_FAMILY_MONO, size=11)),
+            title=dict(text="a, м/с² (dash)", font=dict(family=FONT_FAMILY_UI, size=12)),
             overlaying="y", side="right", range=right_range,
             zeroline=True, zerolinewidth=1.5, zerolinecolor="#C5CDD8",
             tickfont=dict(family=FONT_FAMILY_MONO, size=10),
@@ -1589,12 +1589,12 @@ def _make_compare_v_a_t_overlay(
             x=0.99, y=0.99, xanchor="right", yanchor="top",
             bgcolor="rgba(255,255,255,0.92)",
             bordercolor="#E1E5EC", borderwidth=1,
-            font=dict(family=FONT_FAMILY_MONO, size=10),
+            font=dict(family=FONT_FAMILY_UI, size=11),
         ),
         margin=dict(l=60, r=60, t=80, b=55),
     )
     fig.update_xaxes(
-        title=dict(text="t, c", font=dict(family=FONT_FAMILY_MONO, size=11)),
+        title=dict(text="t, c", font=dict(family=FONT_FAMILY_UI, size=12)),
         gridcolor="#E1E5EC", zerolinecolor="#C5CDD8",
         tickfont=dict(family=FONT_FAMILY_MONO, size=10),
     )
@@ -1896,7 +1896,7 @@ def build_brake_geometry_3d(brake) -> str | None:
         scene=dict(
             xaxis=dict(
                 title=dict(text="X · ось отката, м",
-                           font=dict(family=FONT_FAMILY_MONO, size=11)),
+                           font=dict(family=FONT_FAMILY_UI, size=12)),
                 tickfont=dict(family=FONT_FAMILY_MONO, size=10),
                 backgroundcolor="rgba(245, 247, 250, 1)",
                 gridcolor="#E1E5EC",
@@ -1904,7 +1904,7 @@ def build_brake_geometry_3d(brake) -> str | None:
             ),
             yaxis=dict(
                 title=dict(text="Y, м",
-                           font=dict(family=FONT_FAMILY_MONO, size=11)),
+                           font=dict(family=FONT_FAMILY_UI, size=12)),
                 tickfont=dict(family=FONT_FAMILY_MONO, size=10),
                 backgroundcolor="rgba(245, 247, 250, 1)",
                 gridcolor="#E1E5EC",
@@ -1912,7 +1912,7 @@ def build_brake_geometry_3d(brake) -> str | None:
             ),
             zaxis=dict(
                 title=dict(text="Z, м",
-                           font=dict(family=FONT_FAMILY_MONO, size=11)),
+                           font=dict(family=FONT_FAMILY_UI, size=12)),
                 tickfont=dict(family=FONT_FAMILY_MONO, size=10),
                 backgroundcolor="rgba(245, 247, 250, 1)",
                 gridcolor="#E1E5EC",

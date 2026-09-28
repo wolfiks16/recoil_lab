@@ -44,6 +44,7 @@ from .optimize import (  # noqa: F401
     optimize_status_view,
 )
 from .results import results_view  # noqa: F401
+from .tasks import background_tasks_view  # noqa: F401
 from .run import (  # noqa: F401
     delete_run_view,
     free_fall_new_view,

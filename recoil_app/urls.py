@@ -18,8 +18,10 @@ urlpatterns = [
     path("users/", views.users_list_view, name="users_list"),
     path("users/<int:user_id>/role/", views.users_set_role_view, name="users_set_role"),
 
-    # Главная — новый дашборд (Срез 2)
+    # Главная — рабочий стол
     path("", views.dashboard_view, name="dashboard"),
+    # AJAX: фоновые задачи пользователя (индикатор в верхней строке)
+    path("tasks/status/", views.background_tasks_view, name="background_tasks"),
     # Форма создания нового расчёта (раньше была главной).
     # Имя `index` сохраняется ради обратной совместимости с многочисленными {% url 'index' %}
     # в шаблонах (включая редиректы после создания и кнопки «Скопировать»).

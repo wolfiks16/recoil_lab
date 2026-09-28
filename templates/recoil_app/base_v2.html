@@ -1,74 +1,141 @@
-{% load static %}
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}RecoilLab{% endblock %}</title>
+    {# Свёрнутое меню восстанавливаем до отрисовки — без мигания. #}
+    <script>try { if (localStorage.getItem('recoillab.navCollapsed') === '1') document.documentElement.classList.add('rb-nav-collapsed'); } catch (e) {}</script>
 
-    <link rel="stylesheet" href="{% static 'recoil_app/css/design_system.css' %}">
+    <link rel="stylesheet" href="{% static 'recoil_app/css/design_system.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'recoil_app/css/pages.css' %}?v=3">
 
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-    <style>
-        /* Flash messages (Django messages framework). Inline-блок шаблон рендерит сам
-           вверху контента — никакого fixed-тоста в углу. */
-        .rb-flash { padding: 10px 14px; border-radius: 6px; font-size: 13px;
-            background: white; border: 1px solid var(--rb-panel-border);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        .rb-flash.rb-flash-success { border-left: 3px solid #2EA043; }
-        .rb-flash.rb-flash-info, .rb-flash.rb-flash-debug { border-left: 3px solid var(--rb-accent, #3D73EB); }
-        .rb-flash.rb-flash-warning { border-left: 3px solid #DDAA00; background: #FFFBEC; }
-        .rb-flash.rb-flash-error { border-left: 3px solid #C03030; background: #FFEFEF; }
-
-        /* Auth chip в топбаре — простейшая дополнительная разметка. */
-        .rb-auth-chip { display: flex; align-items: center; gap: 8px; font-size: 12px;
-            color: var(--rb-text-soft); padding: 4px 10px; }
-        .rb-auth-chip a { color: var(--rb-accent, #3D73EB); text-decoration: none; }
-        .rb-auth-chip a:hover { text-decoration: underline; }
-        .rb-auth-role { font-size: 10px; padding: 1px 6px; border-radius: 3px;
-            text-transform: uppercase; letter-spacing: 0.5px; }
-        .rb-auth-role-admin { background: #FEE; color: #C03030; }
-        .rb-auth-role-analyst { background: #F0F4FF; color: var(--rb-accent, #3D73EB); }
-        .rb-auth-role-engineer { background: var(--rb-bg-soft, #FAFBFC); color: var(--rb-text-soft); }
-    </style>
     {% block head_extra %}{% endblock %}
 </head>
 <body class="rb-app">
+<a class="rb-skip-link" href="#rb-main">Перейти к содержимому</a>
 
 <div class="rb-shell">
-    <!-- Shell mount: топбар и rail рендерятся через shell.js.
-         display:contents — чтобы дети попали в grid .rb-shell как прямые потомки. -->
-    <div id="rb-shell-mount"
-         style="display: contents;"
-         data-active="{% block shell_active %}workspace{% endblock %}"
-         data-crumb="{% block shell_crumb %}{% endblock %}"
-         data-index-url="{% url 'index' %}"
-         data-free-fall-url="{% url 'free_fall_new' %}"
-         data-iterative-url="{% url 'iterative_list' %}"
-         data-dashboard-url="{% url 'dashboard' %}"
-         data-results-url="{% url 'results' %}"
-         data-compare-url="{% url 'compare' %}"
-         data-optimize-url="{% url 'optimize_list' %}"
-         data-catalog-url="{% url 'catalog_list' %}"
-         data-login-url="{% url 'login' %}"
-         data-register-url="{% url 'register' %}"
-         data-logout-url="{% url 'logout' %}"
-         data-users-url="{% url 'users_list' %}"
-         data-profile-url="{% url 'profile' %}"
-         data-user-authenticated="{% if request.user.is_authenticated %}1{% else %}0{% endif %}"
-         data-user-name="{% if request.user.is_authenticated %}{{ request.user.username }}{% endif %}"
-         data-user-role="{% if request.user.is_authenticated and request.user.profile %}{{ request.user.profile.role }}{% endif %}"
-         data-user-role-label="{% if request.user.is_authenticated and request.user.profile %}{{ request.user.profile.get_role_display }}{% endif %}"
-         data-user-avatar-emoji="{% if request.user.is_authenticated and request.user.profile %}{{ request.user.profile.avatar_emoji }}{% endif %}"
-         data-user-initials="{% block user_initials %}{% if request.user.is_authenticated %}{{ request.user.username|slice:':2'|upper }}{% else %}—{% endif %}{% endblock %}">
+    <aside class="rb-nav" id="rb-nav" aria-label="Разделы">
+        <div class="rb-nav-brand">
+            <a class="rb-nav-logo" href="{% url 'dashboard' %}" aria-label="RecoilLab, рабочий стол">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="rb-logo-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#3D73EB"/>
+                            <stop offset="1" stop-color="#B44D7A"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="36" height="36" rx="7" fill="#1A2332"/>
+                    <path d="M5 26 Q 12 8, 18 14 T 31 26" fill="none" stroke="url(#rb-logo-grad)" stroke-width="2.4" stroke-linecap="round"/>
+                    <circle cx="18" cy="14" r="2.2" fill="#B44D7A"/>
+                    <line x1="5" y1="28.5" x2="31" y2="28.5" stroke="#3D73EB" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+                </svg>
+                <span class="rb-nav-brand-text">RecoilLab<small>расчёт откатных систем</small></span>
+            </a>
+            <button type="button" class="rb-nav-collapse" data-nav-collapse
+                    aria-controls="rb-nav" aria-expanded="true" title="Свернуть меню">
+                {% include "recoil_app/includes/nav_icon.html" with key="collapse" %}
+                <span class="rb-visually-hidden">Свернуть меню</span>
+            </button>
+        </div>
+
+        <a class="rb-nav-new{% if nav_active == 'new' %} is-active{% endif %}" href="{% url 'index' %}"
+           {% if nav_active == 'new' %}aria-current="page"{% endif %} title="Новый расчёт">
+            {% include "recoil_app/includes/nav_icon.html" with key="new" %}
+            <span class="rb-nav-label">Новый расчёт</span>
+        </a>
+
+        <nav class="rb-nav-groups">
+            {% for group in nav_groups %}
+            <div class="rb-nav-group">
+                <div class="rb-nav-group-title">{{ group.title }}</div>
+                {% for item in group.items %}
+                <a class="rb-nav-item{% if nav_active == item.key %} is-active{% endif %}" href="{{ item.url }}"
+                   {% if nav_active == item.key %}aria-current="page"{% endif %} title="{{ item.label }}">
+                    {% include "recoil_app/includes/nav_icon.html" with key=item.key %}
+                    <span class="rb-nav-label">{{ item.label }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endfor %}
+            {% if request.user.is_authenticated and request.user.profile.role == 'admin' %}
+            <div class="rb-nav-group">
+                <div class="rb-nav-group-title">Администрирование</div>
+                <a class="rb-nav-item{% if nav_active == 'users' %} is-active{% endif %}" href="{% url 'users_list' %}"
+                   {% if nav_active == 'users' %}aria-current="page"{% endif %} title="Пользователи">
+                    {% include "recoil_app/includes/nav_icon.html" with key="users" %}
+                    <span class="rb-nav-label">Пользователи</span>
+                </a>
+            </div>
+            {% endif %}
+        </nav>
+
+        <div class="rb-nav-foot">
+            {% if request.user.is_authenticated %}
+                <a class="rb-nav-user{% if nav_active == 'profile' %} is-active{% endif %}" href="{% url 'profile' %}" title="Профиль">
+                    <span class="rb-nav-avatar" aria-hidden="true">{% if request.user.profile.avatar_emoji %}{{ request.user.profile.avatar_emoji }}{% else %}{{ request.user.username|slice:':1'|upper }}{% endif %}</span>
+                    <span class="rb-nav-label">
+                        <span class="rb-nav-user-name">{{ request.user.username }}</span>
+                        {% if request.user.profile %}<span class="rb-nav-user-role">{{ request.user.profile.get_role_display }}</span>{% endif %}
+                    </span>
+                </a>
+                <form method="post" action="{% url 'logout' %}" class="rb-nav-logout">
+                    {% csrf_token %}
+                    <button type="submit" class="rb-nav-link-btn" title="Выйти">
+                        {% include "recoil_app/includes/nav_icon.html" with key="logout" %}
+                        <span class="rb-nav-label">Выйти</span>
+                    </button>
+                </form>
+            {% else %}
+                <div class="rb-nav-guest">
+                    <a class="rb-nav-link" href="{% url 'login' %}">Войти</a>
+                    <a class="rb-nav-link" href="{% url 'register' %}">Регистрация</a>
+                </div>
+            {% endif %}
+        </div>
+    </aside>
+
+    <div class="rb-main">
+        <header class="rb-topbar">
+            <button type="button" class="rb-topbar-menu" data-nav-open aria-controls="rb-nav" aria-expanded="false">
+                {% include "recoil_app/includes/nav_icon.html" with key="menu" %}
+                <span class="rb-visually-hidden">Открыть меню</span>
+            </button>
+            <nav class="rb-breadcrumb" aria-label="Путь">
+                {% if nav_section %}
+                    {% if nav_section.is_root %}
+                        <span class="current" aria-current="page">{{ nav_section.label }}</span>
+                    {% else %}
+                        <a href="{{ nav_section.url }}">{{ nav_section.label }}</a>
+                        {% block shell_crumb_parent %}{% endblock %}
+                        <span class="sep" aria-hidden="true">/</span>
+                        <span class="current" aria-current="page">{% block shell_crumb %}{% endblock %}</span>
+                    {% endif %}
+                {% else %}
+                    <span class="current" aria-current="page">{% block shell_crumb_plain %}RecoilLab{% endblock %}</span>
+                {% endif %}
+            </nav>
+            <div class="rb-tasks" data-tasks data-tasks-url="{% url 'background_tasks' %}"{% if background_tasks %} data-running="1"{% endif %}>
+                {% include "recoil_app/includes/background_tasks.html" with tasks=background_tasks %}
+            </div>
+        </header>
+
+        {% if messages %}
+        <div class="rb-flash-list" role="status">
+            {% for m in messages %}<div class="rb-flash rb-flash-{{ m.tags }}">{{ m }}</div>{% endfor %}
+        </div>
+        {% endif %}
+
+        <main class="rb-content" id="rb-main" tabindex="-1">
+            {% block content %}{% endblock %}
+        </main>
     </div>
-
-    <main class="rb-content">
-        {% block content %}{% endblock %}
-    </main>
 </div>
+<div class="rb-nav-backdrop" data-nav-close hidden></div>
 
-<script src="{% static 'recoil_app/js/shell.js' %}"></script>
+<script src="{% static 'recoil_app/js/shell.js' %}?v=3"></script>
 {% block body_extra %}{% endblock %}
 </body>
 </html>

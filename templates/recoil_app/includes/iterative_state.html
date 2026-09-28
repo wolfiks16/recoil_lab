@@ -18,11 +18,11 @@
         <div class="it-kpi"><span class="it-kpi-label">F торм</span><span class="it-kpi-value">{{ state.node.f_magnetic|smart_num }}</span><span class="it-kpi-unit">Н</span></div>
     </div>
 
-    <div class="it-meta">
-        шаг {{ state.node.grid_index|smart_num }} из {{ state.node.grid_total|smart_num }}{% if not state.node.on_grid %} · узел внутри шага (точка Δx / переключение){% endif %}
-        · x_max = {{ state.x_max|smart_num }} м
-        {% if state.recoil_end_time is not None %}· разворот t = {{ state.recoil_end_time|smart_num }} с{% endif %}
-        {% if state.energy_brake is not None %}· рассеяно тормозами {{ state.energy_brake|smart_num }} Дж{% endif %}
+    <div class="it-meta rb-inline-list">
+        <span>шаг {{ state.node.grid_index|smart_num }} из {{ state.node.grid_total|smart_num }}{% if not state.node.on_grid %} (узел внутри шага: точка Δx или переключение){% endif %}</span>
+        <span>x<sub>max</sub> = {{ state.x_max|smart_num }} м</span>
+        {% if state.recoil_end_time is not None %}<span>разворот при t = {{ state.recoil_end_time|smart_num }} с</span>{% endif %}
+        {% if state.energy_brake is not None %}<span>рассеяно тормозами {{ state.energy_brake|smart_num }} Дж</span>{% endif %}
     </div>
 
     <table class="rb-params-table it-brakes">
@@ -33,7 +33,7 @@
         {% for b in state.brakes %}
             <tr>
                 <td>{{ b.number }}</td>
-                <td>{{ b.kind_label }}{% if b.curve_info %} <span class="rb-text-muted">· {{ b.curve_info }}</span>{% endif %}</td>
+                <td>{{ b.kind_label }}{% if b.curve_info %} <span class="rb-text-muted">({{ b.curve_info }})</span>{% endif %}</td>
                 <td class="num">{{ b.force|smart_num }}</td>
                 <td class="num">{% if b.wn is not None %}{{ b.wn|smart_num }}{% else %}—{% endif %}</td>
             </tr>
@@ -42,9 +42,10 @@
     </table>
 
     {% if state.mode == 'recoil' %}
-    <div class="it-meta">
-        F вход = {{ state.node.f_ext|smart_num }} Н · F пруж = {{ state.node.f_spring|smart_num }} Н ·
-        ΣF = {{ state.node.f_total|smart_num }} Н
+    <div class="it-meta rb-inline-list">
+        <span>F вход = {{ state.node.f_ext|smart_num }} Н</span>
+        <span>F пружины = {{ state.node.f_spring|smart_num }} Н</span>
+        <span>ΣF = {{ state.node.f_total|smart_num }} Н</span>
     </div>
     {% endif %}
 

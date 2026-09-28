@@ -1,43 +1,32 @@
 {% extends "recoil_app/base_v2.html" %}
 {% load static %}
 
-{% block title %}Новый итерационный расчёт · RecoilLab{% endblock %}
-{% block shell_active %}iterative{% endblock %}
-{% block shell_crumb %}Итерационный расчёт / новый{% endblock %}
+{% block title %}Новый расчёт: пошаговая сессия — RecoilLab{% endblock %}
+{% block shell_crumb %}Пошагово{% endblock %}
 
 {% block head_extra %}
-<link rel="stylesheet" href="{% static 'recoil_app/css/iterative.css' %}">
+<link rel="stylesheet" href="{% static 'recoil_app/css/iterative.css' %}?v=3">
 {% endblock %}
 
 {% block content %}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
-        <div>
-            <div class="rb-hero-title"><h1>Новый итерационный расчёт</h1></div>
-            <div class="rb-hero-sub">
-                Задайте режим, параметры и исходную конфигурацию тормозов — расчёт встанет в начальный узел (t = 0),
-                дальше им управляют кнопками: шаг, N шагов, до точки через Δx, смена конфигурации
-            </div>
-        </div>
-        <div class="rb-hero-actions">
-            <a class="rb-btn" href="{% url 'iterative_list' %}">← К списку</a>
-        </div>
+        <h1 class="rb-h1">Новый расчёт</h1>
     </div>
+    {% include "recoil_app/includes/new_calc_modes.html" with mode='iterative' %}
 </section>
 
 {% if source_run %}
-<section class="rb-module-section">
-    <div class="rb-flash rb-flash-info">
-        Форма заполнена по расчёту <b>{{ source_run.name }}</b>{% if source_run.input_file %}; его входной файл будет использован, если не загрузить другой{% endif %}.
-    </div>
-</section>
+<div class="notice">
+    Форма заполнена по расчёту «{{ source_run.name }}»{% if source_run.input_file %}; его входной файл будет использован, если не загрузить другой{% endif %}.
+</div>
 {% endif %}
 
 {% if form.non_field_errors %}
-<section class="rb-module-section">
-    <div class="rb-flash rb-flash-error">{{ form.non_field_errors|join:" " }}</div>
-</section>
+<div class="rb-status-banner rb-status-banner-danger">
+    <div class="rb-status-banner-icon"></div>
+    <div class="rb-status-banner-sub">{{ form.non_field_errors|join:" " }}</div>
+</div>
 {% endif %}
 
 <form method="post" enctype="multipart/form-data" id="it-new-form" class="rb-module-section">

@@ -1,0 +1,350 @@
+/* RecoilLab — компоненты страниц и стили, вынесенные из <style>-блоков шаблонов.
+   Общие токены и базовые компоненты — design_system.css. */
+
+/* ============================================================================
+   ПРОТОКОЛ — итог расчёта одной строкой: величина, значение, когда достигнута
+   ============================================================================ */
+.rb-protocol {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    background: var(--rb-panel-bg-white);
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius-lg);
+    margin: 0 0 20px;
+    overflow: hidden;
+}
+.rb-protocol-cell {
+    padding: 12px 16px;
+    border-left: 1px solid var(--rb-panel-border);
+    margin-left: -1px;               /* левая рамка первой ячейки ряда уходит под край */
+    min-width: 0;
+}
+.rb-protocol-q {
+    font-size: 13px;
+    color: var(--rb-text-soft);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rb-protocol-q i {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.rb-protocol-val {
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.3;
+    margin-top: 2px;
+    color: var(--rb-text);
+    white-space: nowrap;
+}
+.rb-protocol-val small {
+    font-family: var(--rb-font-ui);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--rb-text-soft);
+    margin-left: 4px;
+}
+.rb-protocol-when { font-size: 12px; color: var(--rb-text-soft); }
+.rb-protocol-cell.is-ok .rb-protocol-val   { color: var(--rb-ok-text); }
+.rb-protocol-cell.is-warn .rb-protocol-val { color: var(--rb-warn-text); }
+.rb-protocol-cell.is-bad .rb-protocol-val  { color: var(--rb-err-text); }
+
+/* Цвет величины (метка перед названием) */
+.q-x { background: var(--q-x); }
+.q-v { background: var(--q-v); }
+.q-a { background: var(--q-a); }
+.q-f { background: var(--q-f); }
+.q-x-text { color: var(--q-x-text); }
+.q-v-text { color: var(--q-v-text); }
+.q-a-text { color: var(--q-a-text); }
+.q-f-text { color: var(--q-f-text); }
+
+/* Табы в шапке панели */
+.rb-tabs-inline { margin: 0; border-bottom: 0; }
+.rb-panel-head .rb-tabs-pills { margin-bottom: 0; }
+.rb-panel-head-meta { font-size: 13px; color: var(--rb-text-soft); }
+
+/* Сообщение о пропавшем графике */
+.rb-chart-missing {
+    margin: 8px 0 0;
+    padding: 10px 12px;
+    border-radius: var(--rb-radius-sm);
+    background: var(--rb-warn-soft);
+    color: var(--rb-warn-dark);
+    font-size: 14px;
+}
+
+/* Сетка: основная колонка + боковая */
+.rb-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 20px;
+    align-items: start;
+}
+.rb-split-side { min-width: 0; }
+.rb-split-side > * + * { margin-top: 16px; }
+@media (max-width: 1200px) {
+    .rb-split { grid-template-columns: minmax(0, 1fr); }
+}
+
+.rb-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+@media (max-width: 1100px) {
+    .rb-grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+.rb-stack > * + * { margin-top: 16px; }
+.rb-app .rb-ok-text   { color: var(--rb-ok-text); }
+.rb-app .rb-warn-text { color: var(--rb-warn-text); }
+.rb-app .rb-danger-text, .rb-app .rb-btn.rb-danger-text { color: var(--rb-err-text); }
+.rb-app .rb-btn.rb-danger-text:hover { background: var(--rb-danger-soft); color: var(--rb-danger-dark); }
+.rb-inline-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.rb-empty-inline { padding: 20px 16px; color: var(--rb-text-soft); font-size: 14px; text-align: center; }
+
+/* Список «определений» (параметры): подпись слева, значение справа */
+.rb-dl { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.rb-dl dt, .rb-dl dd { padding: 7px 16px; border-top: 1px solid #EEF1F4; margin: 0; }
+.rb-dl dt { color: var(--rb-text-soft); font-size: 14px; }
+.rb-dl dd {
+    text-align: right;
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    white-space: nowrap;
+}
+.rb-dl dt:first-of-type, .rb-dl dd:first-of-type { border-top: 0; }
+
+
+/* ============================================================================
+   ТЕПЛОВОЙ МОДУЛЬ
+   ============================================================================ */
+.rb-protocol-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+/* Форма теплового сценария (thermal_form.html) */
+.tf-preset-bar {
+    display: flex; gap: 8px; padding: 12px 14px; flex-wrap: wrap; align-items: center;
+    background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius); margin-bottom: 16px;
+}
+.tf-preset-bar-label { font-size: 14px; font-weight: 600; color: var(--rb-text); margin-right: 6px; }
+.tf-preset-radio {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer;
+    border: 1px solid var(--rb-panel-border-strong); border-radius: var(--rb-radius-sm);
+    font-size: 14px; background: var(--rb-panel-bg-white);
+}
+.tf-preset-radio input { margin: 0; accent-color: var(--rb-blue); }
+.tf-preset-radio.active { border-color: var(--rb-blue); background: rgba(61, 115, 235, 0.07); color: var(--rb-blue-dark); font-weight: 600; }
+
+.tf-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .tf-grid { grid-template-columns: minmax(0, 1fr); } }
+.tf-card { padding: 16px; }
+.tf-section-title {
+    font-weight: 700; font-size: 15px; color: var(--rb-text);
+    margin: 18px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rb-panel-border);
+}
+.tf-section-title:first-child, .tf-section-first { margin-top: 0; }
+.tf-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.tf-fields-1col { grid-template-columns: 1fr; }
+.tf-fields label { font-size: 13px; font-weight: 600; color: var(--rb-text-soft); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tf-fields input, .tf-fields select {
+    padding: 7px 10px; font: 400 14px var(--rb-font-ui); color: var(--rb-text);
+    border: 1px solid var(--rb-panel-border-strong); border-radius: var(--rb-radius-sm); background: var(--rb-panel-bg-white);
+}
+.tf-fields input[type="number"] { font-family: var(--rb-font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.tf-fields input:focus, .tf-fields select:focus { outline: none; border-color: var(--rb-blue); box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.18); }
+.tf-fields .errors { color: var(--rb-danger-dark); font-size: 13px; font-weight: 500; }
+.tf-help { font-size: 12px; font-weight: 400; color: var(--rb-text-soft); line-height: 1.4; }
+.tf-help-block { font-size: 13px; margin-bottom: 12px; max-width: 75ch; }
+.tf-brake-form { padding: 14px; border: 1px solid var(--rb-panel-border); border-radius: var(--rb-radius); margin-bottom: 12px; }
+.tf-brake-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.tf-brake-title { font-weight: 700; font-size: 15px; }
+.tf-form-errors { color: var(--rb-danger-dark); font-size: 14px; padding: 8px 12px; background: var(--rb-danger-soft); border-radius: var(--rb-radius-sm); margin-bottom: 12px; }
+.tf-submit-row { margin-top: 16px; display: flex; gap: 8px; }
+.tf-submit-row .rb-btn-primary { flex: 1; }
+
+/* Калькулятор G = h·A */
+.tf-g-field { position: relative; }
+.tf-g-field .tf-calc-btn {
+    position: absolute; right: 6px; top: 25px; padding: 2px 8px; cursor: pointer;
+    background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm); font: 600 12px var(--rb-font-ui); color: var(--rb-blue-dark);
+}
+.tf-g-field .tf-calc-btn:hover { border-color: var(--rb-blue); }
+.tf-calc-popup {
+    position: absolute; right: 0; top: 56px; z-index: 50; width: 280px; padding: 12px;
+    background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius); box-shadow: var(--rb-shadow-md); display: none;
+}
+.tf-calc-popup.open { display: block; }
+.tf-calc-popup label { display: block; font-size: 13px; color: var(--rb-text-soft); margin-bottom: 8px; }
+.tf-calc-popup label input {
+    width: 100%; padding: 5px 8px; margin-top: 3px; font: 400 13px var(--rb-font-mono);
+    border: 1px solid var(--rb-panel-border-strong); border-radius: var(--rb-radius-sm);
+}
+.tf-calc-popup .tf-calc-result { font-size: 13px; margin: 8px 0; padding: 6px 8px; background: var(--rb-panel-bg-alt); border-radius: var(--rb-radius-sm); }
+.tf-calc-popup .tf-calc-result span { font-family: var(--rb-font-mono); }
+.tf-calc-popup .tf-calc-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+.tf-conditional[data-preset-only="nine_node"] { display: none; }
+.tf-preset-mode-nine_node .tf-conditional[data-preset-only="nine_node"] { display: block; }
+
+/* ============================================================================
+   ОБЩИЕ ФОРМЫ (подбор тормоза, профиль, вход)
+   ============================================================================ */
+.rb-lead { margin: 6px 0 0; max-width: 80ch; color: var(--rb-text-soft); font-size: 14px; }
+.rb-form-narrow { max-width: 760px; }
+.rb-form-fields { display: flex; flex-direction: column; gap: 14px; }
+.rb-check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--rb-text); cursor: pointer; }
+.rb-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--rb-blue); }
+
+/* ============================================================================
+   ПОДБОР ТОРМОЗА (optimize_*)
+   ============================================================================ */
+.rb-wait { text-align: center; padding: 40px 20px; }
+.rb-wait-title { font-size: 17px; font-weight: 700; }
+.rb-wait-sub { margin: 6px auto 0; max-width: 60ch; color: var(--rb-text-soft); font-size: 14px; }
+.rb-spinner {
+    width: 32px; height: 32px; margin: 0 auto 14px;
+    border: 3px solid var(--rb-panel-border); border-top-color: var(--rb-blue);
+    border-radius: 50%; animation: rb-spin .9s linear infinite;
+}
+@keyframes rb-spin { to { transform: rotate(360deg); } }
+.rb-error-details { margin-top: 8px; font-size: 13px; }
+.rb-error-details summary { cursor: pointer; }
+.rb-error-details pre {
+    white-space: pre-wrap; font: 12px/1.4 var(--rb-font-mono); margin: 6px 0 0;
+    padding: 8px; background: rgba(255, 255, 255, 0.6); border-radius: var(--rb-radius-sm); max-height: 260px; overflow: auto;
+}
+.rb-plain-list { margin: 0; padding: 8px 16px 12px 32px; }
+.rb-plain-list li + li { margin-top: 4px; }
+.rb-dl-flush dt, .rb-dl-flush dd { padding-left: 0; padding-right: 0; }
+.rb-split-side .rb-h3 { margin-bottom: 6px; }
+.rb-panel-body .rb-split + *, .rb-panel-body > .rb-table-wrap + * { margin-top: 12px; }
+.rb-panel-body > .rb-h3:not(:first-child) { margin-top: 18px; }
+.rb-params-table td.st { text-align: right; font-size: 13px; white-space: nowrap; }
+
+/* ============================================================================
+   ПРОФИЛЬ (profile.html)
+   ============================================================================ */
+.profile-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .profile-grid { grid-template-columns: minmax(0, 1fr); } }
+.profile-summary {
+    background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius-lg); padding: 20px; text-align: center;
+}
+.profile-avatar-big {
+    width: 112px; height: 112px; margin: 0 auto 12px; border-radius: 50%;
+    background: var(--rb-panel-bg-alt); border: 1px solid var(--rb-panel-border);
+    display: flex; align-items: center; justify-content: center; font-size: 64px; line-height: 1; user-select: none;
+}
+.profile-username { font-size: 18px; font-weight: 700; color: var(--rb-text); margin-bottom: 2px; }
+.profile-full-name { font-size: 14px; color: var(--rb-text-soft); margin-bottom: 12px; min-height: 1.2em; }
+.profile-role-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.profile-role-admin    { background: var(--rb-danger-soft); color: var(--rb-danger-dark); }
+.profile-role-analyst  { background: rgba(61, 115, 235, 0.12); color: var(--rb-blue-dark); }
+.profile-role-engineer { background: var(--rb-panel-bg-alt); color: var(--rb-text-soft); }
+.profile-role-row { padding: 6px 0; }
+.profile-meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rb-panel-border); font-size: 14px; color: var(--rb-text-soft); text-align: left; }
+.profile-meta-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; }
+.profile-meta-row b { color: var(--rb-text); font-weight: 600; overflow-wrap: anywhere; }
+.profile-logout { margin-top: 16px; width: 100%; }
+.profile-form-card { background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border); border-radius: var(--rb-radius-lg); padding: 20px; }
+.profile-section-title { font-size: 16px; font-weight: 700; color: var(--rb-text); margin: 0 0 12px; }
+.profile-section + .profile-section { margin-top: 24px; }
+.profile-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.profile-field { display: flex; flex-direction: column; }
+.profile-field label { font-size: 13px; font-weight: 600; color: var(--rb-text-soft); margin-bottom: 4px; }
+.profile-field input[type="text"], .profile-field input[type="date"] {
+    padding: 7px 10px; font: 400 14px var(--rb-font-ui); color: var(--rb-text);
+    border: 1px solid var(--rb-panel-border-strong); border-radius: var(--rb-radius-sm); background: var(--rb-panel-bg-white);
+}
+.profile-field input:focus { outline: none; border-color: var(--rb-blue); box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.18); }
+.profile-avatar-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.profile-avatar-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; min-width: 0; position: relative; }
+.profile-avatar-cell input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.profile-avatar-option {
+    display: flex; align-items: center; justify-content: center; width: 54px; height: 54px;
+    font-size: 28px; line-height: 1; border: 2px solid var(--rb-panel-border); border-radius: 50%;
+    background: var(--rb-panel-bg-white); user-select: none;
+}
+.profile-avatar-cell:hover .profile-avatar-option { border-color: var(--rb-panel-border-strong); }
+.profile-avatar-cell input[type="radio"]:checked ~ .profile-avatar-option { border-color: var(--rb-blue); box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.18); }
+.profile-avatar-cell input[type="radio"]:focus-visible ~ .profile-avatar-option { outline: 2px solid var(--rb-blue); outline-offset: 2px; }
+.profile-avatar-caption { font-size: 12px; color: var(--rb-text-soft); text-align: center; line-height: 1.2; }
+.profile-avatar-cell input[type="radio"]:checked ~ .profile-avatar-caption { color: var(--rb-blue-dark); font-weight: 600; }
+@media (max-width: 600px) {
+    .profile-avatar-grid { grid-template-columns: repeat(4, 1fr); }
+    .profile-fields { grid-template-columns: 1fr; }
+}
+.profile-actions { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.profile-help { font-size: 13px; color: var(--rb-text-soft); margin-top: 6px; }
+.profile-errors { background: var(--rb-danger-soft); color: var(--rb-danger-dark); padding: 8px 12px; border-radius: var(--rb-radius-sm); font-size: 13px; margin-bottom: 12px; }
+
+/* Пользователи (users_list.html) */
+.users-table .user-cell { display: inline-flex; align-items: center; gap: 10px; }
+.users-table .user-avatar {
+    display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--rb-panel-bg-alt); border: 1px solid var(--rb-panel-border);
+    font-size: 18px; line-height: 1; flex-shrink: 0;
+}
+.users-table .muted { color: var(--rb-text-muted); }
+.users-role-form { display: inline-flex; gap: 6px; align-items: center; }
+.users-role-form select.rb-input { width: auto; padding: 4px 8px; font-size: 13px; }
+
+/* ============================================================================
+   ВХОД / РЕГИСТРАЦИЯ
+   ============================================================================ */
+.auth-card {
+    max-width: 440px; margin: 32px auto; padding: 28px;
+    background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border); border-radius: var(--rb-radius-lg);
+}
+.auth-title { font-size: 22px; font-weight: 700; color: var(--rb-text); margin: 0 0 6px; }
+.auth-sub { font-size: 14px; color: var(--rb-text-soft); margin-bottom: 20px; }
+.auth-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.auth-field label { font-size: 13px; font-weight: 600; color: var(--rb-text-soft); }
+.auth-field input {
+    padding: 8px 10px; border: 1px solid var(--rb-panel-border-strong); border-radius: var(--rb-radius-sm);
+    font: 400 14px var(--rb-font-ui); color: var(--rb-text);
+}
+.auth-field input:focus { outline: none; border-color: var(--rb-blue); box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.18); }
+.auth-field .errors { color: var(--rb-danger-dark); font-size: 13px; }
+.auth-field .helptext { font-size: 12px; color: var(--rb-text-soft); line-height: 1.4; }
+.auth-field .helptext ul { padding-left: 18px; margin: 4px 0; }
+.auth-actions { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+.auth-actions .rb-btn { flex: 1; }
+.auth-link { font-size: 14px; color: var(--rb-text-soft); text-align: center; margin-top: 16px; }
+.auth-non-field { color: var(--rb-danger-dark); font-size: 14px; padding: 8px 12px; background: var(--rb-danger-soft); border-radius: var(--rb-radius-sm); margin-bottom: 12px; }
+.role-note { font-size: 14px; color: var(--rb-text-soft); padding: 10px 12px; background: var(--rb-panel-bg-alt); border-radius: var(--rb-radius-sm); margin-bottom: 16px; }
+
+/* ============================================================================
+   КАТАЛОГ ТОРМОЗОВ
+   ============================================================================ */
+.rb-description-card {
+    background: var(--rb-panel-bg-white); border: 1px solid var(--rb-panel-border); border-radius: var(--rb-radius-lg);
+    padding: 14px 16px; margin-bottom: 16px; font-size: 14px; line-height: 1.6; white-space: pre-line; max-width: 90ch;
+}
+.rb-spec-table .rb-spec-symbol { font-family: var(--rb-font-mono); font-size: 14px; color: var(--rb-blue-dark); white-space: nowrap; width: 70px; }
+.rb-formula { font-family: var(--rb-font-mono); font-size: 14px; line-height: 1.7; margin: 0 0 8px; overflow-wrap: anywhere; }
+.rb-formula sub { font-size: .72em; }
+.rb-curve-table-wrap { max-height: 360px; overflow-y: auto; }
+.rb-curve-table-wrap .rb-table th { position: sticky; top: 0; }
+
+/* ============================================================================
+   НОВЫЙ РАСЧЁТ: переключатель режима
+   ============================================================================ */
+.rb-mode-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 16px; }
+.rb-mode-switch .rb-seg > a { padding: 7px 14px; font-size: 14px; }
+.rb-mode-hint { margin: 0; font-size: 14px; color: var(--rb-text-soft); max-width: 70ch; }
+
+/* Заголовки числовых колонок — обычным шрифтом (моно — только значения) */
+.rb-params-table th.num, .rb-table th.num { font-family: var(--rb-font-ui); font-size: 13px; }
+.it-finish .it-controls-row { margin-top: 10px; }

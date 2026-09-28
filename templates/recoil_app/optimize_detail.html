@@ -1,35 +1,37 @@
 {% extends "recoil_app/base_v2.html" %}
 {% load recoil_extras %}
+{% load static %}
 
-{% block title %}{{ study.name }} · Оптимизация · RecoilLab{% endblock %}
-{% block shell_active %}optimize{% endblock %}
+{% block title %}{{ study.name }}: подбор тормоза — RecoilLab{% endblock %}
 {% block shell_crumb %}{{ study.name }}{% endblock %}
 
 {% block content %}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
         <div>
             <div class="rb-hero-title">
                 <h1>{{ study.name }}</h1>
                 {% if study.status == 'done' %}
-                    {% if study.feasible %}<span class="rb-badge rb-badge-ok">достижимо</span>
-                    {% else %}<span class="rb-badge rb-badge-warn">не достигнуто</span>{% endif %}
-                {% elif study.status == 'error' %}<span class="rb-badge rb-badge-warn">ошибка</span>
-                {% else %}<span class="rb-badge rb-badge-blue">считается…</span>{% endif %}
+                    {% if study.feasible %}<span class="rb-badge rb-badge-ok">в пределах</span>
+                    {% else %}<span class="rb-badge rb-badge-warn">пределы не достигнуты</span>{% endif %}
+                {% elif study.status == 'error' %}<span class="rb-badge rb-badge-danger">ошибка</span>
+                {% else %}<span class="rb-badge rb-badge-blue">считается</span>{% endif %}
             </div>
             <div class="rb-hero-sub">
-                Донор: {% if study.source_run %}<b>{{ study.source_run.name }}</b>{% else %}<em>удалён</em>{% endif %}
-                · N={{ study.n_brakes }}{% if study.multistart %} · мультистарт{% endif %}
-                · пределы: x_max≤{{ study.target_x_max|smart_num }} м, T≤{{ study.target_T|smart_num }} с, v_end≤{{ study.target_v_end|smart_num }} м/с
-                · ΣF≤{{ study.sigma_f_max|smart_num }} Н · <b>x_max минимизируется</b>
+                <span>Исходный расчёт: {% if study.source_run %}<a href="{% url 'run_detail_v2' study.source_run.id %}">{{ study.source_run.name }}</a>{% else %}удалён{% endif %}</span>
+                <span>тормозов: {{ study.n_brakes }}{% if study.multistart %}, мультистарт{% endif %}</span>
             </div>
         </div>
         <div class="rb-hero-actions">
-            <a class="rb-btn" href="{% url 'optimize_list' %}">← К списку</a>
+            {% if study.status == 'done' and study.spawned_run %}
+                <a class="rb-btn rb-btn-primary" href="{% url 'run_detail_v2' study.spawned_run.id %}">Открыть расчёт из дизайна</a>
+            {% elif study.status == 'done' and can_spawn %}
+                <form method="post" action="{% url 'optimize_spawn' study.id %}">
+                    {% csrf_token %}<button type="submit" class="rb-btn rb-btn-primary">Создать расчёт из дизайна</button>
+                </form>
+            {% endif %}
             {% if perm_can_delete %}
-            <form method="post" action="{% url 'optimize_delete' study.id %}" style="display:inline;"
-                  onsubmit="return confirm('Удалить исследование?');">
+            <form method="post" action="{% url 'optimize_delete' study.id %}" data-confirm="Удалить исследование «{{ study.name }}»?">
                 {% csrf_token %}<button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
             </form>
             {% endif %}
@@ -37,37 +39,205 @@
     </div>
 </section>
 
-{% if messages %}
-<section class="rb-module-section">
-    {% for m in messages %}<div class="rb-flash rb-flash-{{ m.tags }}">{{ m }}</div>{% endfor %}
+{# Пределы задачи — одной строкой, как протокол #}
+<section class="rb-protocol" aria-label="Пределы задачи">
+    <div class="rb-protocol-cell">
+        <div class="rb-protocol-q"><i class="q-x"></i>Откат x<sub>max</sub></div>
+        <div class="rb-protocol-val">≤ {{ study.target_x_max|smart_num }}<small>м</small></div>
+        <div class="rb-protocol-when">минимизируется</div>
+    </div>
+    <div class="rb-protocol-cell">
+        <div class="rb-protocol-q">Время цикла T</div>
+        <div class="rb-protocol-val">≤ {{ study.target_T|smart_num }}<small>с</small></div>
+    </div>
+    <div class="rb-protocol-cell">
+        <div class="rb-protocol-q"><i class="q-v"></i>Скорость в конце наката</div>
+        <div class="rb-protocol-val">≤ {{ study.target_v_end|smart_num }}<small>м/с</small></div>
+    </div>
+    <div class="rb-protocol-cell">
+        <div class="rb-protocol-q"><i class="q-f"></i>Суммарная сила ΣF</div>
+        <div class="rb-protocol-val">≤ {{ study.sigma_f_max|smart_num }}<small>Н</small></div>
+    </div>
+</section>
+
+{% if study.status == 'pending' or study.status == 'running' %}
+<section class="rb-panel rb-wait" id="rb-poll" data-status-url="{% url 'optimize_status' study.id %}">
+    <div class="rb-spinner" aria-hidden="true"></div>
+    <div class="rb-wait-title">Идёт подбор</div>
+    <p class="rb-wait-sub">Синтез характеристики и подбор параметров: от 15 с до 3 мин.
+        Страница обновится сама; можно уйти и вернуться позже — индикатор в верхней строке покажет, когда закончится.</p>
+</section>
+
+{% elif study.status == 'error' %}
+<div class="rb-status-banner rb-status-banner-danger">
+    <div class="rb-status-banner-icon"></div>
+    <div>
+        <div class="rb-status-banner-title">Подбор завершился с ошибкой</div>
+        <div class="rb-status-banner-sub">Проверьте пределы (не слишком ли жёсткие) и что исходный расчёт на месте, затем создайте исследование заново.</div>
+        {% if study.error_text %}
+        <details class="rb-error-details"><summary>Технические подробности</summary><pre>{{ study.error_text }}</pre></details>
+        {% endif %}
+    </div>
+</div>
+
+{% else %}
+
+<section class="rb-panel">
+    <div class="rb-panel-head"><h2>Синтез характеристики F(v)</h2></div>
+    <div class="rb-split rb-panel-body">
+        <div>
+            {% if curve_html %}{{ curve_html|safe }}{% else %}<p class="rb-chart-missing">График характеристики не сохранён.</p>{% endif %}
+            {% if design_type == 'parametric' %}
+            <p class="rb-muted-note">
+                Пунктир — идеал синтеза: максимум торможения до ΣF<sub>max</sub> ради минимального отката.
+                Сплошная — что реально даёт подобранный вихретоковый тормоз: сила растёт со скоростью и плавно
+                насыщается, постоянную полку он держать не может. Итог ниже посчитан по полной динамике этого тормоза.
+            </p>
+            {% endif %}
+        </div>
+        <div class="rb-split-side">
+            <div>
+                <h3 class="rb-h3">Кривая против пределов</h3>
+                <table class="rb-params-table">
+                    <thead><tr><th>Величина</th><th class="num">Предел</th><th class="num">Кривая</th><th></th></tr></thead>
+                    <tr><td>x<sub>max</sub>, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage1.achieved.x_max|smart_num }}</td><td class="st">{% if stage1.achieved.x_max <= study.target_x_max %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                    <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage1.achieved.T|smart_num }}</td><td class="st">{% if stage1.achieved.T <= study.target_T %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                    <tr><td>v в конце, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage1.achieved.v_end|smart_num }}</td><td class="st">{% if stage1.achieved.v_end <= study.target_v_end %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                    <tr><td>пик ΣF, Н</td><td class="num">{{ study.sigma_f_max|smart_num }}</td><td class="num">{{ stage1.achieved.sigma_f_peak|smart_num }}</td><td class="st">{% if stage1.achieved.sigma_f_peak <= study.sigma_f_max %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                </table>
+            </div>
+            <div>
+                <h3 class="rb-h3">Что вообще достижимо</h3>
+                <dl class="rb-dl rb-dl-flush">
+                    <dt>Откат без торможения</dt><dd>{{ stage1.envelope.no_brake.x_max|smart_num }} м</dd>
+                    <dt>Откат при максимальном торможении</dt><dd>{{ stage1.envelope.full_brake.x_max|smart_num }} м</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    {% if stage1.messages %}
+    <ul class="rb-panel-note rb-plain-list">
+        {% for m in stage1.messages %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+</section>
+
+{% if stage2 %}
+<section class="rb-panel">
+    <div class="rb-panel-head"><h2>Подбор параметров тормоз{{ study.n_brakes|pluralize:"а,ов" }}</h2></div>
+    <div class="rb-panel-body">
+
+    {% if stage2.kind == 'multistart_failed' %}
+        <div class="rb-status-banner rb-status-banner-warn">
+            <div class="rb-status-banner-icon"></div>
+            <div><div class="rb-status-banner-title">Ни один вариант не уложился в пределы с допуском</div>
+            <div class="rb-status-banner-sub">Ослабьте пределы или потолок ΣF либо расширьте границы параметров.</div></div>
+        </div>
+        <div class="rb-table-wrap">
+        <table class="rb-table">
+            <thead><tr><th>Вариант</th><th>В пределах</th><th class="num">R</th><th class="num">Откат x<sub>max</sub>, м</th><th class="num">Превышение</th></tr></thead>
+            <tbody>
+            {% for c in stage2.candidates %}
+            <tr><td>{{ c.label }}</td><td>{% if c.feasible %}да{% else %}нет{% endif %}</td>
+                <td class="num">{{ c.R|smart_num }}</td><td class="num">{{ c.x_max|smart_num }}</td><td class="num">{{ c.overshoot|pct }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% if pareto_html %}
+        {{ pareto_html|safe }}
+        <p class="rb-muted-note">Левее и ниже — лучше. Ни один вариант не уложился в пределы — по графику видно, насколько не хватило.</p>
+        {% endif %}
+    {% else %}
+
+        {% if stage2.multistart %}
+        <h3 class="rb-h3">Варианты мультистарта</h3>
+        <div class="rb-table-wrap">
+        <table class="rb-table">
+            <thead><tr><th>Вариант</th><th>В пределах</th><th class="num">Устойчивость R</th><th class="num">Откат x<sub>max</sub>, м</th><th class="num">Превышение</th></tr></thead>
+            <tbody>
+            {% for c in stage2.multistart.candidates %}
+            <tr>
+                <td>{{ c.label }}{% if c.is_best %} <span class="rb-badge rb-badge-blue">выбран</span>{% endif %}</td>
+                <td>{% if c.feasible %}да{% else %}нет{% endif %}</td>
+                <td class="num">{{ c.R|smart_num }}</td>
+                <td class="num">{{ c.x_max|smart_num }}</td>
+                <td class="num">{{ c.overshoot|pct }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <p class="rb-muted-note">Оценено вариантов: {{ stage2.multistart.n_evaluated }} (грубый шаг), в пределах: {{ stage2.multistart.n_feasible }}.
+            Выбран самый устойчивый (минимум R); он пересчитан на точном шаге.</p>
+        {% endif %}
+
+        {% if pareto_html %}
+        <h3 class="rb-h3">Откат против устойчивости</h3>
+        {{ pareto_html|safe }}
+        <p class="rb-muted-note">Левее и ниже — лучше: меньше откат и устойчивее. Размер точки — запас до ΣF<sub>max</sub>, звезда — выбранный вариант.</p>
+        {% endif %}
+
+        <div class="rb-split">
+            <div class="rb-grid-2">
+                {% for brake in stage2.params %}
+                <div class="rb-card">
+                    <div class="rb-card-title">
+                        <span class="rb-card-title-text">Тормоз {{ forloop.counter }}{% if stage2.kind == 'multi' %}, доля {{ stage2.weights|index_or:forloop.counter0|smart_num }}{% endif %}</span>
+                    </div>
+                    <table class="rb-params-table">
+                        {% for k, v in brake.items %}<tr><td>{{ k }}</td><td class="num">{{ v|smart_num }}</td></tr>{% endfor %}
+                    </table>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="rb-split-side">
+                <div>
+                    <h3 class="rb-h3">Полная динамика против пределов</h3>
+                    <table class="rb-params-table">
+                        <thead><tr><th>Величина</th><th class="num">Предел</th><th class="num">Итог</th><th></th></tr></thead>
+                        <tr><td>x<sub>max</sub>, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage2.achieved.x_max|smart_num }}</td><td class="st">{% if stage2.achieved.x_max <= study.target_x_max %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                        <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage2.achieved.T|smart_num }}</td><td class="st">{% if stage2.achieved.T <= study.target_T %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                        <tr><td>v в конце, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage2.achieved.v_end|smart_num }}</td><td class="st">{% if stage2.achieved.v_end <= study.target_v_end %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                        <tr><td>пик ΣF, Н</td><td class="num">{{ study.sigma_f_max|smart_num }}</td><td class="num">{{ stage2.sigma_f_peak|smart_num }}</td><td class="st">{% if stage2.sigma_f_ok %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                    </table>
+                    <p class="rb-muted-note">{% if stage2.within_tol %}Все пределы выполнены с учётом допуска.{% else %}Есть превышение сверх допуска.{% endif %}</p>
+                </div>
+                {% if stage2.robustness %}
+                <div>
+                    <h3 class="rb-h3">Устойчивость к разбросу</h3>
+                    <dl class="rb-dl rb-dl-flush">
+                        <dt>R (меньше — устойчивее)</dt><dd>{{ stage2.robustness.R|smart_num }}</dd>
+                        <dt>Разброс x<sub>max</sub></dt><dd>{{ stage2.robustness.rel_sigma.x_max|pct }}</dd>
+                        <dt>Разброс T</dt><dd>{{ stage2.robustness.rel_sigma.T|pct }}</dd>
+                        <dt>Разброс v в конце</dt><dd>{{ stage2.robustness.rel_sigma.v_end|pct }}</dd>
+                        {% if stage2.robustness.dominant %}<dt>Самый влияющий параметр</dt><dd>{{ stage2.robustness.dominant }}</dd>{% endif %}
+                        <dt>Запас до ΣF<sub>max</sub></dt><dd>{{ stage2.robustness.sigma_f_margin|smart_num }} σ</dd>
+                    </dl>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+    </div>
 </section>
 {% endif %}
 
-{# ===== СЧИТАЕТСЯ / ОШИБКА ===== #}
+{% if not study.spawned_run and not can_spawn %}
+<p class="rb-muted-note">Создать расчёт из дизайна нельзя: исходный расчёт удалён или дизайн не получен.</p>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block body_extra %}
 {% if study.status == 'pending' or study.status == 'running' %}
-<section class="rb-module-section" id="rb-poll" data-status-url="{% url 'optimize_status' study.id %}">
-<div class="rb-card" style="text-align:center; padding:48px;">
-    <div class="rb-spinner" style="margin:0 auto 16px;"></div>
-    <div style="font-size:16px; font-weight:600;">Идёт подбор…</div>
-    <div class="rb-text-muted" style="font-size:13px; margin-top:6px;">
-        Синтез характеристики + подбор параметров. Это 15 с … 3 мин.
-        Страница обновится сама; можно уйти и вернуться позже.
-    </div>
-</div>
-</section>
-<style>
-    .rb-spinner { width:36px; height:36px; border:4px solid var(--rb-panel-border);
-        border-top-color: var(--rb-accent, #3D73EB); border-radius:50%;
-        animation: rb-spin 0.9s linear infinite; }
-    @keyframes rb-spin { to { transform: rotate(360deg); } }
-</style>
 <script>
 (function () {
     var el = document.getElementById('rb-poll');
     if (!el) return;
-    var url = el.dataset.statusUrl;
     var timer = setInterval(function () {
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        fetch(el.dataset.statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (d.status === 'done' || d.status === 'error') {
@@ -79,192 +249,5 @@
     }, 3000);
 })();
 </script>
-
-{% elif study.status == 'error' %}
-<section class="rb-module-section">
-<div class="rb-card">
-    <div class="rb-status-banner rb-status-banner-warn">
-        <div class="rb-status-banner-icon">!</div>
-        <div>
-            <div class="rb-status-banner-title">Ошибка при подборе</div>
-            <div class="rb-status-banner-sub" style="white-space:pre-line; font-family:monospace; font-size:12px;">{{ study.error_text }}</div>
-        </div>
-    </div>
-</div>
-</section>
-
-{% else %}
-{# ===== ГОТОВО ===== #}
-
-{# --- STAGE 1: синтез характеристики --- #}
-<section class="rb-module-section rb-section">
-    <div class="rb-section-head"><div class="rb-section-title">Синтез характеристики F(v)</div></div>
-    <div class="rb-plot-grid rb-plot-grid-main">
-        <div class="rb-plot-card rb-plot-card-featured">
-            {% if curve_html %}{{ curve_html|safe }}{% else %}<div class="rb-text-muted" style="padding:40px;">График недоступен</div>{% endif %}
-            {% if design_type == 'parametric' %}
-            <div class="rb-text-muted" style="font-size:11px; padding:4px 8px;">
-                Пунктир — идеал (цель синтеза: максимум торможения до ΣF_max для минимума отката).
-                Сплошная — что реально даёт подобранный вихретоковый тормоз: сила растёт со скоростью
-                и плавно насыщается (постоянную полку он держать не может — это нормально).
-                Итог считается по РЕАЛЬНОЙ динамике этого тормоза (таблица ниже).
-            </div>
-            {% endif %}
-        </div>
-        <div>
-            <div class="rb-card" style="margin-bottom:12px;">
-                <div class="rb-card-title"><span class="rb-card-title-text">Достигнуто (кривая) vs пределы</span></div>
-                <table class="rb-params-table">
-                    <tr><td></td><td class="num">предел ≤</td><td class="num">кривая</td><td class="num">статус</td></tr>
-                    <tr><td>x_max, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage1.achieved.x_max|smart_num }}</td><td class="num">{% if stage1.achieved.x_max <= study.target_x_max %}✓{% else %}✗{% endif %}</td></tr>
-                    <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage1.achieved.T|smart_num }}</td><td class="num">{% if stage1.achieved.T <= study.target_T %}✓{% else %}✗{% endif %}</td></tr>
-                    <tr><td>v_end, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage1.achieved.v_end|smart_num }}</td><td class="num">{% if stage1.achieved.v_end <= study.target_v_end %}✓{% else %}✗{% endif %}</td></tr>
-                    <tr><td>ΣF пик, Н</td><td class="num">{{ study.sigma_f_max|smart_num }}</td><td class="num">{{ stage1.achieved.sigma_f_peak|smart_num }}</td><td class="num">{% if stage1.achieved.sigma_f_peak <= study.sigma_f_max %}✓{% else %}✗{% endif %}</td></tr>
-                </table>
-            </div>
-            <div class="rb-card">
-                <div class="rb-card-title"><span class="rb-card-title-text">Envelope достижимости</span></div>
-                <table class="rb-params-table">
-                    <tr><td>без торможения x_max</td><td class="num">{{ stage1.envelope.no_brake.x_max|smart_num }} м</td></tr>
-                    <tr><td>макс. торможение x_max</td><td class="num">{{ stage1.envelope.full_brake.x_max|smart_num }} м</td></tr>
-                </table>
-            </div>
-        </div>
-    </div>
-    {% if stage1.messages %}
-    <div class="rb-card" style="margin-top:12px;">
-        {% for m in stage1.messages %}<div class="rb-text-muted" style="font-size:13px;">• {{ m }}</div>{% endfor %}
-    </div>
-    {% endif %}
-</section>
-
-{# --- STAGE 2: подбор параметров --- #}
-{% if stage2 %}
-<section class="rb-module-section rb-section">
-    <div class="rb-section-head"><div class="rb-section-title">Подбор физических параметров (Stage 2)</div></div>
-
-    {% if stage2.kind == 'multistart_failed' %}
-    <div class="rb-card">
-        <div class="rb-status-banner rb-status-banner-warn">
-            <div class="rb-status-banner-icon">!</div>
-            <div><div class="rb-status-banner-title">Ни один кандидат не попал в цель в допуске</div>
-            <div class="rb-status-banner-sub">Ослабьте цели/ΣF или расширьте границы параметров.</div></div>
-        </div>
-        <table class="rb-params-table" style="width:100%; margin-top:12px;">
-            <tr><td>кандидат</td><td>под пределами</td><td class="num">R</td><td class="num">откат x_max</td><td class="num">превышение</td></tr>
-            {% for c in stage2.candidates %}
-            <tr><td>{{ c.label }}</td><td>{% if c.feasible %}да{% else %}нет{% endif %}</td>
-                <td class="num">{{ c.R|smart_num }}</td><td class="num">{{ c.x_max|smart_num }}</td><td class="num">{{ c.overshoot|pct }}</td></tr>
-            {% endfor %}
-        </table>
-        {% if pareto_html %}
-        <div style="margin-top:12px;">{{ pareto_html|safe }}</div>
-        <div class="rb-text-muted" style="font-size:11px; margin-top:6px;">
-            Левее и ниже — лучше. Ни один не уложился в пределы (все серые-полые) — видно, насколько.
-        </div>
-        {% endif %}
-    </div>
-    {% else %}
-
-    {# мультистарт-таблица кандидатов #}
-    {% if stage2.multistart %}
-    <div class="rb-card" style="margin-bottom:12px;">
-        <div class="rb-card-title"><span class="rb-card-title-text">Кандидаты мультистарта (★ — выбран по min R)</span></div>
-        <table class="rb-params-table" style="width:100%;">
-            <tr><td>кандидат</td><td>под пределами</td><td class="num">R (робастность)</td><td class="num">откат x_max</td><td class="num">превышение</td></tr>
-            {% for c in stage2.multistart.candidates %}
-            <tr>
-                <td>{{ c.label }}{% if c.is_best %} ★{% endif %}</td>
-                <td>{% if c.feasible %}да{% else %}нет{% endif %}</td>
-                <td class="num">{{ c.R|smart_num }}</td>
-                <td class="num">{{ c.x_max|smart_num }}</td>
-                <td class="num">{{ c.overshoot|pct }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        <div class="rb-text-muted" style="font-size:11px; margin-top:6px;">
-            Оценено {{ stage2.multistart.n_evaluated }} (грубый скрининг), допустимо {{ stage2.multistart.n_feasible }}; победитель доведён точно.
-        </div>
-    </div>
-    {% endif %}
-
-    {% if pareto_html %}
-    <div class="rb-card" style="margin-bottom:12px;">
-        <div class="rb-card-title"><span class="rb-card-title-text">Парето: близость к цели ↔ робастность</span></div>
-        {{ pareto_html|safe }}
-        <div class="rb-text-muted" style="font-size:11px; margin-top:6px;">
-            Левее и ниже — лучше (меньше откат и робастнее). Размер точки — запас до ΣF_max (крупнее = безопаснее). ★ — выбранный по min R.
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="rb-plot-grid rb-plot-grid-main">
-        <div>
-            {% for brake in stage2.params %}
-            <div class="rb-card" style="margin-bottom:12px;">
-                <div class="rb-card-title">
-                    <span class="rb-card-title-text">Тормоз {{ forloop.counter }}{% if stage2.kind == 'multi' %} · доля {{ stage2.weights|index_or:forloop.counter0|smart_num }}{% endif %}</span>
-                </div>
-                <table class="rb-params-table">
-                    {% for k, v in brake.items %}<tr><td>{{ k }}</td><td class="num">{{ v|smart_num }}</td></tr>{% endfor %}
-                </table>
-            </div>
-            {% endfor %}
-        </div>
-        <div>
-            <div class="rb-card" style="margin-bottom:12px;">
-                <div class="rb-card-title"><span class="rb-card-title-text">Полная динамика vs пределы</span></div>
-                <table class="rb-params-table">
-                    <tr><td></td><td class="num">предел ≤</td><td class="num">достигнуто</td><td class="num">статус</td></tr>
-                    <tr><td>x_max, м</td><td class="num">{{ study.target_x_max|smart_num }}</td><td class="num">{{ stage2.achieved.x_max|smart_num }}</td><td class="num">{% if stage2.achieved.x_max <= study.target_x_max %}✓{% else %}✗{% endif %}</td></tr>
-                    <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage2.achieved.T|smart_num }}</td><td class="num">{% if stage2.achieved.T <= study.target_T %}✓{% else %}✗{% endif %}</td></tr>
-                    <tr><td>v_end, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage2.achieved.v_end|smart_num }}</td><td class="num">{% if stage2.achieved.v_end <= study.target_v_end %}✓{% else %}✗{% endif %}</td></tr>
-                </table>
-                <div style="margin-top:8px;">
-                    {% if stage2.within_tol %}<span class="rb-badge rb-badge-ok">в допуске</span>{% else %}<span class="rb-badge rb-badge-warn">вне допуска</span>{% endif %}
-                    {% if stage2.sigma_f_ok %}<span class="rb-badge rb-badge-ok">ΣF в пределах</span>{% else %}<span class="rb-badge rb-badge-warn">ΣF превышен</span>{% endif %}
-                </div>
-                <div class="rb-text-muted" style="font-size:12px; margin-top:6px;">
-                    ΣF пик = {{ stage2.sigma_f_peak|smart_num }} Н / потолок {{ study.sigma_f_max|smart_num }} Н
-                </div>
-            </div>
-            {% if stage2.robustness %}
-            <div class="rb-card">
-                <div class="rb-card-title"><span class="rb-card-title-text">Робастность</span></div>
-                <table class="rb-params-table">
-                    <tr><td>R (меньше = робастнее)</td><td class="num">{{ stage2.robustness.R|smart_num }}</td></tr>
-                    <tr><td>σ[x_max]</td><td class="num">{{ stage2.robustness.rel_sigma.x_max|pct }}</td></tr>
-                    <tr><td>σ[T]</td><td class="num">{{ stage2.robustness.rel_sigma.T|pct }}</td></tr>
-                    <tr><td>σ[v_end]</td><td class="num">{{ stage2.robustness.rel_sigma.v_end|pct }}</td></tr>
-                    {% if stage2.robustness.dominant %}<tr><td>критичный параметр</td><td class="num">{{ stage2.robustness.dominant }}</td></tr>{% endif %}
-                    <tr><td>запас до ΣF_max</td><td class="num">{{ stage2.robustness.sigma_f_margin|smart_num }}σ</td></tr>
-                </table>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-</section>
-{% endif %}
-
-{# --- ОТПОЧКОВАНИЕ --- #}
-<section class="rb-module-section">
-<div class="rb-card" style="text-align:center; padding:24px;">
-    {% if study.spawned_run %}
-        <div class="rb-text-muted" style="margin-bottom:10px;">Расчёт из этого дизайна уже создан.</div>
-        <a class="rb-btn rb-btn-grad" href="{% url 'run_detail_v2' study.spawned_run.id %}">→ Открыть расчёт «{{ study.spawned_run.name }}»</a>
-    {% elif can_spawn %}
-        <div class="rb-text-muted" style="margin-bottom:10px;">
-            Создать полноценный расчёт из подобранного дизайна (полная страница результата, тепло, сравнение).
-        </div>
-        <form method="post" action="{% url 'optimize_spawn' study.id %}" style="display:inline;">
-            {% csrf_token %}<button type="submit" class="rb-btn rb-btn-grad">⎇ Создать расчёт из дизайна</button>
-        </form>
-    {% else %}
-        <div class="rb-text-muted">Отпочкование недоступно (донор удалён или нет дизайна).</div>
-    {% endif %}
-</div>
-</section>
-
 {% endif %}
 {% endblock %}

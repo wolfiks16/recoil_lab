@@ -73,7 +73,6 @@
         return "partial";
     }
 
-    const STATUS_ICONS = { complete: "✓", partial: "⚠", empty: "○", error: "✗" };
     const STATUS_TITLES = {
         complete: "Все параметры заполнены",
         partial: "Заполнены не все параметры",
@@ -100,8 +99,9 @@
             li.innerHTML = `
                 <div class="rb-cad-brake-item-icon">${index + 1}</div>
                 <div class="rb-cad-brake-item-name" title="${name}">${name}</div>
-                <span class="rb-cad-brake-item-status is-${status}" title="${STATUS_TITLES[status]}">${STATUS_ICONS[status]}</span>
-                <div class="rb-cad-brake-item-badge">${type === "curve" ? "F(v)" : "пар"}</div>
+                <span class="rb-cad-brake-item-status is-${status}" title="${STATUS_TITLES[status]}"
+                      role="img" aria-label="${STATUS_TITLES[status]}"></span>
+                <div class="rb-cad-brake-item-badge">${type === "curve" ? "таблица F(v)" : "параметры"}</div>
             `;
 
             li.addEventListener("click", () => {

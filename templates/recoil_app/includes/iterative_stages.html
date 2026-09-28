@@ -32,7 +32,7 @@
                 <td class="num">{% if s.index > 0 %}{{ s.return_t|smart_num }}{% endif %}</td>
                 <td class="num">{% if s.index > 0 %}{{ s.return_v|smart_num }}{% endif %}</td>
                 {% endif %}
-                <td class="it-mono">{{ s.kinds|join:" · " }}</td>
+                <td class="it-mono">{{ s.kinds|join:", " }}</td>
                 <td>{% for c in s.changes %}<div>{{ c }}</div>{% empty %}<span class="rb-text-muted">—</span>{% endfor %}</td>
             </tr>
         {% endfor %}

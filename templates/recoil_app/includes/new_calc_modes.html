@@ -1,0 +1,16 @@
+{# Единый вход «Новый расчёт»: переключатель режима над формой.
+   mode: recoil | free_fall | iterative. ?from_run= сохраняется при переключении. #}
+{% with q=request.GET.from_run %}
+<div class="rb-mode-switch">
+    <nav class="rb-seg" aria-label="Режим расчёта">
+        <a href="{% url 'index' %}{% if q %}?from_run={{ q }}{% endif %}"{% if mode == 'recoil' %} aria-current="page"{% endif %}>Откат и накат</a>
+        <a href="{% url 'free_fall_new' %}{% if q %}?from_run={{ q }}{% endif %}"{% if mode == 'free_fall' %} aria-current="page"{% endif %}>Свободное падение</a>
+        <a href="{% url 'iterative_new' %}{% if q %}?from_run={{ q }}{% endif %}"{% if mode == 'iterative' %} aria-current="page"{% endif %}>Пошагово</a>
+    </nav>
+    <p class="rb-mode-hint">
+        {% if mode == 'recoil' %}Выстрел по входному файлу (сила от времени и пружина), откат и возврат в x = 0.
+        {% elif mode == 'free_fall' %}Тело падает под действием тяжести, тормоза противодействуют. Входной файл не нужен.
+        {% else %}Расчёт по шагам с перестройкой тормозов по ходу отката; на накате конфигурация возвращается сама.{% endif %}
+    </p>
+</div>
+{% endwith %}
