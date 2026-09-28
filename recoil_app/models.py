@@ -169,6 +169,9 @@ class CalculationRun(models.Model):
     )
     # null/blank: в режиме свободного падения входной Excel-файл не нужен.
     input_file = models.FileField(upload_to="uploads/", null=True, blank=True)
+    # Итог итерационного расчёта (Срез 12): тормоза перестраивались по ходу,
+    # этапы — в `brake_stages`, этап каждой точки — в snapshot["iterative"].
+    is_iterative = models.BooleanField(default=False)
     # Владелец расчёта. Null допустим для legacy-расчётов (до введения auth),
     # но миграция назначает их первому суперпользователю; после миграции у новых
     # расчётов owner всегда заполнен (view ставит request.user).
@@ -569,3 +572,138 @@ class DesignStudy(models.Model):
     @property
     def is_finished(self) -> bool:
         return self.status in (self.STATUS_DONE, self.STATUS_ERROR)
+
+
+# ============================================================================
+# Итерационный расчёт с перестройкой тормозов (Срез 12)
+# ============================================================================
+
+
+def iterative_upload_to(instance, filename: str) -> str:
+    return f"{instance.media_folder}/{Path(filename).name}"
+
+
+class IterativeCalc(models.Model):
+    """Итерационный расчёт: сессия пошагового интегрирования с перестройкой тормозов.
+
+    Хранит состояние движка (`state` = `IterativeSession.to_dict()`) и историю
+    узлов (`history_file` — .npz ТОЙ ЖЕ версии, что `version`). Каждое действие
+    (шаг, Δx, смена конфигурации) — загрузка → продвижение → сохранение новой
+    версии (оптимистичная блокировка по `version`). По завершении итог
+    сохраняется обычным `CalculationRun` (`result_run`, `is_iterative=True`).
+    Логика — `services/iterative/store.py`.
+    """
+
+    STATUS_ACTIVE = "active"
+    STATUS_FINISHING = "finishing"   # «Досчитать до конца» идёт в фоновом потоке
+    STATUS_FINISHED = "finished"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Идёт"),
+        (STATUS_FINISHING, "Досчитывается"),
+        (STATUS_FINISHED, "Завершён"),
+    ]
+
+    # Имя будущего CalculationRun (те же правила: латиница/цифры/-/_).
+    name = models.CharField(max_length=200, unique=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="iterative_calcs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    mode = models.CharField(
+        max_length=16,
+        choices=CalculationRun.MODE_CHOICES,
+        default=CalculationRun.MODE_RECOIL,
+    )
+    # Входной Excel (F(t)/F(x)) — только для отката; своя копия, не общая с донором.
+    input_file = models.FileField(upload_to=iterative_upload_to, null=True, blank=True)
+    source_run = models.ForeignKey(
+        CalculationRun,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="+",
+    )
+
+    mass = models.FloatField()
+    angle_deg = models.FloatField(default=70.0)
+    v0 = models.FloatField(default=0.0)
+    x0 = models.FloatField(default=0.0)
+    t_max = models.FloatField(default=0.15)
+    dt = models.FloatField(default=1e-4)
+
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    # Ошибка фонового завершения (сессия вернулась в «идёт», состояние не тронуто).
+    error_text = models.TextField(blank=True, default="")
+    version = models.PositiveIntegerField(default=0)
+    state = models.JSONField(default=dict, blank=True)
+    history_file = models.FileField(upload_to=iterative_upload_to, null=True, blank=True)
+
+    result_run = models.ForeignKey(
+        CalculationRun,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Итерационный расчёт"
+        verbose_name_plural = "Итерационные расчёты"
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def media_folder(self) -> str:
+        return f"iterative/calc_{self.pk or 'new'}"
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == self.STATUS_ACTIVE
+
+    @property
+    def is_finishing(self) -> bool:
+        return self.status == self.STATUS_FINISHING
+
+    @property
+    def is_free_fall(self) -> bool:
+        return self.mode == CalculationRun.MODE_FREE_FALL
+
+
+class BrakeStage(models.Model):
+    """Этап конфигурации тормозов итерационного расчёта (этап 0 — исходная).
+
+    Тормоза расчёта (`MagneticBrakeConfig`) остаются «физическими»: по одной
+    записи на тормоз — на них опираются тепло, 3D-геометрия, копирование. Полная
+    конфигурация каждого этапа (параметры/таблица/отключён по всем тормозам)
+    хранится здесь в `config` (формат `services/iterative/config.config_to_list`).
+    """
+
+    run = models.ForeignKey(
+        CalculationRun,
+        on_delete=models.CASCADE,
+        related_name="brake_stages",
+    )
+    stage = models.PositiveIntegerField()
+    config = models.JSONField(default=list, blank=True)
+    # Точка включения на откате (у этапа 0 — None).
+    x_switch = models.FloatField(null=True, blank=True)
+    t_forward = models.FloatField(null=True, blank=True)
+    v_forward = models.FloatField(null=True, blank=True)
+    # Снятие этапа на накате (возврат к предыдущему). None — не снят (свободное
+    # падение, остановленный расчёт, этап 0).
+    t_return = models.FloatField(null=True, blank=True)
+    v_return = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Этап тормозов"
+        verbose_name_plural = "Этапы тормозов"
+        ordering = ["run", "stage"]
+        unique_together = [("run", "stage")]
+
+    def __str__(self) -> str:
+        return f"Этап {self.stage} расчёта {self.run_id}"

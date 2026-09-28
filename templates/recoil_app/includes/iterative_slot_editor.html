@@ -1,0 +1,36 @@
+{% comment %}
+Редактор конфигурации тормозов итерационного расчёта (formset `slots`).
+editor_mode: "new" — исходная конфигурация C₀ (любой тормоз можно убрать);
+             "reconfigure" — смена в текущем узле (тормоза расчёта не удаляются, только выключаются).
+{% endcomment %}
+<div class="it-editor" data-editor data-editor-mode="{{ editor_mode }}">
+    {{ slot_formset.management_form }}
+    {% if slot_formset.non_form_errors %}
+    <div class="it-field-error">{{ slot_formset.non_form_errors|join:" " }}</div>
+    {% endif %}
+
+    <div class="it-slots" data-slots>
+        {% for form in slot_formset %}
+            {% if editor_mode == 'new' %}
+                {% include "recoil_app/includes/iterative_slot_card.html" with form=form number=forloop.counter removable=True existing=False new_badge=False %}
+            {% else %}
+                {% include "recoil_app/includes/iterative_slot_card.html" with form=form number=forloop.counter removable=False existing=True new_badge=False %}
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <button type="button" class="rb-cad-add-brake" data-add-slot>+ Добавить тормоз</button>
+    {% if editor_mode == 'reconfigure' %}
+    <div class="it-hint">
+        Новый тормоз включится с текущего узла; на прошлых этапах он считается выключенным.
+    </div>
+    {% endif %}
+
+    <template data-slot-template>
+        {% if editor_mode == 'reconfigure' %}
+            {% include "recoil_app/includes/iterative_slot_card.html" with form=slot_formset.empty_form number="__number__" removable=True existing=False new_badge=True %}
+        {% else %}
+            {% include "recoil_app/includes/iterative_slot_card.html" with form=slot_formset.empty_form number="__number__" removable=True existing=False new_badge=False %}
+        {% endif %}
+    </template>
+</div>

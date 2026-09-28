@@ -1,0 +1,260 @@
+/* RecoilLab · Итерационный расчёт (Срез 12). Токены — из design_system.css. */
+
+/* === Страница сессии: слева управление + состояние, справа графики === */
+.it-layout {
+    display: grid;
+    grid-template-columns: minmax(340px, 4fr) 8fr;
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 16px;
+}
+
+@media (max-width: 1200px) {
+    .it-layout { grid-template-columns: 1fr; }
+}
+
+.it-col-left { display: flex; flex-direction: column; gap: 16px; }
+
+.it-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 12px;
+}
+
+.it-charts .rb-plot-card { padding: 8px; }
+
+.it-charts-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.it-stage-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--rb-text-soft);
+    cursor: pointer;
+    user-select: none;
+}
+.it-chart { width: 100%; height: 320px; }
+
+/* === Управление === */
+.it-controls-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.it-input-short {
+    width: 110px;
+    padding: 7px 10px;
+    border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+}
+
+/* У .rb-btn в дизайн-системе нет вида «недоступна» — без него отключённые кнопки
+   («Отменить», шаги после конца) неотличимы от активных. */
+.it-controls .rb-btn:disabled,
+.it-controls input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.it-finish {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--rb-panel-border);
+}
+
+.it-hint {
+    font-size: 11px;
+    color: var(--rb-text-muted);
+}
+
+/* === Текущий узел === */
+.it-badges { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.it-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.it-kpi {
+    background: var(--rb-panel-bg);
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius-sm);
+    padding: 8px 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.it-kpi-label { font-size: 11px; color: var(--rb-text-muted); font-weight: 600; min-width: 100%; }
+.it-kpi-value { font-family: "JetBrains Mono", Consolas, monospace; font-size: 15px; font-weight: 700; color: var(--rb-text); }
+.it-kpi-unit { font-size: 11px; color: var(--rb-text-soft); }
+
+.it-meta { font-size: 12px; color: var(--rb-text-soft); margin: 8px 0; line-height: 1.6; }
+.it-brakes { margin-top: 6px; }
+.it-warnings { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--rb-warn-dark); }
+
+/* === Этапы === */
+.it-stages td { vertical-align: top; }
+.it-stage-active { background: var(--rb-grad-soft); }
+.it-mono { font-family: "JetBrains Mono", Consolas, monospace; }
+
+/* === Редактор тормозов === */
+.it-slots { display: flex; flex-direction: column; gap: 12px; }
+
+.it-slot {
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius);
+    padding: 12px 14px;
+    background: var(--rb-panel-bg);
+}
+
+.it-slot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.it-slot-title { font-weight: 700; font-size: 14px; }
+.it-slot-spacer { flex: 1; }
+
+.it-slot-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+
+.it-slot-params {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+}
+
+.it-slot-curve { display: flex; flex-direction: column; gap: 6px; }
+.it-slot-curve > .it-field { flex: 0 0 auto; }   /* flex-basis широкого поля — ширина только в строке */
+.it-slot-off { font-size: 12px; color: var(--rb-text-muted); }
+.it-curve-info { font-size: 12px; color: var(--rb-text-soft); }
+
+.it-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.it-field-wide { flex: 1 1 260px; }
+.it-field-label { font-size: 11px; font-weight: 600; color: var(--rb-text-soft); }
+
+.it-field input[type="text"],
+.it-field input[type="number"],
+.it-field input[type="file"],
+.it-field select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm);
+    background: var(--rb-panel-bg-white);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+.it-field-error { font-size: 11px; color: var(--rb-danger-dark); }
+
+/* Изменённое относительно текущей конфигурации поле. */
+.it-field .it-changed,
+.it-changed {
+    border-color: var(--rb-accent) !important;
+    background: rgba(180, 77, 122, 0.08) !important;
+}
+
+/* === Страница старта === */
+.it-new-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, 4fr) 8fr;
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .it-new-grid { grid-template-columns: 1fr; }
+}
+
+.it-form-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+}
+
+.it-form-fields .it-field-wide { grid-column: 1 / -1; }
+
+.it-mode { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+.it-mode-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+}
+.it-mode-option:has(input:checked) {
+    border-color: var(--rb-blue);
+    background: rgba(61, 115, 235, 0.08);
+    font-weight: 600;
+}
+
+.it-submit-row { margin-top: 16px; display: flex; justify-content: flex-end; }
+
+/* === «Считаю…» === */
+.it-busy {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--rb-ws-bg);
+    color: var(--rb-ws-text);
+    padding: 10px 16px;
+    border-radius: var(--rb-radius);
+    box-shadow: var(--rb-shadow-lg);
+    font-size: 13px;
+    z-index: 9000;
+}
+
+.it-busy[hidden] { display: none; }
+
+.it-spinner {
+    width: 18px;
+    height: 18px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #FFFFFF;
+    border-radius: 50%;
+    animation: it-spin 0.9s linear infinite;
+}
+
+@keyframes it-spin { to { transform: rotate(360deg); } }
+
+.it-spinner-dark {
+    flex-shrink: 0;
+    border-color: var(--rb-panel-border);
+    border-top-color: var(--rb-blue);
+}
+
+.it-reset-form { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+/* === Клонирование (раскрывающаяся форма в заголовке) === */
+.it-clone { position: relative; display: inline-block; }
+.it-clone > summary { list-style: none; cursor: pointer; }
+.it-clone > summary::-webkit-details-marker { display: none; }
+.it-clone-form {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 50;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    background: var(--rb-panel-bg-white);
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius);
+    box-shadow: var(--rb-shadow-md);
+}
+
+[hidden] { display: none !important; }

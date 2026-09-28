@@ -1,0 +1,100 @@
+{% load recoil_extras %}
+{% comment %}
+Этапы конфигурации тормозов на странице итогового итерационного расчёта.
+Данные — services/iterative/result_view.build_stage_tables (из BrakeStage).
+{% endcomment %}
+<section class="rb-module-section rb-section" data-module="stages">
+    <div class="rb-section-head">
+        <div class="rb-section-title">Этапы конфигурации тормозов</div>
+        <label class="rs-stage-toggle" title="Полосы этапов и линии переключений на графиках">
+            <input type="checkbox" data-stage-toggle> Этапы на графиках
+        </label>
+        {% if iterative_calc %}
+        <a class="rb-btn rb-btn-sm" href="{% url 'iterative_detail' iterative_calc.id %}">Сессия расчёта →</a>
+        {% endif %}
+    </div>
+
+    <div class="rb-card">
+        <div class="rb-text-muted" style="font-size: 12px; margin-bottom: 10px;">
+            Конфигурация — функция положения: этап k действует на участке от x_k до следующей точки.
+            {% if not stage_tables.is_free_fall %}На накате система возвращалась к прежним конфигурациям в тех же точках, в обратном порядке.{% endif %}
+            Переключатель «Этапы на графиках» показывает на графиках этапы цветными полосами,
+            переключения — жёлтыми линиями{% if not stage_tables.is_free_fall %} (откат — сплошные, накат — пунктир){% endif %}.
+        </div>
+        <table class="rb-params-table">
+            <thead>
+                <tr>
+                    <th>Этап</th>
+                    <th class="num">x вкл., м</th>
+                    <th class="num">t вкл., с</th>
+                    <th class="num">v вкл., м/с</th>
+                    {% if not stage_tables.is_free_fall %}
+                    <th class="num">t снятия (накат), с</th>
+                    <th class="num">v снятия, м/с</th>
+                    {% endif %}
+                    <th>Тормоза</th>
+                    <th>Изменения</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in stage_tables.stages %}
+                <tr>
+                    <td>{{ s.index }}</td>
+                    {% if s.index == 0 %}
+                    <td class="num" colspan="3"><span class="rb-text-muted">исходная</span></td>
+                    {% else %}
+                    <td class="num">{{ s.x|smart_num }}</td>
+                    <td class="num">{{ s.t|smart_num }}</td>
+                    <td class="num">{{ s.v|smart_num }}</td>
+                    {% endif %}
+                    {% if not stage_tables.is_free_fall %}
+                    <td class="num">{% if s.index > 0 %}{{ s.return_t|smart_num }}{% endif %}</td>
+                    <td class="num">{% if s.index > 0 %}{{ s.return_v|smart_num }}{% endif %}</td>
+                    {% endif %}
+                    <td>{{ s.kinds|join:" · " }}</td>
+                    <td>{% for c in s.changes %}<div>{{ c }}</div>{% empty %}<span class="rb-text-muted">—</span>{% endfor %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="rb-card" style="margin-top: 12px;">
+        <div class="rb-card-title"><span class="rb-card-title-text">Параметры тормозов по этапам</span></div>
+        {% for brake in stage_tables.brakes %}
+        <details class="rs-brake"{% if brake.changed_params or brake.state_changed %} open{% endif %}>
+            <summary>
+                Тормоз {{ brake.number }}
+                <span class="rb-text-muted">
+                {% if brake.changed_params or brake.state_changed %}
+                    — изменялись:
+                    {% if brake.state_changed %}состояние{% if brake.changed_params %}, {% endif %}{% endif %}{{ brake.changed_params|join:", " }}
+                {% else %}
+                    — без изменений
+                {% endif %}
+                </span>
+            </summary>
+            <table class="rb-params-table rs-params">
+                <thead>
+                    <tr>
+                        <th>Параметр</th>
+                        {% for n in stage_tables.stage_numbers %}<th class="num">этап {{ n }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in brake.rows %}
+                    <tr>
+                        <td>{{ row.label }}</td>
+                        {% for cell in row.cells %}
+                        <td class="num{% if cell.changed %} rs-changed{% endif %}">
+                            {% if cell.text %}{{ cell.value }}{% elif cell.value is None %}—{% else %}{{ cell.value|smart_num }}{% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endfor %}
+    </div>
+</section>

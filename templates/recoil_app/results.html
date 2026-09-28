@@ -196,6 +196,9 @@
                 {% elif c.status == 'free_fall' %}
                     <span class="rb-badge rb-badge-blue">{{ c.status_label }}</span>
                 {% endif %}
+                {% if run.is_iterative %}
+                    <span class="rb-badge rb-badge-accent" title="Итерационный расчёт: тормоза перестраивались по ходу">итерац.</span>
+                {% endif %}
                 {% if c.has_warnings %}
                     <span class="rb-badge rb-badge-warn" title="Есть предупреждения">!</span>
                 {% endif %}

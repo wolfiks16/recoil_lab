@@ -1,0 +1,46 @@
+{% load recoil_extras %}
+{# Этапы конфигурации итерационного расчёта. Перерисовывается после каждого действия (AJAX). #}
+<div class="rb-card">
+    <div class="rb-card-title"><span class="rb-card-title-text">Этапы конфигурации</span></div>
+    <table class="rb-params-table it-stages">
+        <thead>
+            <tr>
+                <th>Этап</th>
+                <th class="num">x вкл., м</th>
+                <th class="num">t вкл., с</th>
+                <th class="num">v вкл., м/с</th>
+                {% if state.mode == 'recoil' %}
+                <th class="num">t снятия (накат), с</th>
+                <th class="num">v снятия, м/с</th>
+                {% endif %}
+                <th>Тормоза</th>
+                <th>Изменения</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in state.stages %}
+            <tr{% if s.active %} class="it-stage-active"{% endif %}>
+                <td>{{ s.index }}{% if s.active %} ◂{% endif %}</td>
+                {% if s.index == 0 %}
+                <td class="num" colspan="3"><span class="rb-text-muted">исходная</span></td>
+                {% else %}
+                <td class="num">{{ s.x|smart_num }}</td>
+                <td class="num">{{ s.t|smart_num }}</td>
+                <td class="num">{{ s.v|smart_num }}</td>
+                {% endif %}
+                {% if state.mode == 'recoil' %}
+                <td class="num">{% if s.index > 0 %}{{ s.return_t|smart_num }}{% endif %}</td>
+                <td class="num">{% if s.index > 0 %}{{ s.return_v|smart_num }}{% endif %}</td>
+                {% endif %}
+                <td class="it-mono">{{ s.kinds|join:" · " }}</td>
+                <td>{% for c in s.changes %}<div>{{ c }}</div>{% empty %}<span class="rb-text-muted">—</span>{% endfor %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if state.mode == 'recoil' %}
+    <div class="it-hint">
+        На накате конфигурация возвращается автоматически в тех же точках x, в обратном порядке.
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,75 @@
+{% comment %}
+Один тормоз в редакторе конфигурации итерационного расчёта.
+Параметры: form, number, removable (кнопка «Убрать»), existing (тормоз уже в расчёте),
+new_badge (бейдж «новый» — у тормоза, добавленного при смене конфигурации).
+{% endcomment %}
+<div class="it-slot" data-slot>
+    <div class="it-slot-head">
+        <span class="it-slot-title" data-slot-title>Тормоз {{ number }}</span>
+        {% if existing %}
+            {% if form.initial.kind == 'parametric' %}<span class="rb-badge rb-badge-blue">сейчас: параметрический</span>
+            {% elif form.initial.kind == 'curve' %}<span class="rb-badge rb-badge-accent">сейчас: табличный</span>
+            {% elif form.initial.kind == 'off' %}<span class="rb-badge">сейчас: выключен</span>{% endif %}
+        {% elif new_badge %}
+            <span class="rb-badge rb-badge-ok" data-new-badge>новый</span>
+        {% endif %}
+        <span class="it-slot-spacer"></span>
+        {% if removable %}
+        <button type="button" class="rb-btn rb-btn-sm rb-btn-danger" data-remove-slot>× Убрать</button>
+        {% endif %}
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="it-field-error">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+
+    <div class="it-slot-row">
+        <label class="it-field">
+            <span class="it-field-label">Состояние</span>
+            {{ form.kind }}
+        </label>
+        {% if catalog_count %}
+        <label class="it-field it-field-wide">
+            <span class="it-field-label">Подставить из каталога</span>
+            <select class="it-catalog-select" data-catalog-select>
+                <option value="">— не выбрано —</option>
+                {% for item in catalog_items %}
+                <option value="{{ item.id }}" data-model-type="{{ item.model_type }}">{{ item.name }} ({{ item.summary }})</option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+    </div>
+
+    <div class="it-slot-params" data-kind-block="parametric">
+        {% for field in form.param_fields %}
+        <label class="it-field">
+            <span class="it-field-label">{{ field.label }}</span>
+            {{ field }}
+            {% if field.errors %}<span class="it-field-error">{{ field.errors|join:" " }}</span>{% endif %}
+        </label>
+        {% endfor %}
+    </div>
+
+    <div class="it-slot-curve" data-kind-block="curve">
+        {% if form.initial.curve_info %}
+        <div class="it-curve-info">
+            Текущая таблица: {{ form.initial.curve_info }}{% if form.initial.keep_curve or form.initial.source_brake_id %} — останется, если не загрузить новую{% endif %}
+        </div>
+        {% endif %}
+        <div class="it-curve-info" data-catalog-note hidden></div>
+        <label class="it-field it-field-wide">
+            <span class="it-field-label">{{ form.force_curve_file.label }}</span>
+            {{ form.force_curve_file }}
+            {% if form.force_curve_file.errors %}<span class="it-field-error">{{ form.force_curve_file.errors|join:" " }}</span>{% endif %}
+        </label>
+        <div class="it-hint">{{ form.force_curve_file.help_text }}</div>
+    </div>
+
+    <div class="it-slot-off" data-kind-block="off">
+        Тормоз выключен: F = 0. Параметры сохранятся — их можно включить обратно на следующем этапе.
+    </div>
+
+    {{ form.catalog_source_id }}{{ form.source_brake_id }}{{ form.keep_curve }}
+    <span hidden>{{ form.DELETE }}</span>
+</div>

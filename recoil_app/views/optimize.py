@@ -22,7 +22,7 @@ from ..services.design.persist import create_brakes_from_design
 from ..services.design.runner import start_study
 from ..services.dynamics import RecoilParams, simulate_recoil
 from ..services.permissions import can_run_calc
-from .run import _persist_result_and_snapshot
+from ..services.run_pipeline import persist_result_and_snapshot
 
 
 def _can_view_study(user, study: DesignStudy) -> bool:
@@ -199,7 +199,7 @@ def optimize_spawn_view(request, study_id):
             recoil = RecoilParams(mass=run.mass, angle_deg=run.angle_deg, v0=run.v0,
                                   x0=run.x0, t_max=run.t_max, dt=run.dt)
             result = simulate_recoil(run.input_file.path, recoil, runtime)
-            _persist_result_and_snapshot(run, brake_objects, result)
+            persist_result_and_snapshot(run, brake_objects, result)
 
             study.spawned_run = run
             study.save(update_fields=["spawned_run"])

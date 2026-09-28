@@ -3,7 +3,7 @@
 
    Использование в шаблоне:
      <div id="rb-shell-mount"
-          data-active="result"             // dashboard | workspace | result | optimize | compare | catalog
+          data-active="result"             // dashboard | workspace | free_fall | iterative | result | optimize | compare | catalog
           data-crumb="H155-v4-optimal"     // что показывать в breadcrumb после "Проекты / RecoilLab /"
           data-index-url="{% url 'index' %}"
           data-compare-url="{% url 'compare' %}"
@@ -31,6 +31,11 @@
             key: 'free_fall',
             title: 'Свободное падение',
             icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7"/><path d="m8 12 4 4 4-4"/><path d="M5 21h14"/></svg>'
+        },
+        {
+            key: 'iterative',
+            title: 'Итерационный расчёт',
+            icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>'
         },
         {
             key: 'result',
@@ -74,6 +79,7 @@
         const crumb         = mountEl.dataset.crumb || '';
         const indexUrl      = mountEl.dataset.indexUrl || '/';
         const freeFallUrl   = mountEl.dataset.freeFallUrl || '#';
+        const iterativeUrl  = mountEl.dataset.iterativeUrl || '#';
         const dashboardUrl  = mountEl.dataset.dashboardUrl || indexUrl;
         const resultsUrl    = mountEl.dataset.resultsUrl || '#';
         const compareUrl    = mountEl.dataset.compareUrl || '/compare/';
@@ -97,6 +103,7 @@
             dashboard: dashboardUrl,
             workspace: indexUrl,
             free_fall: freeFallUrl,
+            iterative: iterativeUrl,
             result:    resultsUrl,
             optimize:  optimizeUrl,
             compare:   compareUrl,

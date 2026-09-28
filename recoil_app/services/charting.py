@@ -75,6 +75,105 @@ def _add_recoil_vline(fig: go.Figure, result, label_text: str = "разворо�
     )
 
 
+# --- Этапы итерационного расчёта (Срез 12) ---------------------------------
+# overlay — словарь из services/iterative/overlay.build_stage_overlay (charting о
+# пакете iterative не знает): segments / x_bands / events / stage_index.
+
+_SWITCH_COLOR = RB_AMBER
+STAGE_BAND_ALPHA = 0.08
+STAGE_LABEL_MIN_FRACTION = 0.03   # подпись полосы этапа — если она шире 3% окна графика
+
+# Этапы на графиках скрыты по умолчанию (пользователь: «не читаемо») — страница
+# включает их переключателем «Этапы на графиках» (static/.../js/stage_toggle.js).
+# Все элементы этапов помечены: shapes/annotations — name="stage-*", трассы — meta="stage".
+STAGES_VISIBLE_DEFAULT = False
+STAGE_BAND_NAME = "stage-band"
+STAGE_SWITCH_NAME = "stage-switch"
+STAGE_LABEL_NAME = "stage-label"
+STAGE_TRACE_META = "stage"
+
+
+def _stage_color(stage: int) -> str:
+    """Цвет этапа: этап 0 — синий (исходная), дальше по палитре серий."""
+    return SERIES_PALETTE[stage % len(SERIES_PALETTE)]
+
+
+def _add_stage_overlay_t(fig: go.Figure, overlay: dict | None, t_range=None, labels: bool = True) -> None:
+    """Полосы этапов (k ≥ 1) по времени + линии переключений (откат — сплошные, накат — пунктир).
+
+    t_range — окно графика (фазы): полосы обрезаются, события вне окна не рисуются,
+    чтобы не растягивать ось.
+    """
+    if not overlay:
+        return
+    segments = overlay.get("segments", [])
+    lo, hi = t_range if t_range is not None else (-math.inf, math.inf)
+    span_lo = max(lo, segments[0]["t0"]) if segments else lo
+    span_hi = min(hi, segments[-1]["t1"]) if segments else hi
+    min_label_width = STAGE_LABEL_MIN_FRACTION * max(span_hi - span_lo, 0.0)
+    for seg in segments:
+        if seg["stage"] == 0:
+            continue
+        x0, x1 = max(seg["t0"], lo), min(seg["t1"], hi)
+        if x1 <= x0:
+            continue
+        color = _stage_color(seg["stage"])
+        kwargs = {}
+        # Узкие полосы (частые переключения на быстром откате) без подписи — иначе подписи
+        # соседних этапов налезают; этап виден по цвету и подписан на широкой полосе наката.
+        if labels and x1 - x0 >= min_label_width:
+            kwargs = _stage_label_kwargs(seg["stage"], color)
+        fig.add_vrect(x0=x0, x1=x1, fillcolor=_hex_to_rgba(color, STAGE_BAND_ALPHA),
+                      line_width=0, layer="below", name=STAGE_BAND_NAME,
+                      visible=STAGES_VISIBLE_DEFAULT, **kwargs)
+    for event in overlay.get("events", []):
+        if not lo <= event["t"] <= hi:
+            continue
+        fig.add_vline(
+            x=float(event["t"]),
+            line=dict(color=_SWITCH_COLOR, width=1.1,
+                      dash="solid" if event["direction"] == "forward" else "dot"),
+            name=STAGE_SWITCH_NAME, visible=STAGES_VISIBLE_DEFAULT,
+        )
+
+
+def _stage_label_kwargs(stage: int, color: str) -> dict:
+    return dict(
+        annotation_text=f"этап {stage}", annotation_position="top left",
+        annotation_font=dict(color=color, size=10, family=FONT_FAMILY_MONO),
+        annotation=dict(name=STAGE_LABEL_NAME, visible=STAGES_VISIBLE_DEFAULT),
+    )
+
+
+def _add_stage_overlay_x(fig: go.Figure, overlay: dict | None) -> None:
+    """Этапы как функция положения: полосы [x_k, x_{k+1}) + точки переключений на v(x)."""
+    if not overlay:
+        return
+    bands = overlay.get("x_bands", [])
+    x_span = abs(bands[-1]["x1"]) if bands else 0.0   # окно v(x) — от старта до x_max
+    for band in bands:
+        color = _stage_color(band["stage"])
+        kwargs = {}
+        if band["x1"] - band["x0"] >= STAGE_LABEL_MIN_FRACTION * x_span:
+            kwargs = _stage_label_kwargs(band["stage"], color)
+        fig.add_vrect(
+            x0=band["x0"], x1=band["x1"], fillcolor=_hex_to_rgba(color, STAGE_BAND_ALPHA),
+            line_width=0, layer="below", name=STAGE_BAND_NAME,
+            visible=STAGES_VISIBLE_DEFAULT, **kwargs,
+        )
+    events = overlay.get("events", [])
+    if events:
+        fig.add_trace(go.Scatter(
+            x=[e["x"] for e in events], y=[e["v"] for e in events],
+            mode="markers", name="переключения",
+            marker=dict(color=_SWITCH_COLOR, size=9, symbol="diamond", line=dict(color="white", width=1.5)),
+            text=[f"этап {e['stage_from']}→{e['stage_to']}"
+                  f" ({'откат' if e['direction'] == 'forward' else 'накат'})" for e in events],
+            hoverinfo="text+x+y",
+            meta=STAGE_TRACE_META, visible=STAGES_VISIBLE_DEFAULT,
+        ))
+
+
 def _add_peak_marker(
     fig: go.Figure,
     x_value: float,
@@ -333,6 +432,7 @@ def _save_phase_charts(
     prefix: str,
     phase_name: str,
     mask,
+    overlay: dict | None = None,
 ) -> None:
     if mask is None or not mask.any():
         return
@@ -351,6 +451,7 @@ def _save_phase_charts(
     f_each = result.f_magnetic_each[mask, :]
 
     n_brakes = f_each.shape[1] if f_each.ndim == 2 else 0
+    t_range = (float(t[0]), float(t[-1]))
 
     # === x(t) для фазы — толстая синяя линия + заливка + маркер пика ===
     fig = go.Figure()
@@ -372,6 +473,7 @@ def _save_phase_charts(
             x_arr=t,
             y_arr=x,
         )
+    _add_stage_overlay_t(fig, overlay, t_range)
     files[f"chart_x_t_{phase_name}"] = _save_fragment(
         _apply_layout(fig, f"Перемещение от времени — фаза {phase_label}", "t, c", "x, м"),
         output_dir,
@@ -396,6 +498,7 @@ def _save_phase_charts(
             x_arr=t,
             y_arr=v,
         )
+    _add_stage_overlay_t(fig, overlay, t_range)
     files[f"chart_v_a_t_{phase_name}"] = _save_fragment(
         fig,
         output_dir,
@@ -413,6 +516,7 @@ def _save_phase_charts(
             x=t, y=f_total, mode="lines", name="FΣ - суммарная сила",
             line=dict(color=RB_ACCENT, width=LINE_WIDTH_SECONDARY),
         ))
+        _add_stage_overlay_t(fig, overlay, t_range)
         files[f"chart_forces_main_{phase_name}"] = _save_fragment(
             _apply_layout(fig, f"Движущая и суммарная силы от времени — фаза {phase_label}", "t, c", "F, Н"),
             output_dir,
@@ -445,6 +549,7 @@ def _save_phase_charts(
             line=dict(color=RB_GRAY, width=LINE_WIDTH_PRIMARY),
         ))
 
+    _add_stage_overlay_t(fig, overlay, t_range)
     files[f"chart_forces_secondary_{phase_name}"] = _save_fragment(
         _apply_layout(fig, f"Распределение сил от времени — фаза {phase_label}", "t, c", "F, Н"),
         output_dir,
@@ -452,7 +557,7 @@ def _save_phase_charts(
     )
 
 
-def _save_annotated_x_t(result, output_dir: Path, prefix: str) -> str:
+def _save_annotated_x_t(result, output_dir: Path, prefix: str, overlay: dict | None = None) -> str:
     """x(t) с подсвеченным пиком x_max и затемнённой областью под кривой.
 
     Используется в новом дизайне result-страницы как hero-график.
@@ -481,6 +586,7 @@ def _save_annotated_x_t(result, output_dir: Path, prefix: str) -> str:
 
     # Точка разворота
     _add_recoil_vline(fig, result)
+    _add_stage_overlay_t(fig, overlay)
 
     return _save_fragment(
         _apply_layout(fig, "Перемещение откатных частей x(t)", "t, c", "x, м"),
@@ -489,7 +595,7 @@ def _save_annotated_x_t(result, output_dir: Path, prefix: str) -> str:
     )
 
 
-def _save_energy_balance(result, output_dir: Path, prefix: str) -> str:
+def _save_energy_balance(result, output_dir: Path, prefix: str, overlay: dict | None = None) -> str:
     """График энергобаланса: E_kin, E_spring, E_brake_cum + невязка."""
     if result.energy_kinetic is None:
         return ""
@@ -518,6 +624,7 @@ def _save_energy_balance(result, output_dir: Path, prefix: str) -> str:
     ))
 
     _add_recoil_vline(fig, result)
+    _add_stage_overlay_t(fig, overlay, labels=False)
 
     residual_pct = result.energy_residual_pct
     title = "Энергобаланс"
@@ -531,7 +638,130 @@ def _save_energy_balance(result, output_dir: Path, prefix: str) -> str:
     )
 
 
-def save_interactive_charts(result, output_dir: str | Path, prefix: str = "run") -> dict[str, str]:
+# Цвета тормозов на |F|(|v|): не синий (сумма) и не цвета этапов 1–2, чтобы серии не путались.
+_BRAKE_LINE_COLORS = (RB_GREEN, RB_AMBER, RB_PURPLE, RB_PINK, RB_GRAY)
+
+
+def _masked(values: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Значения вне маски → NaN: Plotly рвёт линию, куски фаз/этапов не соединяются."""
+    return np.where(mask, values, np.nan)
+
+
+def _save_fmag_v(result, output_dir: Path, prefix: str, stage_overlay: dict | None,
+                 fv_reference: dict | None) -> str:
+    """Сила торможения от скорости |F|(|v|) — комбинированный график.
+
+    Толстые линии — ПОСЧИТАННОЕ (шаги интегрирования): сплошная — откат, пунктир —
+    накат. Тонкие пунктирные — характеристика конфигурации тормозов из модели
+    (справка: какую кривую давал тормоз/этап). У обычного расчёта — сумма + каждый
+    тормоз; у итерационного — сумма цветом этапа. Если расчёт отходит от
+    характеристики > 1 % — пометка и точки ×.
+    """
+    v = np.abs(np.asarray(result.v, dtype=float))
+    total = np.abs(np.asarray(result.f_magnetic, dtype=float)) / 1e3
+    n = len(v)
+    each = result.f_magnetic_each if result.f_magnetic_each.ndim == 2 else np.zeros((n, 0))
+
+    if result.recoil_end_time is not None:
+        # (маска, стиль линии): откат — сплошная, накат — пунктир.
+        phases = [(result.t <= result.recoil_end_time, "solid"),
+                  (result.t >= result.recoil_end_time, "dash")]
+    else:
+        phases = [(np.ones(n, dtype=bool), "solid")]
+
+    stage_index = None
+    if stage_overlay is not None and len(stage_overlay.get("stage_index", [])) == n:
+        stage_index = np.asarray(stage_overlay["stage_index"], dtype=int)
+    hover = "|v| = %{x:.4g} м/с<br>|F| = %{y:.4g} кН<extra>%{fullData.name}</extra>"
+
+    fig = go.Figure()
+
+    # Фон: характеристики (модель).
+    for curve in (fv_reference or {}).get("curves", []):
+        staged = stage_index is not None
+        color = _stage_color(curve["stage"]) if staged else RB_BLUE
+        fig.add_trace(go.Scatter(
+            x=curve["v"], y=np.asarray(curve["f"]) / 1e3, mode="lines",
+            name=(f"характеристика этапа {curve['stage']} (модель)" if staged
+                  else "характеристика Σ (модель)"),
+            line=dict(color=_hex_to_rgba(color, 0.6), width=1.4, dash="dot"),
+            hovertemplate=hover,
+        ))
+
+    # Главное: посчитанное.
+    if stage_index is not None:
+        for stage in sorted(set(stage_index.tolist())):
+            color = _stage_color(stage)
+            in_legend = False   # в легенде — один элемент на этап (обе фазы в одной группе)
+            for mask, dash in phases:
+                sel = mask & (stage_index == stage)
+                if not sel.any():
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=_masked(v, sel), y=_masked(total, sel), mode="lines",
+                    name=f"Σ тормозов · этап {stage}", legendgroup=f"stage{stage}",
+                    showlegend=not in_legend,
+                    line=dict(color=color, width=LINE_WIDTH_PRIMARY, dash=dash),
+                    hovertemplate=hover,
+                ))
+                in_legend = True
+    else:
+        if each.shape[1] > 1:
+            for j in range(each.shape[1]):
+                color = _BRAKE_LINE_COLORS[j % len(_BRAKE_LINE_COLORS)]
+                force = np.abs(each[:, j]) / 1e3
+                for i, (mask, dash) in enumerate(phases):
+                    fig.add_trace(go.Scatter(
+                        x=_masked(v, mask), y=_masked(force, mask), mode="lines",
+                        name=f"тормоз {j + 1}", legendgroup=f"brake{j}", showlegend=i == 0,
+                        line=dict(color=color, width=LINE_WIDTH_DASHED, dash=dash),
+                        hovertemplate=hover,
+                    ))
+        for i, (mask, dash) in enumerate(phases):
+            fig.add_trace(go.Scatter(
+                x=_masked(v, mask), y=_masked(total, mask), mode="lines",
+                name="Σ тормозов", legendgroup="total", showlegend=i == 0,
+                line=dict(color=RB_BLUE, width=LINE_WIDTH_PRIMARY, dash=dash),
+                hovertemplate=hover,
+            ))
+
+    title = "Сила торможения от скорости |F|(|v|)"
+    deviation = (fv_reference or {}).get("deviation") or {}
+    rows = [r for r in deviation.get("rows", []) if 0 <= r < n]
+    if deviation.get("max_rel", 0.0) > 0.01 and rows:
+        fig.add_trace(go.Scatter(
+            x=v[rows], y=total[rows], mode="markers", name="расчёт ≠ характеристика (> 1 %)",
+            marker=dict(color=RB_ACCENT, size=7, symbol="x"),
+            hovertemplate=hover,
+        ))
+        title += f" · ⚠ расчёт отходит от характеристики до {deviation['max_rel'] * 100:.1f} %"
+
+    _apply_layout(fig, title, "|v|, м/с", "|F|, кН")
+    style_note = ("толстые — расчёт (сплошная — откат, пунктир — накат) · "
+                  "тонкий пунктир — характеристика тормоза по модели")
+    if len(phases) == 1:
+        style_note = "толстая — расчёт · тонкий пунктир — характеристика тормоза по модели"
+    # Пояснение — внутри поля справа внизу: кривые растут вверх, угол пуст (над полем — заголовок).
+    fig.add_annotation(xref="paper", yref="paper", x=0.99, y=0.05, xanchor="right", yanchor="bottom",
+                       text=style_note, showarrow=False, bgcolor="rgba(255,255,255,0.85)",
+                       font=dict(color="#5A6A7F", size=11, family=FONT_FAMILY_UI))
+    # Кривые растут в правый верхний угол — легенду в левый верхний.
+    fig.update_layout(legend=dict(x=0.01, xanchor="left", y=0.99, yanchor="top"))
+    return _save_fragment(fig, output_dir, f"{prefix}_fmag_v.html")
+
+
+def save_interactive_charts(
+    result,
+    output_dir: str | Path,
+    prefix: str = "run",
+    stage_overlay: dict | None = None,
+    fv_reference: dict | None = None,
+) -> dict[str, str]:
+    """Все графики страницы результата (HTML-фрагменты). `stage_overlay` — этапы
+    итерационного расчёта: полосы и линии переключений на графиках по времени,
+    полосы по x на v(x), сумма F(v) по этапам. `fv_reference` — характеристики
+    тормозов и расхождение с ними (`services/fv_reference.build_fv_reference`)
+    для графика «Сила торможения от скорости»."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -555,6 +785,7 @@ def save_interactive_charts(result, output_dir: str | Path, prefix: str = "run")
         fillcolor=RB_BLUE_FILL,
     ))
     _add_recoil_vline(fig, result)
+    _add_stage_overlay_t(fig, stage_overlay)
     files["chart_x_t"] = _save_fragment(
         _apply_layout(fig, "Перемещение от времени", "t, c", "x, м"),
         output_dir,
@@ -567,6 +798,7 @@ def save_interactive_charts(result, output_dir: str | Path, prefix: str = "run")
         "Скорость и ускорение от времени",
         result=result,
     )
+    _add_stage_overlay_t(fig, stage_overlay)
     files["chart_v_a_t"] = _save_fragment(
         fig,
         output_dir,
@@ -594,30 +826,15 @@ def save_interactive_charts(result, output_dir: str | Path, prefix: str = "run")
                 x_arr=result.x,
                 y_arr=result.v,
             )
+    _add_stage_overlay_x(fig, stage_overlay)
     files["chart_v_x"] = _save_fragment(
         _apply_layout(fig, "Скорость от перемещения", "x, м", "v, м/с"),
         output_dir,
         f"{prefix}_v_x.html",
     )
 
-    # === F_маг(v) — маркеры (это график-зависимость, не процесс) ===
-    fig = go.Figure()
-    for j in range(n_brakes):
-        fig.add_trace(go.Scatter(
-            x=result.v, y=result.f_magnetic_each[:, j], mode="markers",
-            name=f"Fмаг{j + 1}(v)",
-            marker=dict(color=_series_color(j), size=4, opacity=0.65),
-        ))
-    fig.add_trace(go.Scatter(
-        x=result.v, y=result.f_magnetic, mode="markers",
-        name="Fмаг_сумм(v)",
-        marker=dict(color=RB_ACCENT, size=5, opacity=0.85),
-    ))
-    files["chart_fmag_v"] = _save_fragment(
-        _apply_layout(fig, "Магнитные силы от скорости", "v, м/с", "F, Н"),
-        output_dir,
-        f"{prefix}_fmag_v.html",
-    )
+    # === Сила торможения от скорости: посчитанное + характеристика тормозов (модель) ===
+    files["chart_fmag_v"] = _save_fmag_v(result, output_dir, prefix, stage_overlay, fv_reference)
 
     # === F(t) распределение сил — несколько серий из палитры + vline разворота ===
     fig = go.Figure()
@@ -640,23 +857,24 @@ def save_interactive_charts(result, output_dir: str | Path, prefix: str = "run")
         line=dict(color=_series_color(2 + n_brakes), width=LINE_WIDTH_SECONDARY, dash="dot"),
     ))
     _add_recoil_vline(fig, result)
+    _add_stage_overlay_t(fig, stage_overlay)
     files["chart_forces_secondary"] = _save_fragment(
         _apply_layout(fig, "Распределение сил от времени", "t, c", "F, Н"),
         output_dir,
         f"{prefix}_forces_secondary.html",
     )
 
-    _save_phase_charts(files, result, output_dir, prefix, "recoil", recoil_mask)
-    _save_phase_charts(files, result, output_dir, prefix, "return", return_mask)
+    _save_phase_charts(files, result, output_dir, prefix, "recoil", recoil_mask, stage_overlay)
+    _save_phase_charts(files, result, output_dir, prefix, "return", return_mask, stage_overlay)
 
     # Дополнительные графики для нового дизайна страницы результата.
     # Если что-то упадёт — расчёт остаётся валидным, базовые графики уже сохранены.
     try:
-        files["chart_x_t_annotated"] = _save_annotated_x_t(result, output_dir, prefix)
+        files["chart_x_t_annotated"] = _save_annotated_x_t(result, output_dir, prefix, stage_overlay)
     except Exception:
         pass
     try:
-        energy_path = _save_energy_balance(result, output_dir, prefix)
+        energy_path = _save_energy_balance(result, output_dir, prefix, stage_overlay)
         if energy_path:
             files["chart_energy"] = energy_path
     except Exception:
@@ -821,6 +1039,99 @@ def make_pareto_fragment(
 
     _apply_layout(fig, title, "откат x_max, м (меньше = лучше)", "R — робастность (меньше = лучше)")
     return _to_html_fragment(fig, height="440px")
+
+
+# ============================================================================
+# Итерационный расчёт: графики «на текущий момент» (Срез 12)
+# ============================================================================
+
+def _preview_indices(n: int, keep: list[int], max_points: int) -> np.ndarray:
+    """Прореживание до max_points с обязательными узлами (переключения, последняя точка)."""
+    if n <= max_points:
+        return np.arange(n)
+    base = np.linspace(0, n - 1, max_points).round().astype(int)
+    extra = np.array([i for i in keep if 0 <= i < n], dtype=int)
+    return np.unique(np.concatenate([base, extra, [n - 1]]))
+
+
+def make_iterative_preview_figures(
+    result,
+    overlay: dict | None,
+    max_points: int = 3000,
+) -> dict[str, dict]:
+    """Графики итерационного расчёта до текущего узла — JSON фигур Plotly.
+
+    Страница обновляет их после каждого действия без перезагрузки
+    (`Plotly.react`), поэтому возвращаются фигуры, а не HTML-фрагменты.
+    x(t), v(t), F_торм(t) (сумма + по тормозам), v(x); этапы — те же полосы и
+    линии переключений, что на странице итогового расчёта. Прореживание до
+    `max_points` с сохранением узлов переключений и последней точки; текущий
+    узел — акцентная точка.
+    """
+    import json
+
+    n = len(result.t)
+    events = (overlay or {}).get("events", [])
+    keep = [r for e in events if e.get("row") is not None for r in (e["row"] - 1, e["row"])]
+    idx = _preview_indices(n, keep, max_points)
+    t = result.t[idx]
+    x = result.x[idx]
+    v = result.v[idx]
+
+    def _current(fig: go.Figure, xv: float, yv: float) -> None:
+        fig.add_trace(go.Scatter(
+            x=[xv], y=[yv], mode="markers", name="текущий узел", showlegend=False,
+            marker=dict(color=RB_ACCENT, size=10, line=dict(color="white", width=2)),
+            hoverinfo="skip",
+        ))
+
+    def _finish(fig: go.Figure, title: str, x_title: str, y_title: str, hovermode: str,
+                legend: bool = False) -> dict:
+        _apply_layout(fig, title, x_title, y_title)
+        # Легенда — только где несколько серий (F(t) по тормозам): у одиночной кривой
+        # она закрывает подписи этапов и текущий узел в правом верхнем углу.
+        fig.update_layout(height=320, margin=dict(l=60, r=24, t=48, b=48), hovermode=hovermode,
+                          uirevision="iterative", showlegend=legend)
+        return json.loads(fig.to_json())
+
+    figures: dict[str, dict] = {}
+
+    fig = go.Figure(go.Scatter(x=t, y=x, mode="lines", name="x(t)",
+                               line=dict(color=RB_BLUE, width=LINE_WIDTH_PRIMARY)))
+    _current(fig, float(result.t[-1]), float(result.x[-1]))
+    _add_stage_overlay_t(fig, overlay)
+    _add_recoil_vline(fig, result)
+    figures["x_t"] = _finish(fig, "Перемещение x(t)", "t, с", "x, м", "x unified")
+
+    fig = go.Figure(go.Scatter(x=t, y=v, mode="lines", name="v(t)",
+                               line=dict(color=RB_BLUE, width=LINE_WIDTH_PRIMARY)))
+    _current(fig, float(result.t[-1]), float(result.v[-1]))
+    _add_stage_overlay_t(fig, overlay, labels=False)
+    _add_recoil_vline(fig, result)
+    figures["v_t"] = _finish(fig, "Скорость v(t)", "t, с", "v, м/с", "x unified")
+
+    fig = go.Figure()
+    each = result.f_magnetic_each[idx]
+    several = each.ndim == 2 and each.shape[1] > 1
+    if several:
+        for k in range(each.shape[1]):
+            fig.add_trace(go.Scatter(
+                x=t, y=each[:, k], mode="lines", name=f"тормоз {k + 1}",
+                line=dict(color=_series_color(k + 1), width=LINE_WIDTH_DASHED),
+            ))
+    fig.add_trace(go.Scatter(x=t, y=result.f_magnetic[idx], mode="lines", name="Σ тормозов",
+                             line=dict(color=RB_BLUE, width=LINE_WIDTH_PRIMARY)))
+    _current(fig, float(result.t[-1]), float(result.f_magnetic[-1]))
+    _add_stage_overlay_t(fig, overlay, labels=False)
+    figures["f_t"] = _finish(fig, "Сила торможения F(t)", "t, с", "F, Н", "x unified", legend=several)
+
+    fig = go.Figure(go.Scatter(x=x, y=v, mode="lines", name="v(x)",
+                               line=dict(color=RB_BLUE, width=LINE_WIDTH_PRIMARY)))
+    _add_stage_overlay_x(fig, overlay)
+    _current(fig, float(result.x[-1]), float(result.v[-1]))
+    figures["v_x"] = _finish(fig, "Фазовая траектория v(x)", "x, м", "v, м/с", "closest")
+
+    return figures
 
 
 # ============================================================================

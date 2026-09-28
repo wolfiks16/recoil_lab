@@ -1,8 +1,8 @@
 """Сигналы приложения.
 
 Задачи:
-  1. После удаления `ThermalRun` — снести файлы и папку отчёта (Django каскад
-     чистит запись в БД, но не FileField'ы).
+  1. После удаления `ThermalRun` / `IterativeCalc` — снести файлы и папку
+     (Django каскад чистит запись в БД, но не FileField'ы).
   2. После создания `auth.User` — автоматически создать `UserProfile` с
      корректной ролью: суперпользователь → admin, остальные → engineer.
 """
@@ -17,7 +17,18 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from .models import ThermalRun, UserProfile
+from .models import IterativeCalc, ThermalRun, UserProfile
+
+
+@receiver(post_delete, sender=IterativeCalc)
+def remove_iterative_calc_artifacts(sender, instance: IterativeCalc, **kwargs) -> None:
+    """Папка сессии итерационного расчёта: входной файл + история .npz всех версий.
+
+    Итоговый `CalculationRun` не затрагивается — у него свои копии файлов.
+    """
+    from .services.iterative.store import remove_calc_media
+
+    remove_calc_media(instance)
 
 
 @receiver(post_delete, sender=ThermalRun)

@@ -22,7 +22,7 @@ from typing import Optional
 from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.db.models import QuerySet
 
-from ..models import BrakeCatalog, CalculationRun, UserProfile
+from ..models import BrakeCatalog, CalculationRun, IterativeCalc, UserProfile
 
 UserOrAnon = AbstractBaseUser | AnonymousUser
 
@@ -104,6 +104,40 @@ def runs_visible_to(user: UserOrAnon) -> QuerySet[CalculationRun]:
     """
     role = user_role(user)
     base = CalculationRun.objects.all()
+    if role in (UserProfile.ROLE_ADMIN, UserProfile.ROLE_ANALYST):
+        return base
+    if role == UserProfile.ROLE_ENGINEER:
+        return base.filter(owner_id=user.id)
+    return base.none()
+
+
+# --- IterativeCalc (итерационный расчёт) ----------------------------------------------
+
+
+def can_view_iterative(user: UserOrAnon, calc: IterativeCalc) -> bool:
+    """Смотреть сессию: admin/analyst — любую, engineer — свою (как расчёты)."""
+    role = user_role(user)
+    if role is None:
+        return False
+    if role in (UserProfile.ROLE_ADMIN, UserProfile.ROLE_ANALYST):
+        return True
+    return calc.owner_id is not None and calc.owner_id == user.id
+
+
+def can_edit_iterative(user: UserOrAnon, calc: IterativeCalc) -> bool:
+    """Вести сессию (шаги, смена конфигурации, завершение) и удалять её:
+    admin — любую, остальные — только свою (как удаление расчёта)."""
+    role = user_role(user)
+    if role is None:
+        return False
+    if role == UserProfile.ROLE_ADMIN:
+        return True
+    return calc.owner_id is not None and calc.owner_id == user.id
+
+
+def iterative_visible_to(user: UserOrAnon) -> QuerySet[IterativeCalc]:
+    role = user_role(user)
+    base = IterativeCalc.objects.all()
     if role in (UserProfile.ROLE_ADMIN, UserProfile.ROLE_ANALYST):
         return base
     if role == UserProfile.ROLE_ENGINEER:

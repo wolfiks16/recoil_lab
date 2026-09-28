@@ -70,7 +70,49 @@ def _add_scatter_chart_sheet(
     _autosize_columns(ws)
 
 
-def export_results_to_excel(result, output_path: str | Path) -> Path:
+_PARAM_COLUMNS = [
+    ("gamma", "γ"), ("delta", "δ"), ("xm", "x_m"), ("ym", "y_m"), ("dh1", "Δh₁"), ("dh2", "Δh₂"),
+    ("dm", "d_m"), ("n", "N"), ("mu", "μ"), ("bz", "B̄₃"), ("lya", "λ_a"), ("wn0", "w_n0"),
+]
+
+
+def _write_stage_sheets(wb: Workbook, overlay: dict) -> None:
+    """Итерационный расчёт: лист «Этапы» (точки переключения) и «Этапы_тормоза» (конфигурации)."""
+    stage_rows = []
+    for s in overlay["stages"]:
+        stage_rows.append([
+            s["stage"],
+            "исходная" if s["stage"] == 0 else s["x"],
+            s["t"], s["v"], s["return_t"], s["return_v"],
+            " · ".join(b["kind_label"] for b in s["brakes"]),
+            "; ".join(s["changes"]),
+        ])
+    _write_sheet_from_table(
+        wb, "Этапы",
+        ["этап", "x включения, м", "t включения, с", "v включения, м/с",
+         "t снятия (накат), с", "v снятия, м/с", "тормоза", "изменения"],
+        stage_rows,
+    )
+
+    brake_rows = []
+    for s in overlay["stages"]:
+        for b in s["brakes"]:
+            params = b["params"] or {}
+            brake_rows.append(
+                [s["stage"], b["number"], b["kind_label"]]
+                + [params.get(field) for field, _ in _PARAM_COLUMNS]
+                + [b["curve"]]
+            )
+    _write_sheet_from_table(
+        wb, "Этапы_тормоза",
+        ["этап", "тормоз", "состояние"] + [label for _, label in _PARAM_COLUMNS] + ["таблица F(v)"],
+        brake_rows,
+    )
+
+
+def export_results_to_excel(result, output_path: str | Path, stage_overlay: dict | None = None) -> Path:
+    """XLSX-отчёт. `stage_overlay` — этапы итерационного расчёта: колонка «этап» на
+    листе data + листы «Этапы» и «Этапы_тормоза»."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -133,7 +175,17 @@ def export_results_to_excel(result, output_path: str | Path) -> Path:
             row.append(float(result.f_magnetic_each[i, j]))
         rows.append(row)
 
-    _write_sheet_from_table(wb, "data", headers, rows)
+    stage_index = stage_overlay.get("stage_index") if stage_overlay else None
+    if stage_index is not None and len(stage_index) == len(rows):
+        # Колонка этапа — только на листе data (остальные листы берут столбцы по номерам).
+        _write_sheet_from_table(
+            wb, "data", headers + ["этап"],
+            [row + [int(stage)] for row, stage in zip(rows, stage_index)],
+        )
+    else:
+        _write_sheet_from_table(wb, "data", headers, rows)
+    if stage_overlay:
+        _write_stage_sheets(wb, stage_overlay)
 
     recoil_rows = []
     if result.recoil_end_index is not None:

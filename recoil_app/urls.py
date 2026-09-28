@@ -42,6 +42,16 @@ urlpatterns = [
     path("optimize/<int:study_id>/spawn/", views.optimize_spawn_view, name="optimize_spawn"),
     path("optimize/<int:study_id>/delete/", views.optimize_delete_view, name="optimize_delete"),
 
+    # Итерационный расчёт с перестройкой тормозов (Срез 12)
+    path("iterative/", views.iterative_list_view, name="iterative_list"),
+    path("iterative/new/", views.iterative_new_view, name="iterative_new"),
+    path("iterative/<int:calc_id>/", views.iterative_detail_view, name="iterative_detail"),
+    path("iterative/<int:calc_id>/action/", views.iterative_action_view, name="iterative_action"),
+    path("iterative/<int:calc_id>/status/", views.iterative_status_view, name="iterative_status"),
+    path("iterative/<int:calc_id>/reset/", views.iterative_reset_view, name="iterative_reset"),
+    path("iterative/<int:calc_id>/clone/", views.iterative_clone_view, name="iterative_clone"),
+    path("iterative/<int:calc_id>/delete/", views.iterative_delete_view, name="iterative_delete"),
+
     # Каталог тормозов (Срез 3a + 3c)
     path("catalog/", views.catalog_list_view, name="catalog_list"),
     path("catalog/new/", views.catalog_new_view, name="catalog_new"),

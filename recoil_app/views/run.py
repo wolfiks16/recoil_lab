@@ -7,21 +7,19 @@ from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from ..forms import CalculationForm, FreeFallForm, MagneticBrakeFormSet
-from ..models import BrakeCatalog, CalculationRun, CalculationSnapshot
+from ..models import BrakeCatalog, CalculationRun
 from ..services.permissions import can_delete_run, can_run_calc, can_view_run
-from ..services.analysis import enrich_with_basic_analysis
-from ..services.charting import build_brake_geometry_3d, save_interactive_charts
+from ..services.charting import build_brake_geometry_3d
 from ..services.dynamics import RecoilParams, simulate_free_fall, simulate_recoil
+from ..services.iterative.result_view import build_stage_tables, session_for_run
 from ..services.kpi import build_kpi_groups
-from ..services.modeling import build_calculation_model
-from ..services.reporting import export_results_to_excel
 from ..services.run_pipeline import (
     build_initial_from_run,
     create_brake_objects_and_runtime_models,
+    persist_result_and_snapshot,
     resolve_curve_sources,
 )
 from ..services.snapshot import extract_snapshot_parts
@@ -76,7 +74,7 @@ def index_view(request):
 
                     result = simulate_recoil(run.input_file.path, recoil, runtime_brakes)
 
-                    _persist_result_and_snapshot(run, brake_objects, result)
+                    persist_result_and_snapshot(run, brake_objects, result)
 
                 return redirect("run_detail_v2", run_id=run.id)
 
@@ -167,7 +165,7 @@ def free_fall_new_view(request):
 
                     result = simulate_free_fall(recoil, runtime_brakes)
 
-                    _persist_result_and_snapshot(run, brake_objects, result)
+                    persist_result_and_snapshot(run, brake_objects, result)
 
                 return redirect("run_detail_v2", run_id=run.id)
 
@@ -229,87 +227,6 @@ def _build_catalog_items() -> list[dict]:
             },
         })
     return catalog_items
-
-
-def _persist_result_and_snapshot(run, brake_objects, result) -> None:
-    """Сохраняет результат симуляции: метрики, графики, XLSX, snapshot.
-
-    Общий хвост для обоих режимов (`index_view` и `free_fall_new_view`).
-    None-safe к отсутствию фаз отката/наката (свободное падение).
-    """
-    run.x_max = float(result.x.max())
-    run.v_max = float(result.v.max())
-    run.x_final = float(result.x[-1])
-    run.v_final = float(result.v[-1])
-    run.a_final = float(result.a[-1])
-    run.recoil_end_time = result.recoil_end_time
-    run.return_end_time = result.return_end_time
-    run.termination_reason = result.termination_reason
-    run.spring_out_of_range = result.spring_out_of_range
-    run.warnings_text = "\n".join(result.warnings)
-
-    safe_name = slugify(run.name) or f"run-{run.id}"
-    run_folder_name = f"{safe_name}_{run.id}"
-    prefix = run_folder_name
-
-    run_reports_dir = Path(settings.MEDIA_ROOT) / "reports" / run_folder_name
-    run_reports_dir.mkdir(parents=True, exist_ok=True)
-
-    chart_paths = save_interactive_charts(result, run_reports_dir, prefix=prefix)
-
-    field_map = {
-        "chart_x_t": "chart_x_t",
-        "chart_v_a_t": "chart_v_a_t",
-        "chart_v_x": "chart_v_x",
-        "chart_fmag_v": "chart_fmag_v",
-        "chart_forces_secondary": "chart_forces_secondary",
-        "chart_x_t_recoil": "chart_x_t_recoil",
-        "chart_v_a_t_recoil": "chart_v_a_t_recoil",
-        "chart_forces_main_recoil": "chart_forces_main_recoil",
-        "chart_forces_secondary_recoil": "chart_forces_secondary_recoil",
-        "chart_x_t_return": "chart_x_t_return",
-        "chart_v_a_t_return": "chart_v_a_t_return",
-        "chart_forces_secondary_return": "chart_forces_secondary_return",
-        # --- v2 ---
-        "chart_x_t_annotated": "chart_x_t_annotated",
-        "chart_energy": "chart_energy",
-    }
-
-    for chart_key, model_field in field_map.items():
-        if chart_key in chart_paths:
-            setattr(
-                run,
-                model_field,
-                f"reports/{run_folder_name}/{Path(chart_paths[chart_key]).name}",
-            )
-
-    if result.energy_residual_pct is not None:
-        run.energy_residual_pct = float(result.energy_residual_pct)
-    if result.energy_input_cum is not None and len(result.energy_input_cum):
-        run.energy_input_total = float(result.energy_input_cum[-1])
-    if result.energy_brake_cum is not None and len(result.energy_brake_cum):
-        run.energy_brake_total = float(result.energy_brake_cum[-1])
-
-    report_name = f"{prefix}_report.xlsx"
-    report_path = run_reports_dir / report_name
-    export_results_to_excel(result, report_path)
-    run.report_file.name = f"reports/{run_folder_name}/{report_name}"
-
-    run.save()
-
-    calculation_model = build_calculation_model(run, brake_objects, result)
-    calculation_model, analysis_snapshot = enrich_with_basic_analysis(calculation_model)
-
-    CalculationSnapshot.objects.update_or_create(
-        run=run,
-        defaults={
-            "model_version": calculation_model.model_version,
-            "input_snapshot": calculation_model.input_snapshot(),
-            "result_snapshot": calculation_model.result_snapshot(),
-            "analysis_snapshot": analysis_snapshot,
-            "thermal_snapshot": {},
-        },
-    )
 
 
 def run_detail_v2_view(request, run_id):
@@ -411,6 +328,12 @@ def run_detail_v2_view(request, run_id):
     ]
     has_brakes_geometry_3d = any(item["html"] for item in brakes_geometry)
 
+    # Срез 12: этапы итерационного расчёта (таблицы) и ссылка на его сессию.
+    stage_tables, iterative_calc = None, None
+    if run.is_iterative:
+        stage_tables = build_stage_tables(run)
+        iterative_calc = session_for_run(run)
+
     return render(
         request,
         "recoil_app/run_detail_v2.html",
@@ -434,6 +357,8 @@ def run_detail_v2_view(request, run_id):
             "thermal_runs_total": thermal_runs_total,
             "brakes_geometry": brakes_geometry,
             "has_brakes_geometry_3d": has_brakes_geometry_3d,
+            "stage_tables": stage_tables,
+            "iterative_calc": iterative_calc,
             # --- Permission flags для шаблона ---
             "perm_can_delete": can_delete_run(request.user, run),
         },

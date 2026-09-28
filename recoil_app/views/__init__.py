@@ -25,6 +25,16 @@ from .catalog import (  # noqa: F401
 )
 from .compare import compare_view  # noqa: F401
 from .dashboard import dashboard_view  # noqa: F401
+from .iterative import (  # noqa: F401
+    iterative_action_view,
+    iterative_clone_view,
+    iterative_delete_view,
+    iterative_detail_view,
+    iterative_list_view,
+    iterative_new_view,
+    iterative_reset_view,
+    iterative_status_view,
+)
 from .optimize import (  # noqa: F401
     optimize_delete_view,
     optimize_detail_view,

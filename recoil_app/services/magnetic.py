@@ -248,6 +248,23 @@ def magnetic_force_quasistatic(v: float, params: MagneticParams) -> float:
     return pre * _kb(v_abs, tp, xm, ex, ed, wn_star) ** 2
 
 
+def wn_memory_coefficient(v: float, params: MagneticParams) -> float:
+    """Коэффициент «памяти» рекурренты wn: A = (ex·ed)² в wn_next = A·wn + B.
+
+    Показывает, какая доля прежнего wn переживает один шаг. На рабочих скоростях
+    отката A ≈ 0 (wn забывается за шаг, начальное wn ни на что не влияет);
+    заметным A становится лишь при v ~ xm/τp (десятки–сотни м/с). Нужен
+    итерационному расчёту, чтобы предупреждать, когда выбор wn при
+    переключении конфигурации влияет на силу.
+    """
+    v_abs = abs(v)
+    if v_abs < DEFAULT_V_EPS:
+        return 0.0
+
+    _, ex, ed, _, _ = _magnetic_core(v_abs, params)
+    return (ed**2) * (ex**2)
+
+
 def _curve_force_abs_from_speed(v_abs: float, params: CurveBrakeParams) -> float:
     """
     Кусочно-линейная интерполяция F(|v|) строго внутри табличного диапазона.

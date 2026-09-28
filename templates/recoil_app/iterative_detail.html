@@ -1,0 +1,234 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load static recoil_extras %}
+
+{% block title %}{{ calc.name }} · Итерационный расчёт · RecoilLab{% endblock %}
+{% block shell_active %}iterative{% endblock %}
+{% block shell_crumb %}Итерационный расчёт / {{ calc.name }}{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{% static 'recoil_app/css/iterative.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title">
+                <h1>{{ calc.name }}</h1>
+                <span class="rb-badge">{{ calc.get_mode_display }}</span>
+                {% if calc.is_active %}<span class="rb-badge rb-badge-blue">идёт</span>
+                {% elif calc.is_finishing %}<span class="rb-badge rb-badge-warn">досчитывается…</span>
+                {% else %}<span class="rb-badge rb-badge-ok">завершён</span>{% endif %}
+            </div>
+            <div class="rb-hero-sub">
+                m = {{ calc.mass|smart_num }} кг · α = {{ calc.angle_deg|smart_num }}° ·
+                v₀ = {{ calc.v0|smart_num }} м/с · x₀ = {{ calc.x0|smart_num }} м ·
+                dt = {{ calc.dt|smart_num }} с · t_max = {{ calc.t_max|smart_num }} с
+                {% if calc.source_run %} · по расчёту <a href="{% url 'run_detail_v2' calc.source_run.id %}">{{ calc.source_run.name }}</a>{% endif %}
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn" href="{% url 'iterative_list' %}">← К списку</a>
+            {% if calc.result_run %}
+            <a class="rb-btn rb-btn-grad" href="{% url 'run_detail_v2' calc.result_run.id %}">Итоговый расчёт →</a>
+            {% endif %}
+            {% if can_edit %}
+            <form method="post" action="{% url 'iterative_delete' calc.id %}" style="display:inline;"
+                  onsubmit="return confirm('Удалить итерационный расчёт? Итоговый расчёт (если сохранён) останется.');">
+                {% csrf_token %}<button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
+            </form>
+            {% endif %}
+            {# «Клонировать» — последней: выпадающая форма привязана к правому краю кнопки #}
+            {% if can_clone and state %}
+            <details class="it-clone">
+                <summary class="rb-btn">⎘ Клонировать</summary>
+                <form method="post" action="{% url 'iterative_clone' calc.id %}" class="it-clone-form">
+                    {% csrf_token %}
+                    <label class="it-field">
+                        <span class="it-field-label">Имя клона</span>
+                        <input type="text" name="name" value="{{ clone_name }}" pattern="[A-Za-z0-9_-]+" required>
+                    </label>
+                    <div class="it-hint">
+                        Копия в текущем состоянии. Отменяя в ней изменения, можно пересчитать любой этап иначе;
+                        клон остановленной сессии продолжает счёт с точки остановки. Оригинал не меняется.
+                    </div>
+                    <button type="submit" class="rb-btn rb-btn-primary">Создать клон</button>
+                </form>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% if messages %}
+<section class="rb-module-section">
+    {% for m in messages %}<div class="rb-flash rb-flash-{{ m.tags }}">{{ m }}</div>{% endfor %}
+</section>
+{% endif %}
+
+{% if load_error %}
+<section class="rb-module-section">
+    <div class="rb-status-banner rb-status-banner-warn">
+        <div class="rb-status-banner-icon">!</div>
+        <div>
+            <div class="rb-status-banner-title">Не удалось загрузить сессию</div>
+            <div class="rb-status-banner-sub">{{ load_error }}</div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% if calc.is_finishing %}
+<section class="rb-module-section" id="it-finishing" data-status-url="{% url 'iterative_status' calc.id %}">
+    <div class="rb-status-banner rb-status-banner-ok">
+        <div class="it-spinner it-spinner-dark"></div>
+        <div>
+            <div class="rb-status-banner-title">Досчитываю до конца в фоне…</div>
+            <div class="rb-status-banner-sub">
+                Когда итог будет сохранён, откроется его страница. Можно уйти и вернуться позже.
+            </div>
+        </div>
+    </div>
+    {% if can_edit %}
+    <form method="post" action="{% url 'iterative_reset' calc.id %}" class="it-reset-form"
+          onsubmit="return confirm('Сбросить фоновый досчёт? Используйте, только если он завис (например, после перезапуска сервера).');">
+        {% csrf_token %}
+        <button type="submit" class="rb-btn rb-btn-sm">Досчёт завис? Сбросить</button>
+        <span class="it-hint">доступно через 10 минут после запуска</span>
+    </form>
+    {% endif %}
+</section>
+{% elif calc.error_text and calc.is_active %}
+<section class="rb-module-section">
+    <div class="rb-status-banner rb-status-banner-warn">
+        <div class="rb-status-banner-icon">!</div>
+        <div>
+            <div class="rb-status-banner-title">Фоновый досчёт не удался — сессия не изменена</div>
+            <div class="rb-status-banner-sub">{{ calc.error_text }}</div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% if state %}
+<section class="rb-module-section">
+    <div id="it-message" class="rb-flash" hidden></div>
+</section>
+
+<section class="rb-module-section it-layout">
+    <div class="it-col-left">
+        {% if can_edit and calc.is_active %}
+        <div class="rb-card it-controls" id="it-controls"
+             data-action-url="{% url 'iterative_action' calc.id %}"
+             data-finished="{{ state.finished|yesno:'1,0' }}"
+             data-can-reconfigure="{{ state.can_reconfigure|yesno:'1,0' }}"
+             data-can-undo="{{ state.can_undo|yesno:'1,0' }}"
+             data-phase="{{ state.phase }}">
+            {% csrf_token %}
+            <div class="rb-card-title"><span class="rb-card-title-text">Управление</span></div>
+
+            <div class="it-controls-row">
+                <button type="button" class="rb-btn rb-btn-primary" data-action="step" data-advance
+                        title="Ровно один шаг интегрирования dt (клавиша →)">Шаг ▸</button>
+                <span class="it-hint">ровно dt = {{ calc.dt|smart_num }} с · клавиша →</span>
+            </div>
+            <div class="it-controls-row">
+                <input type="number" name="n" value="100" min="1" step="1" class="it-input-short" data-advance>
+                <button type="button" class="rb-btn" data-action="steps" data-advance>N шагов</button>
+            </div>
+            <div class="it-controls-row">
+                <input type="number" name="dx" value="0.1" min="0" step="any" class="it-input-short" data-advance>
+                <span class="it-hint">м</span>
+                <button type="button" class="rb-btn" data-action="distance" data-advance>До точки через Δx</button>
+            </div>
+            <div class="it-controls-row">
+                <button type="button" class="rb-btn" data-toggle-editor
+                        {% if not state.can_reconfigure %}disabled{% endif %}>✎ Изменить конфигурацию</button>
+                <span class="it-hint" data-reconfigure-hint>
+                    {% if calc.mode == 'recoil' %}только на откате{% else %}в текущем узле{% endif %}
+                </span>
+            </div>
+            <div class="it-controls-row">
+                <button type="button" class="rb-btn" data-action="undo" data-undo
+                        data-confirm="Отменить последнее изменение конфигурации? Всё посчитанное после него будет отброшено."
+                        {% if not state.can_undo %}disabled{% endif %}>↶ Отменить последнее изменение</button>
+                <span class="it-hint" data-undo-hint>{{ state.undo_hint }}</span>
+            </div>
+
+            <div class="it-finish">
+                <label class="it-field it-field-wide">
+                    <span class="it-field-label">Имя итогового расчёта</span>
+                    <input type="text" name="result_name" value="{{ calc.name }}" pattern="[A-Za-z0-9_-]+">
+                </label>
+                <div class="it-controls-row">
+                    <button type="button" class="rb-btn rb-btn-grad" data-action="to_end"
+                            data-confirm="Досчитать до конца без ручных изменений и сохранить итог?">⏭ Досчитать до конца</button>
+                    <button type="button" class="rb-btn" data-action="stop"
+                            data-confirm="Остановить в текущем узле и построить графики по посчитанной части?">■ Остановить и построить графики</button>
+                </div>
+            </div>
+        </div>
+        {% elif calc.result_run %}
+        <div class="rb-card">
+            <div class="rb-card-title"><span class="rb-card-title-text">Расчёт завершён</span></div>
+            <p>Итог сохранён расчётом <a href="{% url 'run_detail_v2' calc.result_run.id %}"><b>{{ calc.result_run.name }}</b></a>.</p>
+        </div>
+        {% endif %}
+
+        <div id="it-state">{% include "recoil_app/includes/iterative_state.html" %}</div>
+    </div>
+
+    <div class="it-col-right">
+        <div class="it-charts-head">
+            <label class="it-stage-toggle" title="Полосы этапов и линии переключений на графиках">
+                <input type="checkbox" data-stage-toggle> Этапы на графиках
+            </label>
+        </div>
+        <div class="it-charts">
+            <div class="rb-plot-card"><div class="it-chart" id="it-chart-x_t"></div></div>
+            <div class="rb-plot-card"><div class="it-chart" id="it-chart-v_t"></div></div>
+            <div class="rb-plot-card"><div class="it-chart" id="it-chart-f_t"></div></div>
+            <div class="rb-plot-card"><div class="it-chart" id="it-chart-v_x"></div></div>
+        </div>
+    </div>
+</section>
+
+{% if slot_formset %}
+<section class="rb-module-section" id="it-editor-panel" hidden>
+    <form id="it-editor-form" class="rb-card" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="rb-card-title">
+            <span class="rb-card-title-text">Изменить конфигурацию в текущем узле</span>
+        </div>
+        <div class="it-hint" style="margin-bottom:12px;">
+            Изменение действует с текущего узла.
+            {% if calc.mode == 'recoil' %}На накате в этой же точке система сама вернётся к прежней конфигурации.{% endif %}
+            Повторное изменение в том же узле правит этот этап; возврат к прежним значениям отменяет его.
+        </div>
+        <div id="it-editor">{% include "recoil_app/includes/iterative_slot_editor.html" with editor_mode="reconfigure" %}</div>
+        <div class="it-controls-row" style="margin-top:12px;">
+            <button type="submit" class="rb-btn rb-btn-primary">Применить в текущем узле</button>
+            <button type="button" class="rb-btn" data-toggle-editor>Отмена</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+
+<section class="rb-module-section" id="it-stages">{% include "recoil_app/includes/iterative_stages.html" %}</section>
+
+<div class="it-busy" id="it-busy" hidden>
+    <div class="it-spinner"></div>
+    <div>Считаю…</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block body_extra %}
+{% if state %}
+{{ state.charts|json_script:"it-charts" }}
+{% endif %}
+{{ catalog_items|json_script:"rb-catalog-data" }}
+<script src="{% static 'recoil_app/js/stage_toggle.js' %}"></script>
+<script src="{% static 'recoil_app/js/iterative.js' %}"></script>
+{% endblock %}

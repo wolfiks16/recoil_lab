@@ -1,0 +1,56 @@
+{% load recoil_extras %}
+{# Текущий узел итерационного расчёта. Перерисовывается после каждого действия (AJAX). #}
+<div class="rb-card it-state">
+    <div class="rb-card-title">
+        <span class="rb-card-title-text">Текущий узел</span>
+        <span class="it-badges">
+            <span class="rb-badge rb-badge-blue">{{ state.phase_label }}</span>
+            <span class="rb-badge rb-badge-accent">этап {{ state.stage }}</span>
+            {% if state.finished %}<span class="rb-badge rb-badge-ok">{{ state.termination_label|default:"завершён" }}</span>{% endif %}
+        </span>
+    </div>
+
+    <div class="it-kpis">
+        <div class="it-kpi"><span class="it-kpi-label">t</span><span class="it-kpi-value">{{ state.node.t|smart_num }}</span><span class="it-kpi-unit">с</span></div>
+        <div class="it-kpi"><span class="it-kpi-label">x</span><span class="it-kpi-value">{{ state.node.x|smart_num }}</span><span class="it-kpi-unit">м</span></div>
+        <div class="it-kpi"><span class="it-kpi-label">v</span><span class="it-kpi-value">{{ state.node.v|smart_num }}</span><span class="it-kpi-unit">м/с</span></div>
+        <div class="it-kpi"><span class="it-kpi-label">a</span><span class="it-kpi-value">{{ state.node.a|smart_num }}</span><span class="it-kpi-unit">м/с²</span></div>
+        <div class="it-kpi"><span class="it-kpi-label">F торм</span><span class="it-kpi-value">{{ state.node.f_magnetic|smart_num }}</span><span class="it-kpi-unit">Н</span></div>
+    </div>
+
+    <div class="it-meta">
+        шаг {{ state.node.grid_index|smart_num }} из {{ state.node.grid_total|smart_num }}{% if not state.node.on_grid %} · узел внутри шага (точка Δx / переключение){% endif %}
+        · x_max = {{ state.x_max|smart_num }} м
+        {% if state.recoil_end_time is not None %}· разворот t = {{ state.recoil_end_time|smart_num }} с{% endif %}
+        {% if state.energy_brake is not None %}· рассеяно тормозами {{ state.energy_brake|smart_num }} Дж{% endif %}
+    </div>
+
+    <table class="rb-params-table it-brakes">
+        <thead>
+            <tr><th>Тормоз</th><th>Состояние</th><th class="num">F, Н</th><th class="num">w_n</th></tr>
+        </thead>
+        <tbody>
+        {% for b in state.brakes %}
+            <tr>
+                <td>{{ b.number }}</td>
+                <td>{{ b.kind_label }}{% if b.curve_info %} <span class="rb-text-muted">· {{ b.curve_info }}</span>{% endif %}</td>
+                <td class="num">{{ b.force|smart_num }}</td>
+                <td class="num">{% if b.wn is not None %}{{ b.wn|smart_num }}{% else %}—{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if state.mode == 'recoil' %}
+    <div class="it-meta">
+        F вход = {{ state.node.f_ext|smart_num }} Н · F пруж = {{ state.node.f_spring|smart_num }} Н ·
+        ΣF = {{ state.node.f_total|smart_num }} Н
+    </div>
+    {% endif %}
+
+    {% if state.warnings %}
+    <ul class="it-warnings">
+        {% for w in state.warnings %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+</div>

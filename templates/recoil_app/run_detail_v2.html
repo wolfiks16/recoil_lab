@@ -13,6 +13,14 @@
     .rb-content { max-width: none; }
     /* Глобально скрываем графики Plotly во вкладках, кроме активной — иначе все сразу видны */
     .rb-tab-panel:not(.is-active) { display: none; }
+    /* Этапы итерационного расчёта: параметры по этапам */
+    .rs-brake { border-top: 1px solid var(--rb-panel-border); padding: 6px 0; }
+    .rs-brake summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0; }
+    .rs-params { margin: 6px 0 8px; }
+    .rs-changed { background: rgba(180, 77, 122, 0.12); color: var(--rb-accent-dark); font-weight: 700; }
+    .rs-toggle-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+    .rs-stage-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+        color: var(--rb-text-soft); cursor: pointer; user-select: none; }
 </style>
 {% endblock %}
 
@@ -37,6 +45,9 @@
                 {% if run.spring_out_of_range %}
                     <span class="rb-badge rb-badge-warn">пружина вне таблицы</span>
                 {% endif %}
+                {% if run.is_iterative %}
+                    <span class="rb-badge rb-badge-accent">итерационный{% if stage_tables %} · этапов: {{ stage_tables.stages|length }}{% endif %}</span>
+                {% endif %}
             </div>
             <div class="rb-hero-sub">
                 Расчёт #{{ run.id }} · создан {{ run.created_at|date:"d.m.Y · H:i" }}
@@ -53,6 +64,12 @@
             <a class="rb-btn" href="{% url 'free_fall_new' %}?from_run={{ run.id }}">↗ Скопировать</a>
             {% else %}
             <a class="rb-btn" href="{% url 'index' %}?from_run={{ run.id }}">↗ Скопировать</a>
+            {% endif %}
+            <a class="rb-btn" href="{% url 'iterative_new' %}?from_run={{ run.id }}"
+               title="Итерационный расчёт с этими параметрами и тормозами">⏯ Итерационно</a>
+            {% if iterative_calc %}
+            <a class="rb-btn" href="{% url 'iterative_detail' iterative_calc.id %}"
+               title="Сессия итерационного расчёта, из которой сохранён этот итог">⏯ Сессия</a>
             {% endif %}
             <a class="rb-btn" href="{% url 'compare' %}?run_a={{ run.id }}">≡ Сравнить</a>
             <a class="rb-btn rb-btn-grad" href="{% url 'thermal_list' run.id %}">🔥 Тепло{% if thermal_runs_total %} · {{ thermal_runs_total }}{% endif %}</a>
@@ -167,6 +184,13 @@
 <div class="rb-plot-grid rb-plot-grid-main">
 
     <div class="rb-plot-card rb-plot-card-featured">
+        {% if stage_tables %}
+        <div class="rs-toggle-row">
+            <label class="rs-stage-toggle" title="Полосы этапов и линии переключений на графиках">
+                <input type="checkbox" data-stage-toggle> Этапы на графиках
+            </label>
+        </div>
+        {% endif %}
         {# Верхний уровень: набор графиков (Общие / Откат / Накат) #}
         <div class="rb-tabs rb-tabs-pills" data-tab-group="hero-set">
             <button class="rb-tab is-active" data-tab="common" type="button">Общие</button>
@@ -283,6 +307,11 @@
             <div class="rb-card-title">
                 <span class="rb-card-title-text">Тормоза ({{ brakes|length }})</span>
             </div>
+            {% if stage_tables %}
+            <div class="rb-text-muted" style="font-size: 11px; margin-bottom: 4px;">
+                Исходные параметры (у включённого позже — с этапа включения); по этапам — в блоке «Этапы конфигурации».
+            </div>
+            {% endif %}
             {% for brake in brakes %}
             <div style="padding: 8px 0; border-bottom: 1px solid var(--rb-panel-border);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -331,6 +360,11 @@
     </div>
 </div>
 </section>
+
+{# --- ЭТАПЫ ИТЕРАЦИОННОГО РАСЧЁТА --- #}
+{% if stage_tables %}
+    {% include "recoil_app/includes/run_stages.html" %}
+{% endif %}
 
 {# --- ENERGY BALANCE --- #}
 {% if has_energy or energy_summary %}
@@ -493,6 +527,13 @@
         <span>Главный график · параметры</span>
     </label>
 
+    {% if stage_tables %}
+    <label class="rb-module-toggle">
+        <input type="checkbox" class="rb-module-checkbox" data-module="stages" checked>
+        <span>Этапы конфигурации</span>
+    </label>
+    {% endif %}
+
     {% if has_energy or energy_summary %}
     <label class="rb-module-toggle">
         <input type="checkbox" class="rb-module-checkbox" data-module="energy" checked>
@@ -519,4 +560,7 @@
 
 {% block body_extra %}
 <script src="{% static 'recoil_app/js/modules.js' %}"></script>
+{% if stage_tables %}
+<script src="{% static 'recoil_app/js/stage_toggle.js' %}"></script>
+{% endif %}
 {% endblock %}

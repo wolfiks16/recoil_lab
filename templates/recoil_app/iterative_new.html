@@ -1,0 +1,122 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load static %}
+
+{% block title %}Новый итерационный расчёт · RecoilLab{% endblock %}
+{% block shell_active %}iterative{% endblock %}
+{% block shell_crumb %}Итерационный расчёт / новый{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{% static 'recoil_app/css/iterative.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="rb-hero">
+    <div class="rb-color-bar"></div>
+    <div class="rb-hero-row">
+        <div>
+            <div class="rb-hero-title"><h1>Новый итерационный расчёт</h1></div>
+            <div class="rb-hero-sub">
+                Задайте режим, параметры и исходную конфигурацию тормозов — расчёт встанет в начальный узел (t = 0),
+                дальше им управляют кнопками: шаг, N шагов, до точки через Δx, смена конфигурации
+            </div>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn" href="{% url 'iterative_list' %}">← К списку</a>
+        </div>
+    </div>
+</section>
+
+{% if source_run %}
+<section class="rb-module-section">
+    <div class="rb-flash rb-flash-info">
+        Форма заполнена по расчёту <b>{{ source_run.name }}</b>{% if source_run.input_file %}; его входной файл будет использован, если не загрузить другой{% endif %}.
+    </div>
+</section>
+{% endif %}
+
+{% if form.non_field_errors %}
+<section class="rb-module-section">
+    <div class="rb-flash rb-flash-error">{{ form.non_field_errors|join:" " }}</div>
+</section>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" id="it-new-form" class="rb-module-section">
+    {% csrf_token %}
+    {{ form.source_run_id }}
+
+    <div class="it-new-grid">
+        <div class="rb-card">
+            <div class="rb-card-title"><span class="rb-card-title-text">Режим и параметры</span></div>
+
+            <div class="it-mode" data-mode-switch>
+                {% for radio in form.mode %}
+                <label class="it-mode-option">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+                {% endfor %}
+            </div>
+
+            <div class="it-form-fields">
+                <label class="it-field it-field-wide">
+                    <span class="it-field-label">Название</span>
+                    {{ form.name }}
+                    {% if form.name.errors %}<span class="it-field-error">{{ form.name.errors|join:" " }}</span>{% endif %}
+                </label>
+
+                <label class="it-field it-field-wide" data-mode-only="recoil">
+                    <span class="it-field-label">Файл характеристик Excel (F(t), F(x))</span>
+                    {{ form.input_file }}
+                    {% if source_run.input_file %}<span class="it-hint">Если не выбрать — возьмётся файл «{{ source_run.name }}».</span>{% endif %}
+                    {% if form.input_file.errors %}<span class="it-field-error">{{ form.input_file.errors|join:" " }}</span>{% endif %}
+                </label>
+
+                <label class="it-field">
+                    <span class="it-field-label">Масса m, кг</span>
+                    {{ form.mass }}
+                    {% if form.mass.errors %}<span class="it-field-error">{{ form.mass.errors|join:" " }}</span>{% endif %}
+                </label>
+                <label class="it-field">
+                    <span class="it-field-label">Угол α, °</span>
+                    {{ form.angle_deg }}
+                    {% if form.angle_deg.errors %}<span class="it-field-error">{{ form.angle_deg.errors|join:" " }}</span>{% endif %}
+                </label>
+                <label class="it-field">
+                    <span class="it-field-label">v₀, м/с</span>
+                    {{ form.v0 }}
+                    {% if form.v0.errors %}<span class="it-field-error">{{ form.v0.errors|join:" " }}</span>{% endif %}
+                </label>
+                <label class="it-field">
+                    <span class="it-field-label">x₀, м</span>
+                    {{ form.x0 }}
+                    {% if form.x0.errors %}<span class="it-field-error">{{ form.x0.errors|join:" " }}</span>{% endif %}
+                </label>
+                <label class="it-field">
+                    <span class="it-field-label">t_max, с</span>
+                    {{ form.t_max }}
+                    <span class="it-hint" data-mode-only="recoil">для отката — не больше 10 с</span>
+                    <span class="it-hint" data-mode-only="free_fall">без верхнего предела</span>
+                    {% if form.t_max.errors %}<span class="it-field-error">{{ form.t_max.errors|join:" " }}</span>{% endif %}
+                </label>
+                <label class="it-field">
+                    <span class="it-field-label">Шаг dt, с</span>
+                    {{ form.dt }}
+                    <span class="it-hint">кнопка «Шаг» продвигает ровно на dt</span>
+                    {% if form.dt.errors %}<span class="it-field-error">{{ form.dt.errors|join:" " }}</span>{% endif %}
+                </label>
+            </div>
+        </div>
+
+        <div class="rb-card">
+            <div class="rb-card-title"><span class="rb-card-title-text">Тормоза — исходная конфигурация C₀</span></div>
+            {% include "recoil_app/includes/iterative_slot_editor.html" with editor_mode="new" %}
+        </div>
+    </div>
+
+    <div class="it-submit-row">
+        <button type="submit" class="rb-btn rb-btn-grad">⏵ Начать итерационный расчёт</button>
+    </div>
+</form>
+{% endblock %}
+
+{% block body_extra %}
+{{ catalog_items|json_script:"rb-catalog-data" }}
+<script src="{% static 'recoil_app/js/iterative.js' %}"></script>
+{% endblock %}

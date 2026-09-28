@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.forms import BaseFormSet, formset_factory
 
-from .models import CalculationRun, MagneticBrakeConfig, UserProfile
+from .models import CalculationRun, IterativeCalc, MagneticBrakeConfig, UserProfile
 from .services.curve_parser import parse_force_curve_file
 
 
@@ -982,4 +982,181 @@ class UserProfileEditForm(forms.Form):
         profile.birth_date = cd.get("birth_date") or None
         profile.avatar_key = cd.get("avatar_key") or "fox"
         profile.save(update_fields=["birth_date", "avatar_key", "updated_at"])
+
+
+# ============================================================================
+# Итерационный расчёт (Срез 12)
+# ============================================================================
+
+_NAME_ATTRS = {
+    "pattern": "[A-Za-z0-9_-]+",
+    "title": "Только английские буквы, цифры, дефис и подчёркивание",
+}
+
+
+class IterativeCalcForm(forms.Form):
+    """Старт итерационного расчёта: режим + параметры. Тормоза C₀ — `IterativeSlotFormSet`.
+
+    Для отката нужен входной Excel: загруженный файл или файл расчёта-донора
+    (`source_run_id`, при старте «с этого расчёта»). t_max ограничен 10 с только
+    для отката (как в обычной форме); у свободного падения предела нет.
+    """
+
+    name = forms.CharField(label="Название", widget=forms.TextInput(attrs=_NAME_ATTRS))
+    mode = forms.ChoiceField(
+        label="Режим",
+        choices=CalculationRun.MODE_CHOICES,
+        initial=CalculationRun.MODE_RECOIL,
+        widget=forms.RadioSelect,
+    )
+    input_file = forms.FileField(label="Файл характеристик Excel", required=False)
+    source_run_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
+
+    mass = forms.FloatField(
+        label="Масса",
+        validators=[MinValueValidator(1e-6, "Масса должна быть положительной.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    angle_deg = forms.FloatField(
+        initial=70.0,
+        label="Угол, град",
+        validators=[
+            MinValueValidator(0.0, "Угол должен быть неотрицательным."),
+            MaxValueValidator(90.0, "Угол не должен превышать 90°."),
+        ],
+        widget=forms.NumberInput(attrs={"min": "0", "max": "90", "step": "any"}),
+    )
+    v0 = forms.FloatField(
+        initial=0.0,
+        label="Начальная скорость",
+        validators=[MinValueValidator(0.0, "Начальная скорость должна быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    x0 = forms.FloatField(
+        initial=0.0,
+        label="Начальное перемещение",
+        validators=[MinValueValidator(0.0, "Начальное перемещение должно быть ≥ 0.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+    t_max = forms.FloatField(
+        initial=1.0,
+        label="Время расчёта",
+        validators=[MinValueValidator(1e-6, "Время расчёта должно быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0.000001", "step": "any"}),
+    )
+    dt = forms.FloatField(
+        initial=1e-4,
+        label="Шаг dt",
+        validators=[MinValueValidator(1e-9, "Шаг должен быть положительным.")],
+        widget=forms.NumberInput(attrs={"min": "0", "step": "any"}),
+    )
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise forms.ValidationError(
+                "Название должно содержать только английские буквы, цифры, дефис и подчёркивание."
+            )
+        if CalculationRun.objects.filter(name=name).exists():
+            raise forms.ValidationError("Расчёт с таким названием уже существует.")
+        if IterativeCalc.objects.filter(name=name).exists():
+            raise forms.ValidationError("Итерационный расчёт с таким названием уже существует.")
+        return name
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("mode") != CalculationRun.MODE_RECOIL:
+            return cleaned
+
+        if cleaned.get("t_max") is not None and cleaned["t_max"] > 10.0:
+            self.add_error("t_max", "Для отката время расчёта не должно превышать 10 с.")
+
+        if not cleaned.get("input_file"):
+            source_id = cleaned.get("source_run_id")
+            source = CalculationRun.objects.filter(pk=source_id).first() if source_id else None
+            if source is None or not source.input_file:
+                self.add_error("input_file", "Для отката загрузите файл характеристик F(t), F(x).")
+            else:
+                cleaned["source_run"] = source
+        return cleaned
+
+
+class IterativeSlotForm(forms.Form):
+    """Один тормоз в конфигурации итерационного расчёта: параметрический / табличный / выключен.
+
+    Табличная F(v) — из загруженного файла, из каталога (`catalog_source_id`),
+    из тормоза расчёта-донора (`source_brake_id`) или «оставить текущую»
+    (`keep_curve`, при смене конфигурации). Сборка модели — `services/iterative/editor.py`.
+    """
+
+    KIND_PARAMETRIC = "parametric"
+    KIND_CURVE = "curve"
+    KIND_OFF = "off"
+    KIND_CHOICES = [
+        (KIND_PARAMETRIC, "Параметрический"),
+        (KIND_CURVE, "Табличный F(v)"),
+        (KIND_OFF, "Выключен"),
+    ]
+    PARAM_FIELDS = ("gamma", "delta", "xm", "ym", "dh1", "dh2", "dm", "n", "mu", "bz", "lya", "wn0")
+
+    kind = forms.ChoiceField(label="Состояние", choices=KIND_CHOICES, initial=KIND_PARAMETRIC)
+
+    gamma = forms.FloatField(label="γ", required=False)
+    delta = forms.FloatField(label="δ", required=False)
+    xm = forms.FloatField(label="x_m", required=False)
+    ym = forms.FloatField(label="y_m", required=False)
+    dh1 = forms.FloatField(label="Δh₁", required=False)
+    dh2 = forms.FloatField(label="Δh₂", required=False)
+    dm = forms.FloatField(label="d_m", required=False)
+    n = forms.IntegerField(label="N", required=False,
+                           widget=forms.NumberInput(attrs={"min": "1", "step": "1"}))
+    mu = forms.FloatField(label="μ", required=False)
+    bz = forms.FloatField(label="B̄₃", required=False)
+    lya = forms.FloatField(label="λ_a", initial=2.5, required=False)
+    wn0 = forms.FloatField(label="w_n0", initial=1.0, required=False)
+
+    force_curve_file = forms.FileField(
+        label="Excel-файл F(v)",
+        required=False,
+        help_text="Первый лист: A — скорость, м/с; B — сила, Н. Первая строка может быть заголовком.",
+    )
+    catalog_source_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
+    source_brake_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
+    keep_curve = forms.BooleanField(required=False, widget=forms.HiddenInput())
+
+    def param_fields(self):
+        """Поля параметрической модели — для вывода сеткой в шаблоне."""
+        return [self[name] for name in self.PARAM_FIELDS]
+
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get("kind")
+        cleaned["parsed_points"] = None
+
+        if kind == self.KIND_PARAMETRIC:
+            missing = [f for f in self.PARAM_FIELDS if cleaned.get(f) in (None, "")]
+            if missing:
+                raise ValidationError(
+                    "Для параметрического тормоза должны быть заполнены все коэффициенты "
+                    f"(не заданы: {', '.join(missing)})."
+                )
+        elif kind == self.KIND_CURVE:
+            uploaded = cleaned.get("force_curve_file")
+            if uploaded:
+                cleaned["parsed_points"] = parse_force_curve_file(uploaded)
+            elif not (cleaned.get("catalog_source_id") or cleaned.get("source_brake_id")
+                      or cleaned.get("keep_curve")):
+                raise ValidationError(
+                    "Для табличного тормоза загрузите Excel-файл F(v) или выберите тормоз из каталога."
+                )
+        return cleaned
+
+
+IterativeSlotFormSet = formset_factory(
+    IterativeSlotForm,
+    extra=0,
+    min_num=1,
+    validate_min=True,
+    can_delete=True,
+)
 
