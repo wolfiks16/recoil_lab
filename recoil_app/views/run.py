@@ -12,11 +12,13 @@ from django.views.decorators.http import require_POST
 
 from ..forms import CalculationForm, FreeFallForm, MagneticBrakeFormSet
 from ..models import BrakeCatalog, CalculationRun, MagneticBrakeConfig
-from ..services.permissions import can_delete_run, can_run_calc, can_view_run
+from ..services.permissions import can_delete_run, can_run_calc, can_view_run, visible_run
 from ..services.charting import build_brake_geometry_3d
 from ..services.dynamics import RecoilParams, simulate_free_fall, simulate_recoil
 from ..services.run_pipeline import (
+    brake_initial_from_catalog,
     build_initial_from_run,
+    copy_input_file,
     create_brake_objects_and_runtime_models,
     persist_result_and_snapshot,
     resolve_curve_sources,
@@ -25,177 +27,97 @@ from ..services.result_page import build_result_page, lazy_chart_html
 
 
 def index_view(request):
-    # Гость может ВИДЕТЬ форму, но не сабмитить расчёт.
-    # GET без логина — показать форму + плашка (см. шаблон).
-    # POST без логина — редирект на login с next=.
-    if request.method == "POST" and not can_run_calc(request.user):
-        messages.warning(
-            request,
-            "Для запуска расчёта войдите или зарегистрируйтесь.",
-        )
-        return redirect(f"{settings.LOGIN_URL}?next={request.path}" if settings.LOGIN_URL.startswith('/') else f"/login/?next={request.path}")
+    """Новый расчёт в режиме «откат и накат» (форма calc_new.html, mode='recoil').
 
-    if request.method == "POST":
-        form = CalculationForm(request.POST, request.FILES)
-        brake_formset = MagneticBrakeFormSet(request.POST, request.FILES, prefix="brakes")
-
-        forms_valid = form.is_valid() and brake_formset.is_valid()
-        curve_sources_valid = resolve_curve_sources(brake_formset) if forms_valid else False
-
-        if forms_valid and curve_sources_valid:
-            try:
-                with transaction.atomic():
-                    run = CalculationRun.objects.create(
-                        name=form.cleaned_data["name"],
-                        input_file=form.cleaned_data["input_file"],
-                        mass=form.cleaned_data["mass"],
-                        angle_deg=form.cleaned_data["angle_deg"],
-                        v0=form.cleaned_data["v0"],
-                        x0=form.cleaned_data["x0"],
-                        t_max=form.cleaned_data["t_max"],
-                        dt=form.cleaned_data["dt"],
-                        owner=request.user,        # auth: владелец = автор формы
-                    )
-
-                    brake_objects, runtime_brakes = create_brake_objects_and_runtime_models(
-                        run,
-                        brake_formset,
-                    )
-
-                    recoil = RecoilParams(
-                        mass=run.mass,
-                        angle_deg=run.angle_deg,
-                        v0=run.v0,
-                        x0=run.x0,
-                        t_max=run.t_max,
-                        dt=run.dt,
-                    )
-
-                    result = simulate_recoil(run.input_file.path, recoil, runtime_brakes)
-
-                    persist_result_and_snapshot(run, brake_objects, result)
-
-                return redirect("run_detail_v2", run_id=run.id)
-
-            except ValueError as exc:
-                form.add_error(None, str(exc))
-    else:
-        initial_main, brakes_initial = build_initial_from_run(request.GET.get("from_run"))
-        form = CalculationForm(initial=initial_main)
-
-        if brakes_initial:
-            brake_formset = MagneticBrakeFormSet(initial=brakes_initial, prefix="brakes")
-        else:
-            brake_formset = MagneticBrakeFormSet(initial=[{}, {}], prefix="brakes")
-
-    # Список «недавних» на форме — то же ограничение видимости, что и на дашборде.
-    from ..services.permissions import runs_visible_to
-    runs = runs_visible_to(request.user).order_by("-created_at")[:20]
-
-    # Срез 3b: каталог тормозов для выбора в форме.
-    catalog_items = _build_catalog_items()
-
-    return render(
-        request,
-        "recoil_app/index.html",
-        {
-            "form": form,
-            "brake_formset": brake_formset,
-            "runs": runs,
-            "catalog_items": catalog_items,
-            "catalog_count": len(catalog_items),
-        },
-    )
+    Гость может ВИДЕТЬ форму, но не запускать расчёт (POST → на вход).
+    ?from_run=<id> — копия расчёта (входной файл можно не загружать заново);
+    ?catalog=<id> — первый тормоз подставлен из каталога.
+    """
+    return _new_calc_view(request, mode=CalculationRun.MODE_RECOIL)
 
 
 def free_fall_new_view(request):
-    """Создание расчёта в режиме свободного падения.
+    """Новый расчёт в режиме свободного падения: без входного файла, `simulate_free_fall`."""
+    return _new_calc_view(request, mode=CalculationRun.MODE_FREE_FALL)
 
-    Зеркалит `index_view`, но без входного Excel-файла: гравитация задаётся
-    углом, выстрел и пружина отсутствуют. Использует `simulate_free_fall`.
-    """
+
+def _new_calc_view(request, *, mode: str):
+    is_recoil = mode == CalculationRun.MODE_RECOIL
     if request.method == "POST" and not can_run_calc(request.user):
-        messages.warning(
-            request,
-            "Для запуска расчёта войдите или зарегистрируйтесь.",
-        )
-        return redirect(
-            f"{settings.LOGIN_URL}?next={request.path}"
-            if settings.LOGIN_URL.startswith("/")
-            else f"/login/?next={request.path}"
-        )
+        messages.warning(request, "Для запуска расчёта войдите или зарегистрируйтесь.")
+        return redirect(f"/login/?next={request.path}")
 
+    source_run, catalog_prefill = None, None
     if request.method == "POST":
-        form = FreeFallForm(request.POST)
+        form = (CalculationForm(request.POST, request.FILES, user=request.user) if is_recoil
+                else FreeFallForm(request.POST))
         brake_formset = MagneticBrakeFormSet(request.POST, request.FILES, prefix="brakes")
-
         forms_valid = form.is_valid() and brake_formset.is_valid()
-        curve_sources_valid = resolve_curve_sources(brake_formset) if forms_valid else False
+        curve_sources_valid = resolve_curve_sources(brake_formset, user=request.user) if forms_valid else False
 
         if forms_valid and curve_sources_valid:
+            cd = form.cleaned_data
             try:
                 with transaction.atomic():
+                    input_file = None
+                    if is_recoil:
+                        input_file = cd.get("input_file") or copy_input_file(cd["source_run"])
                     run = CalculationRun.objects.create(
-                        name=form.cleaned_data["name"],
-                        mode=CalculationRun.MODE_FREE_FALL,
-                        input_file=None,        # свободное падение не требует файла
-                        mass=form.cleaned_data["mass"],
-                        angle_deg=form.cleaned_data["angle_deg"],
-                        v0=form.cleaned_data["v0"],
-                        x0=form.cleaned_data["x0"],
-                        t_max=form.cleaned_data["t_max"],
-                        dt=form.cleaned_data["dt"],
+                        name=cd["name"],
+                        mode=mode,
+                        input_file=input_file,
+                        mass=cd["mass"],
+                        angle_deg=cd["angle_deg"],
+                        v0=cd["v0"],
+                        x0=cd["x0"],
+                        t_max=cd["t_max"],
+                        dt=cd["dt"],
                         owner=request.user,
                     )
-
-                    brake_objects, runtime_brakes = create_brake_objects_and_runtime_models(
-                        run,
-                        brake_formset,
-                    )
-
-                    recoil = RecoilParams(
-                        mass=run.mass,
-                        angle_deg=run.angle_deg,
-                        v0=run.v0,
-                        x0=run.x0,
-                        t_max=run.t_max,
-                        dt=run.dt,
-                    )
-
-                    result = simulate_free_fall(recoil, runtime_brakes)
-
+                    brake_objects, runtime_brakes = create_brake_objects_and_runtime_models(run, brake_formset)
+                    recoil = RecoilParams(mass=run.mass, angle_deg=run.angle_deg, v0=run.v0,
+                                          x0=run.x0, t_max=run.t_max, dt=run.dt)
+                    if is_recoil:
+                        result = simulate_recoil(run.input_file.path, recoil, runtime_brakes)
+                    else:
+                        result = simulate_free_fall(recoil, runtime_brakes)
                     persist_result_and_snapshot(run, brake_objects, result)
-
                 return redirect("run_detail_v2", run_id=run.id)
-
             except ValueError as exc:
                 form.add_error(None, str(exc))
+        source_run = visible_run(request.user, request.POST.get("source_run_id"))
     else:
-        # Поддержка ?from_run= — префилл параметров из существующего расчёта.
-        initial_main, brakes_initial = build_initial_from_run(request.GET.get("from_run"))
-        form = FreeFallForm(initial=initial_main)
+        source_run = visible_run(request.user, request.GET.get("from_run"))
+        initial_main, brakes_initial = build_initial_from_run(source_run.pk if source_run else None)
+        if source_run is not None and (not is_recoil or not source_run.input_file):
+            initial_main.pop("source_run_id", None)
 
-        if brakes_initial:
-            brake_formset = MagneticBrakeFormSet(initial=brakes_initial, prefix="brakes")
-        else:
-            brake_formset = MagneticBrakeFormSet(initial=[{}], prefix="brakes")
+        catalog_prefill = BrakeCatalog.objects.filter(pk=_int_or_none(request.GET.get("catalog"))).first()
+        if catalog_prefill is not None and not brakes_initial:
+            brakes_initial = [brake_initial_from_catalog(catalog_prefill)]
 
-    from ..services.permissions import runs_visible_to
-    runs = runs_visible_to(request.user).order_by("-created_at")[:20]
+        form = CalculationForm(initial=initial_main, user=request.user) if is_recoil             else FreeFallForm(initial=initial_main)
+        brake_formset = MagneticBrakeFormSet(
+            initial=brakes_initial or ([{}, {}] if is_recoil else [{}]), prefix="brakes",
+        )
 
     catalog_items = _build_catalog_items()
+    return render(request, "recoil_app/calc_new.html", {
+        "mode": "recoil" if is_recoil else "free_fall",
+        "form": form,
+        "brake_formset": brake_formset,
+        "source_run": source_run,
+        "catalog_prefill": catalog_prefill,
+        "catalog_items": catalog_items,
+        "catalog_count": len(catalog_items),
+    })
 
-    return render(
-        request,
-        "recoil_app/free_fall.html",
-        {
-            "form": form,
-            "brake_formset": brake_formset,
-            "runs": runs,
-            "catalog_items": catalog_items,
-            "catalog_count": len(catalog_items),
-        },
-    )
+
+def _int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _build_catalog_items() -> list[dict]:

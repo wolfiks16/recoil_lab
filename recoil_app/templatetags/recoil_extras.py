@@ -108,3 +108,15 @@ def smart_num(value):
     # %g подбирает формат сам
     s = f"{f:.6g}"
     return s
+
+
+@register.inclusion_tag("recoil_app/includes/brake_param_grid.html")
+def brake_param_grid(form, required_mark=False):
+    """Единая сетка параметров вихретокового тормоза (группы, символ, подпись, единица).
+
+    {% brake_param_grid brake_form %} — в форме расчёта, свободного падения,
+    пошаговой сессии и каталога параметры выглядят и подписаны одинаково.
+    """
+    from ..services.brake_params import param_field_groups
+
+    return {"groups": param_field_groups(form), "required_mark": required_mark}

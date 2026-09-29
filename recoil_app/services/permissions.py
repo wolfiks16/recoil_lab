@@ -93,6 +93,15 @@ def can_duplicate_run(user: UserOrAnon, run: CalculationRun) -> bool:
     return can_view_run(user, run)
 
 
+def visible_run(user: UserOrAnon, run_id) -> Optional[CalculationRun]:
+    """Расчёт по id (из GET/скрытого поля), если пользователю можно его видеть, иначе None."""
+    try:
+        run = CalculationRun.objects.filter(pk=int(run_id)).first()
+    except (TypeError, ValueError):
+        return None
+    return run if run is not None and can_view_run(user, run) else None
+
+
 def runs_visible_to(user: UserOrAnon) -> QuerySet[CalculationRun]:
     """Queryset расчётов, видимых пользователю.
 

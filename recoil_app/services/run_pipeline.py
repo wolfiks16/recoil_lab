@@ -151,7 +151,8 @@ def build_initial_from_run(run_id: str | None) -> tuple[dict, list[dict]]:
         return initial_main, brakes_initial
 
     initial_main = {
-        "name": f"{source_run.name}_1",
+        "name": unique_copy_name(source_run.name),
+        "source_run_id": source_run.pk,
         "mass": source_run.mass,
         "angle_deg": source_run.angle_deg,
         "v0": source_run.v0,
@@ -186,12 +187,48 @@ def build_initial_from_run(run_id: str | None) -> tuple[dict, list[dict]]:
     return initial_main, brakes_initial
 
 
-def resolve_curve_sources(brake_formset) -> bool:
+def unique_copy_name(base: str) -> str:
+    """Свободное имя для копии расчёта: base_1, base_2, … (имена уникальны)."""
+    stem = base
+    # Копия копии не должна копить суффиксы: «run_1» → «run_2», а не «run_1_1».
+    head, _, tail = base.rpartition("_")
+    if head and tail.isdigit():
+        stem = head
+    k = 1
+    while CalculationRun.objects.filter(name=f"{stem}_{k}").exists():
+        k += 1
+    return f"{stem}_{k}"
+
+
+def copy_input_file(run: CalculationRun) -> ContentFile:
+    """Копия входного Excel расчёта-донора (у нового расчёта — свой файл)."""
+    if not run.input_file:
+        raise ValueError(f"У расчёта «{run.name}» нет входного файла.")
+    run.input_file.open("rb")
+    try:
+        content = run.input_file.read()
+    finally:
+        run.input_file.close()
+    return ContentFile(content, name=Path(run.input_file.name).name)
+
+
+def brake_initial_from_catalog(entry: BrakeCatalog) -> dict:
+    """initial формы тормоза из записи каталога (copy-on-use F(v) — через catalog_source_id)."""
+    initial = {"model_type": entry.model_type, "name": entry.name, "catalog_source_id": entry.pk}
+    for field in ("gamma", "delta", "xm", "ym", "dh1", "dh2", "dm", "n", "mu", "bz", "lya", "wn0"):
+        initial[field] = getattr(entry, field)
+    return initial
+
+
+def resolve_curve_sources(brake_formset, user=None) -> bool:
     """Для curve-тормозов без uploaded_file подтягивает точки F(v) из существующего тормоза.
 
     Возвращает True если все источники разрешены, False если хотя бы один не нашёлся
-    (в этом случае на форму добавлены ошибки).
+    (в этом случае на форму добавлены ошибки). С `user` — таблицу можно взять только
+    из тормоза расчёта, который пользователю виден (id приходит из скрытого поля формы).
     """
+    from .permissions import can_view_run
+
     ok = True
 
     for form in brake_formset.forms:
@@ -216,6 +253,13 @@ def resolve_curve_sources(brake_formset) -> bool:
             )
             ok = False
             continue
+
+        if user is not None:
+            source = MagneticBrakeConfig.objects.select_related("run").filter(pk=source_brake_id).first()                 if source_brake_id.isdigit() else None
+            if source is None or not can_view_run(user, source.run):
+                form.add_error("force_curve_file", "Таблица F(v) исходного тормоза недоступна — загрузите файл.")
+                ok = False
+                continue
 
         try:
             resolved_points = _load_curve_points_from_source_brake(source_brake_id)

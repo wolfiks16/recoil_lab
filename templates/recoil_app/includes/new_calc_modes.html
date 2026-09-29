@@ -1,5 +1,7 @@
-{# Единый вход «Новый расчёт»: переключатель режима над формой.
-   mode: recoil | free_fall | iterative. ?from_run= сохраняется при переключении. #}
+{% comment %}
+Единый вход «Новый расчёт»: переключатель режима над формой.
+mode: recoil | free_fall | iterative. ?from_run= сохраняется при переключении.
+{% endcomment %}
 {% with q=request.GET.from_run %}
 <div class="rb-mode-switch">
     <nav class="rb-seg" aria-label="Режим расчёта">

@@ -64,15 +64,6 @@
     border-radius: var(--rb-radius-sm);
 }
 
-.notice {
-    background: rgba(61, 115, 235, 0.07);
-    border: 1px solid rgba(61, 115, 235, 0.22);
-    color: var(--rb-blue-dark);
-    padding: 10px 14px;
-    border-radius: var(--rb-radius-sm);
-    margin-bottom: 12px;
-    font-size: 14px;
-}
 
 .brake-parametric-fields,
 .brake-curve-fields {
@@ -217,3 +208,13 @@
 .rb-cad-brake-item-status.is-partial  { background: var(--rb-warn); }
 .rb-cad-brake-item-status.is-empty    { background: transparent; box-shadow: inset 0 0 0 2px var(--rb-panel-border-strong); }
 .rb-cad-brake-item-status.is-error    { background: var(--rb-danger); }
+
+
+.rb-cad-add-row { padding: 0 8px 12px; }
+.rb-cad-brake-head-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.rb-cad-brake-head-name { font-weight: 500; color: var(--rb-text-soft); }
+.rb-catalog-picker select { margin-top: 4px; }
+.curve-preview-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.rb-overlay-title { font-size: 18px; margin-bottom: 6px; }
+.rb-overlay-sub { font-size: 14px; opacity: .8; }
+#empty-brake-form[hidden] { display: none !important; }

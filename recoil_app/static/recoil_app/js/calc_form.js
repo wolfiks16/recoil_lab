@@ -563,8 +563,8 @@
         if (info) {
             const parts = [item.summary];
             if (item.description) parts.push(item.description);
-            if (item.is_curve) parts.push("Файл F(v) будет взят из каталога");
-            info.textContent = parts.join(" — ");
+            if (item.is_curve) parts.push("Таблица F(v) будет скопирована из каталога");
+            info.textContent = parts.join(". ");
         }
 
         if (window.__rbRebuildBrakeList) window.__rbRebuildBrakeList();

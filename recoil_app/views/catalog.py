@@ -195,7 +195,7 @@ def catalog_edit_view(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, f"Тормоз «{obj.name}» обновлён.")
-            return redirect("catalog_list")
+            return redirect("catalog_detail", pk=obj.pk)
     else:
         form = BrakeCatalogForm(instance=obj)
 
@@ -206,6 +206,7 @@ def catalog_edit_view(request, pk):
             "form": form,
             "is_edit": True,
             "object": obj,
+            "perm_can_delete": can_delete_catalog(request.user, obj),
         },
     )
 

@@ -139,14 +139,9 @@ def create_calc(
 
 def input_file_from_run(run: CalculationRun) -> ContentFile:
     """Копия входного файла расчёта-донора (у сессии — своя копия)."""
-    if not run.input_file:
-        raise ValueError(f"У расчёта «{run.name}» нет входного файла.")
-    run.input_file.open("rb")
-    try:
-        content = run.input_file.read()
-    finally:
-        run.input_file.close()
-    return ContentFile(content, name=Path(run.input_file.name).name)
+    from ..run_pipeline import copy_input_file
+
+    return copy_input_file(run)
 
 
 # ------------------------------------------------------------------ загрузка/сохранение

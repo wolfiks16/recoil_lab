@@ -56,3 +56,33 @@ def geometry_3d_available(brake) -> bool:
         return int(brake.n) >= 1 and float(brake.xm) > 0 and float(brake.ym) > 0
     except (TypeError, ValueError):
         return False
+
+
+# Короткие подсказки под полем (там, где символа и подписи мало).
+PARAM_HINTS: dict[str, str] = {
+    "n": "Число секций тормоза, целое ≥ 1",
+    "lya": "Обычно 2.5",
+    "wn0": "Начальное значение рекурсивного параметра, обычно 1",
+}
+
+
+def param_field_groups(form, fields: tuple[str, ...] | None = None) -> list[dict]:
+    """Поля параметров тормоза из формы, сгруппированные для единого редактора.
+
+    Работает с любой формой, где параметры названы как поля `BrakeParametersMixin`
+    (расчёт, свободное падение, пошаговая сессия, каталог). Отсутствующие поля пропускаются.
+    """
+    wanted = set(fields) if fields else None
+    groups = []
+    for group_key, title in PARAM_GROUPS:
+        items = []
+        for field, label, symbol, unit, group in PARAM_SPECS:
+            if group != group_key or field not in form.fields:
+                continue
+            if wanted is not None and field not in wanted:
+                continue
+            items.append({"bf": form[field], "symbol": symbol, "label": label, "unit": unit,
+                          "hint": PARAM_HINTS.get(field, "")})
+        if items:
+            groups.append({"title": title, "fields": items})
+    return groups

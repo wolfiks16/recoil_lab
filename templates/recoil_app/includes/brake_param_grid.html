@@ -1,0 +1,23 @@
+{% comment %}
+Параметры вихретокового тормоза — общий вид для всех форм (тег brake_param_grid).
+{% endcomment %}
+<div class="rb-param-groups">
+    {% for group in groups %}
+    <fieldset class="rb-param-group">
+        <legend>{{ group.title }}</legend>
+        <div class="rb-param-grid">
+            {% for f in group.fields %}
+            <div class="rb-param-field{% if f.bf.errors %} has-error{% endif %}">
+                <label for="{{ f.bf.id_for_label }}">
+                    <span class="rb-param-symbol">{{ f.symbol }}</span>
+                    <span class="rb-param-label">{{ f.label }}{% if f.unit %}, {{ f.unit }}{% endif %}{% if required_mark %} *{% endif %}</span>
+                </label>
+                {{ f.bf }}
+                {% if f.bf.errors %}<div class="field-error">{{ f.bf.errors|join:" " }}</div>{% endif %}
+                {% if f.hint %}<div class="rb-param-hint">{{ f.hint }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </fieldset>
+    {% endfor %}
+</div>

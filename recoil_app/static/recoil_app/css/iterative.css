@@ -122,11 +122,8 @@
 
 .it-slot-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 
-.it-slot-params {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-    gap: 8px;
-}
+.it-slot-params { display: block; }
+.it-slot-params .rb-param-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 
 .it-slot-curve { display: flex; flex-direction: column; gap: 6px; }
 .it-slot-curve > .it-field { flex: 0 0 auto; }   /* flex-basis широкого поля — ширина только в строке */

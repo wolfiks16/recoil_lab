@@ -35,7 +35,7 @@
 
     <div class="it-new-grid">
         <div class="rb-card">
-            <div class="rb-card-title"><span class="rb-card-title-text">Режим и параметры</span></div>
+            <div class="rb-card-title"><span class="rb-card-title-text">Что считаем и параметры</span></div>
 
             <div class="it-mode" data-mode-switch>
                 {% for radio in form.mode %}
@@ -45,13 +45,13 @@
 
             <div class="it-form-fields">
                 <label class="it-field it-field-wide">
-                    <span class="it-field-label">Название</span>
+                    <span class="it-field-label">Имя сессии</span>
                     {{ form.name }}
                     {% if form.name.errors %}<span class="it-field-error">{{ form.name.errors|join:" " }}</span>{% endif %}
                 </label>
 
                 <label class="it-field it-field-wide" data-mode-only="recoil">
-                    <span class="it-field-label">Файл характеристик Excel (F(t), F(x))</span>
+                    <span class="it-field-label">Входной файл (Excel)</span>
                     {{ form.input_file }}
                     {% if source_run.input_file %}<span class="it-hint">Если не выбрать — возьмётся файл «{{ source_run.name }}».</span>{% endif %}
                     {% if form.input_file.errors %}<span class="it-field-error">{{ form.input_file.errors|join:" " }}</span>{% endif %}
@@ -68,24 +68,24 @@
                     {% if form.angle_deg.errors %}<span class="it-field-error">{{ form.angle_deg.errors|join:" " }}</span>{% endif %}
                 </label>
                 <label class="it-field">
-                    <span class="it-field-label">v₀, м/с</span>
+                    <span class="it-field-label">Начальная скорость v₀, м/с</span>
                     {{ form.v0 }}
                     {% if form.v0.errors %}<span class="it-field-error">{{ form.v0.errors|join:" " }}</span>{% endif %}
                 </label>
                 <label class="it-field">
-                    <span class="it-field-label">x₀, м</span>
+                    <span class="it-field-label">Начальное перемещение x₀, м</span>
                     {{ form.x0 }}
                     {% if form.x0.errors %}<span class="it-field-error">{{ form.x0.errors|join:" " }}</span>{% endif %}
                 </label>
                 <label class="it-field">
-                    <span class="it-field-label">t_max, с</span>
+                    <span class="it-field-label">Предел времени t<sub>max</sub>, с</span>
                     {{ form.t_max }}
                     <span class="it-hint" data-mode-only="recoil">для отката — не больше 10 с</span>
                     <span class="it-hint" data-mode-only="free_fall">без верхнего предела</span>
                     {% if form.t_max.errors %}<span class="it-field-error">{{ form.t_max.errors|join:" " }}</span>{% endif %}
                 </label>
                 <label class="it-field">
-                    <span class="it-field-label">Шаг dt, с</span>
+                    <span class="it-field-label">Шаг интегрирования dt, с</span>
                     {{ form.dt }}
                     <span class="it-hint">кнопка «Шаг» продвигает ровно на dt</span>
                     {% if form.dt.errors %}<span class="it-field-error">{{ form.dt.errors|join:" " }}</span>{% endif %}
@@ -94,18 +94,18 @@
         </div>
 
         <div class="rb-card">
-            <div class="rb-card-title"><span class="rb-card-title-text">Тормоза — исходная конфигурация C₀</span></div>
+            <div class="rb-card-title"><span class="rb-card-title-text">Тормоза в начале (этап 0)</span></div>
             {% include "recoil_app/includes/iterative_slot_editor.html" with editor_mode="new" %}
         </div>
     </div>
 
     <div class="it-submit-row">
-        <button type="submit" class="rb-btn rb-btn-grad">⏵ Начать итерационный расчёт</button>
+        <button type="submit" class="rb-btn rb-btn-primary">Начать сессию</button>
     </div>
 </form>
 {% endblock %}
 
 {% block body_extra %}
 {{ catalog_items|json_script:"rb-catalog-data" }}
-<script src="{% static 'recoil_app/js/iterative.js' %}"></script>
+<script src="{% static 'recoil_app/js/iterative.js' %}?v=3"></script>
 {% endblock %}

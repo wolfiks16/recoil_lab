@@ -1,0 +1,173 @@
+{% extends "recoil_app/base_v2.html" %}
+{% load static %}
+
+{% comment %}
+Форма нового расчёта — общая для режимов «откат и накат» (mode='recoil', index_view)
+и «свободное падение» (mode='free_fall', free_fall_new_view). Пошаговый режим —
+отдельная страница iterative_new.html, переключатель режимов общий.
+{% endcomment %}
+
+{% block title %}Новый расчёт: {% if mode == 'free_fall' %}свободное падение{% else %}откат и накат{% endif %} — RecoilLab{% endblock %}
+{% block shell_crumb %}{% if mode == 'free_fall' %}Свободное падение{% else %}Откат и накат{% endif %}{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="{% static 'recoil_app/css/calc_form.css' %}?v=3">
+{% endblock %}
+
+{% block content %}
+
+<section class="rb-hero">
+    <div class="rb-hero-row">
+        <h1 class="rb-h1">Новый расчёт</h1>
+        <div class="rb-cad-hero-actions">
+            <button type="button" id="submit-calc-btn" class="rb-btn rb-btn-primary rb-cad-submit">Рассчитать</button>
+        </div>
+    </div>
+    {% include "recoil_app/includes/new_calc_modes.html" %}
+</section>
+
+{% if source_run %}
+<div class="notice">
+    Форма заполнена по расчёту «{{ source_run.name }}».
+    {% if mode == 'recoil' and source_run.input_file %}Его входной файл будет использован, если не загрузить другой.{% endif %}
+    Измените нужное и нажмите «Рассчитать».
+</div>
+{% elif catalog_prefill %}
+<div class="notice">Тормоз «{{ catalog_prefill.name }}» подставлен из каталога. Задайте параметры расчёта и нажмите «Рассчитать».</div>
+{% endif %}
+
+{% if form.non_field_errors %}
+<div class="rb-status-banner rb-status-banner-danger">
+    <div class="rb-status-banner-icon"></div>
+    <div>
+        <div class="rb-status-banner-title">Расчёт не запущен</div>
+        <div class="rb-status-banner-sub">{{ form.non_field_errors|join:" " }}</div>
+    </div>
+</div>
+{% endif %}
+
+{% if brake_formset.non_form_errors %}
+<div class="rb-status-banner rb-status-banner-danger">
+    <div class="rb-status-banner-icon"></div>
+    <div class="rb-status-banner-sub">{{ brake_formset.non_form_errors|join:" " }}</div>
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" id="calculation-form" data-catalog-save-url="{% url 'catalog_save_from_form' %}">
+    {% csrf_token %}
+    {{ brake_formset.management_form }}
+    {% if form.source_run_id %}{{ form.source_run_id }}{% endif %}
+
+    <div class="rb-cad">
+
+        <aside class="rb-cad-sidebar">
+            <div class="rb-cad-sidebar-section">
+                <div class="rb-cad-sidebar-section-title">{% if mode == 'free_fall' %}Параметры падения{% else %}Параметры откатной системы{% endif %}</div>
+                <div class="rb-cad-params">
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.name.id_for_label }}" class="rb-cad-field-label">Имя расчёта</label>
+                        {{ form.name }}
+                        <div class="rb-cad-field-hint">Латинские буквы, цифры, «-» и «_»; имя должно быть новым.</div>
+                        {% if form.name.errors %}<div class="rb-cad-field-error">{{ form.name.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    {% if mode == 'recoil' %}
+                    <div class="rb-cad-field">
+                        <label for="{{ form.input_file.id_for_label }}" class="rb-cad-field-label">Входной файл (Excel)</label>
+                        {{ form.input_file }}
+                        {% if source_run and source_run.input_file %}
+                        <div class="rb-cad-field-hint">Можно не загружать: возьмётся файл расчёта «{{ source_run.name }}».</div>
+                        {% else %}
+                        <div class="rb-cad-field-hint">Листы «сила от времени» (t, с; F, кН) и «сила от перемещения» (X, м; F, кН).</div>
+                        {% endif %}
+                        {% if form.input_file.errors %}<div class="rb-cad-field-error">{{ form.input_file.errors|join:"; " }}</div>{% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.mass.id_for_label }}" class="rb-cad-field-label"><span>Масса</span><span class="rb-cad-field-symbol">m, кг</span></label>
+                        {{ form.mass }}
+                        {% if form.mass.errors %}<div class="rb-cad-field-error">{{ form.mass.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.angle_deg.id_for_label }}" class="rb-cad-field-label"><span>Угол</span><span class="rb-cad-field-symbol">α, °</span></label>
+                        {{ form.angle_deg }}
+                        {% if mode == 'free_fall' %}<div class="rb-cad-field-hint">90° — вертикальное падение, тяжесть действует полностью.</div>{% endif %}
+                        {% if form.angle_deg.errors %}<div class="rb-cad-field-error">{{ form.angle_deg.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.v0.id_for_label }}" class="rb-cad-field-label"><span>Начальная скорость</span><span class="rb-cad-field-symbol">v₀, м/с</span></label>
+                        {{ form.v0 }}
+                        {% if form.v0.errors %}<div class="rb-cad-field-error">{{ form.v0.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.x0.id_for_label }}" class="rb-cad-field-label"><span>Начальное перемещение</span><span class="rb-cad-field-symbol">x₀, м</span></label>
+                        {{ form.x0 }}
+                        {% if form.x0.errors %}<div class="rb-cad-field-error">{{ form.x0.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.t_max.id_for_label }}" class="rb-cad-field-label"><span>Предел времени</span><span class="rb-cad-field-symbol">t<sub>max</sub>, с</span></label>
+                        {{ form.t_max }}
+                        {% if mode == 'free_fall' %}<div class="rb-cad-field-hint">Без верхнего предела; большое t<sub>max</sub> при малом шаге — долгий расчёт.</div>
+                        {% else %}<div class="rb-cad-field-hint">Не больше 10 с; расчёт закончится раньше, если вернётся в x = 0.</div>{% endif %}
+                        {% if form.t_max.errors %}<div class="rb-cad-field-error">{{ form.t_max.errors|join:"; " }}</div>{% endif %}
+                    </div>
+
+                    <div class="rb-cad-field">
+                        <label for="{{ form.dt.id_for_label }}" class="rb-cad-field-label"><span>Шаг интегрирования</span><span class="rb-cad-field-symbol">dt, с</span></label>
+                        {{ form.dt }}
+                        {% if form.dt.errors %}<div class="rb-cad-field-error">{{ form.dt.errors|join:"; " }}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="rb-cad-sidebar-section">
+                <div class="rb-cad-sidebar-section-title" id="brake-list-title">Тормоза (<span id="brake-count">0</span>)</div>
+                <div class="rb-cad-brake-list" id="brake-list" aria-labelledby="brake-list-title"></div>
+                <div class="rb-cad-add-row">
+                    <button type="button" id="add-brake-btn" class="rb-cad-add-brake">Добавить тормоз</button>
+                </div>
+            </div>
+        </aside>
+
+        <div class="rb-cad-main">
+            <div class="rb-cad-main-empty" id="brake-empty-state" style="display: none;">
+                <div class="rb-empty-title">Тормозов нет</div>
+                <div class="rb-empty-sub">Добавьте тормоз в списке слева: нужен хотя бы один.</div>
+            </div>
+
+            <div id="brake-forms">
+                {% for brake_form in brake_formset %}
+                    {% include "recoil_app/includes/brake_card.html" with f=brake_form index=forloop.counter0 number=forloop.counter %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# Шаблон пустой формы для «Добавить тормоз» — та же карточка #}
+    <div id="empty-brake-form" class="hidden-template" hidden>
+        {% include "recoil_app/includes/brake_card.html" with f=brake_formset.empty_form index="__prefix__" number="__number__" %}
+    </div>
+</form>
+
+<div id="calculation-overlay" role="status" aria-live="polite">
+    <div>
+        <div class="rb-overlay-title">Идёт расчёт</div>
+        <div class="rb-overlay-sub">Обычно несколько секунд; страница результата откроется сама.</div>
+    </div>
+</div>
+
+<div id="rb-toast" class="rb-toast" role="status"></div>
+
+{% endblock %}
+
+{% block body_extra %}
+{{ catalog_items|json_script:"rb-catalog-data" }}
+<script src="{% static 'recoil_app/js/calc_form.js' %}?v=3"></script>
+{% endblock %}
