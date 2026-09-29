@@ -21,7 +21,7 @@
             <div class="rb-hero-sub">
                 <span>создан {{ object.created_at|date:"d.m.Y" }}</span>
                 <span>изменён {{ object.updated_at|date:"d.m.Y, H:i" }}</span>
-                {% if usage_count %}<span>использован в {{ usage_count }} расчёт{{ usage_count|pluralize:"е,ах,ах" }}</span>{% endif %}
+                {% if usage_count %}<span>использован в {{ usage_count }} {{ usage_count|ru_plural:"расчёте,расчётах,расчётах" }}</span>{% endif %}
             </div>
         </div>
         <div class="rb-hero-actions">
@@ -130,8 +130,8 @@
                     {% for p in curve_points %}
                     <tr>
                         <td class="num rb-text-muted">{{ forloop.counter }}</td>
-                        <td class="num">{{ p.velocity|floatformat:4 }}</td>
-                        <td class="num">{{ p.force|floatformat:2 }}</td>
+                        <td class="num">{{ p.velocity|floatformat:"4u" }}</td>
+                        <td class="num">{{ p.force|floatformat:"2u" }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -143,10 +143,10 @@
             <div class="rb-panel-head"><h2>Диапазоны</h2></div>
             <dl class="rb-dl">
                 <dt>Точек</dt><dd>{{ curve_stats.n_points }}</dd>
-                <dt>Скорость, м/с</dt><dd>{{ curve_stats.v_min|floatformat:3 }} … {{ curve_stats.v_max|floatformat:3 }}</dd>
-                <dt>Сила, Н</dt><dd>{{ curve_stats.f_min|floatformat:1 }} … {{ curve_stats.f_max|floatformat:1 }}</dd>
+                <dt>Скорость, м/с</dt><dd>{{ curve_stats.v_min|floatformat:"3u" }} … {{ curve_stats.v_max|floatformat:"3u" }}</dd>
+                <dt>Сила, Н</dt><dd>{{ curve_stats.f_min|floatformat:"1u" }} … {{ curve_stats.f_max|floatformat:"1u" }}</dd>
             </dl>
-            <p class="rb-panel-note">За пределами таблицы сила не экстраполируется: расчёт со скоростью выше {{ curve_stats.v_max|floatformat:3 }} м/с остановится с ошибкой.</p>
+            <p class="rb-panel-note">За пределами таблицы сила не экстраполируется: расчёт со скоростью выше {{ curve_stats.v_max|floatformat:"3u" }} м/с остановится с ошибкой.</p>
         </section>
     </aside>
 </div>

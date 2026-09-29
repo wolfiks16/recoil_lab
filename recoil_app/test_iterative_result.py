@@ -171,4 +171,4 @@ class ResultPageTests(TestCase):
 
     def test_results_list_badge(self):
         response = self.client.get(reverse("results"))
-        self.assertContains(response, "итерац.")
+        self.assertContains(response, "пошаговый")

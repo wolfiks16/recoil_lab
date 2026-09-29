@@ -2033,3 +2033,78 @@ def make_oscillogram_figure(data: dict, *, free_fall: bool = False) -> go.Figure
         height=640 if has_ribbon else 600,
     )
     return fig
+
+
+def make_compare_oscillogram_figure(osc_a: dict, osc_b: dict, name_a: str, name_b: str) -> go.Figure:
+    """Сравнение двух расчётов на одной осциллограмме: x, v, a, |F| на общей оси t.
+
+    Каналы — те же, что на странице результата; расчёт различается цветом
+    (_CMP_COLOR_A сплошной / _CMP_COLOR_B пунктир), подписи осей — цветом величины.
+    """
+    f_unit = "кН" if "кН" in (osc_a.get("f_unit"), osc_b.get("f_unit")) else "Н"
+
+    def f_values(osc):
+        vals = osc["f"]
+        if osc.get("f_unit") == f_unit:
+            return vals
+        return [v / 1000.0 for v in vals] if f_unit == "кН" else [v * 1000.0 for v in vals]
+
+    rows = [("x_mm", "x, мм", "x", "мм", ".1f"), ("v", "v, м/с", "v", "м/с", ".3f"),
+            ("a_g", "a, g", "a", "g", ".1f"), ("f", f"|F| торм., {f_unit}", "f", f_unit, ".1f")]
+    gap = 0.016
+    domains = [[1 - (i + 1) * 0.25 + gap / 2, 1 - i * 0.25 - gap / 2] for i in range(4)]
+    tick_font = dict(family=FONT_FAMILY_MONO, size=10, color="#5A6A7F")
+    fig = go.Figure()
+    for i, (key, title, q, unit, fmt) in enumerate(rows):
+        yaxis = "y" if i == 0 else f"y{i + 1}"
+        for osc, name, color, dash in ((osc_a, name_a, _CMP_COLOR_A, "solid"), (osc_b, name_b, _CMP_COLOR_B, "dash")):
+            y = f_values(osc) if key == "f" else osc[key]
+            fig.add_trace(go.Scatter(
+                x=osc["t"], y=y, mode="lines", name=name, legendgroup=name, showlegend=(i == 0),
+                xaxis="x", yaxis=yaxis, line=dict(color=color, width=2, dash=dash),
+                hovertemplate=f"{name}: %{{y:{fmt}}} {unit}<extra></extra>",
+            ))
+        fig.update_layout({("yaxis" if i == 0 else f"yaxis{i + 1}"): dict(
+            domain=domains[i], tickfont=tick_font, gridcolor=OSC_GRID, zerolinecolor=OSC_ZERO, fixedrange=True,
+            title=dict(text=title, font=dict(family=FONT_FAMILY_UI, size=12, color=QUANTITY_COLORS[q][1])),
+        )})
+    t_end = max(osc_a["t_end"], osc_b["t_end"])
+    fig.update_layout(
+        template="plotly_white",
+        font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
+        margin=dict(l=64, r=16, t=36, b=40),
+        paper_bgcolor="white", plot_bgcolor="white",
+        hovermode="x", hoversubplots="axis",
+        hoverlabel=dict(font=dict(family=FONT_FAMILY_MONO, size=11)),
+        legend=dict(orientation="h", x=0, y=1.0, yanchor="bottom", font=dict(family=FONT_FAMILY_UI, size=12)),
+        xaxis=dict(anchor="y4", title=dict(text="t, с", font=dict(family=FONT_FAMILY_UI, size=12)),
+                   tickfont=tick_font, gridcolor=OSC_GRID, zeroline=False,
+                   showspikes=True, spikemode="across", spikesnap="cursor",
+                   spikethickness=1, spikecolor="#1B2430", spikedash="solid",
+                   range=[min(osc_a["t0"], osc_b["t0"]), t_end]),
+        height=640,
+    )
+    return fig
+
+
+def make_compare_phase_figures(osc_a: dict, osc_b: dict, name_a: str, name_b: str) -> tuple[go.Figure, go.Figure]:
+    """Фазовая траектория v(x) и сила от скорости |F|(|v|) двух расчётов (по прореженным рядам)."""
+    f_unit = "кН" if "кН" in (osc_a.get("f_unit"), osc_b.get("f_unit")) else "Н"
+    vx = go.Figure()
+    fv = go.Figure()
+    for osc, name, color, dash in ((osc_a, name_a, _CMP_COLOR_A, "solid"), (osc_b, name_b, _CMP_COLOR_B, "dash")):
+        vx.add_trace(go.Scatter(x=osc["x_mm"], y=osc["v"], mode="lines", name=name,
+                                line=dict(color=color, width=2, dash=dash),
+                                hovertemplate="x %{x:.1f} мм, v %{y:.3f} м/с<extra>" + name + "</extra>"))
+        f = osc["f"]
+        if osc.get("f_unit") != f_unit:
+            f = [v / 1000.0 for v in f] if f_unit == "кН" else [v * 1000.0 for v in f]
+        fv.add_trace(go.Scatter(x=[abs(v) for v in osc["v"]], y=f, mode="lines", name=name,
+                                line=dict(color=color, width=2, dash=dash),
+                                hovertemplate="|v| %{x:.2f} м/с, |F| %{y:.1f} " + f_unit + "<extra>" + name + "</extra>"))
+    _apply_layout(vx, "", "x, мм", "v, м/с")
+    _apply_layout(fv, "", "|v|, м/с", f"|F| торм., {f_unit}")
+    for fig in (vx, fv):
+        fig.update_layout(margin=dict(l=60, r=16, t=20, b=50), hovermode="closest", height=380,
+                          legend=dict(x=0.99, y=0.99, xanchor="right", yanchor="top"))
+    return vx, fv

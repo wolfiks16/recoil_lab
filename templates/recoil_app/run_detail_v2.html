@@ -189,7 +189,7 @@
 {% if 'energy' in lazy_charts or energy_summary %}
 <details class="rb-fold" open>
     <summary>Энергобаланс
-        {% if energy_summary and energy_summary.residual_pct is not None %}<span class="rb-fold-meta">невязка {{ energy_summary.residual_pct|floatformat:2 }} %</span>{% endif %}
+        {% if energy_summary and energy_summary.residual_pct is not None %}<span class="rb-fold-meta">невязка {{ energy_summary.residual_pct|floatformat:"2u" }} %</span>{% endif %}
     </summary>
     <div class="rb-fold-body">
         {% if energy_summary %}

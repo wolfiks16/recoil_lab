@@ -299,20 +299,12 @@ def lazy_chart_html(run: CalculationRun, key: str) -> str | None:
 
 def brake_rows(brakes) -> list[dict]:
     """Тормоза для боковой панели: имя, тип, краткая сводка."""
-    from .brake_params import SPEC_BY_FIELD, SUMMARY_FIELDS
+    from .brake_params import param_summary
 
     rows = []
     for b in brakes:
         if b.model_type == "parametric":
-            parts = []
-            for field in SUMMARY_FIELDS:
-                value = getattr(b, field, None)
-                if value is None:
-                    continue
-                _f, _label, symbol, unit, _g = SPEC_BY_FIELD[field]
-                text = f"{value:g}" if isinstance(value, float) else str(value)
-                parts.append(f"{symbol} = {text}{(' ' + unit) if unit else ''}")
-            rows.append({"name": b.display_name, "kind": "параметры", "summary": ", ".join(parts)})
+            rows.append({"name": b.display_name, "kind": "параметры", "summary": param_summary(b)})
         else:
             points = list(b.force_points.order_by("order", "id").values_list("velocity", "force"))
             if points:

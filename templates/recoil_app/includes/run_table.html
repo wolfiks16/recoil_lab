@@ -1,0 +1,62 @@
+{% load recoil_extras %}
+{% comment %}
+Таблица расчётов. rows — services.run_list.run_rows; pickable — колонка выбора
+для сравнения (страница «Все расчёты»); compact — без автора и действий (рабочий стол).
+{% endcomment %}
+<div class="rb-table-wrap">
+<table class="rb-table rb-run-table">
+    <thead>
+        <tr>
+            {% if pickable %}<th class="rb-col-pick"><span class="rb-visually-hidden">Выбрать для сравнения</span></th>{% endif %}
+            <th>Расчёт</th>
+            <th>Итог</th>
+            <th class="num">Откат, мм</th>
+            <th class="num">Цикл, с</th>
+            <th class="num">Невязка, %</th>
+            <th class="num">Тормозов</th>
+            {% if not compact %}<th>Автор</th>{% endif %}
+            <th class="num">Создан</th>
+            {% if not compact %}<th><span class="rb-visually-hidden">Действия</span></th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+    {% with run=r.run %}
+        <tr data-run-row="{{ run.id }}">
+            {% if pickable %}
+            <td class="rb-col-pick">
+                <input type="checkbox" class="rb-cmp-pick-cb" data-run-id="{{ run.id }}" data-run-name="{{ run.name }}"
+                       aria-label="Выбрать «{{ run.name }}» для сравнения">
+            </td>
+            {% endif %}
+            <td class="rb-col-wrap">
+                <a class="rb-row-title" href="{% url 'run_detail_v2' run.id %}">{{ run.name }}</a>
+                {% if run.is_iterative %}<span class="rb-badge rb-badge-accent" title="Пошаговый расчёт: тормоза перестраивались по ходу">пошаговый</span>{% endif %}
+            </td>
+            <td class="rb-col-wrap rb-col-status">
+                <span class="rb-status rb-status-{{ r.status|default:'none' }}">{{ r.status_label }}</span>
+                {% if r.has_warnings %}<span class="rb-status rb-status-warn" title="{{ run.warnings_text|default:'пружина вне табличного диапазона' }}">предупреждения</span>{% endif %}
+            </td>
+            <td class="num">{% if run.x_max is not None %}{{ run.x_max|mul1000|floatformat:"1u" }}{% else %}—{% endif %}</td>
+            <td class="num">{% if run.return_end_time is not None %}{{ run.return_end_time|floatformat:"3u" }}{% else %}—{% endif %}</td>
+            <td class="num{% if run.energy_residual_pct is not None and run.energy_residual_pct >= 3 %} rb-danger-text{% elif run.energy_residual_pct is not None and run.energy_residual_pct >= 1 %} rb-warn-text{% endif %}">{% if run.energy_residual_pct is not None %}{{ run.energy_residual_pct|floatformat:"2u" }}{% else %}—{% endif %}</td>
+            <td class="num">{{ r.brakes_count }}</td>
+            {% if not compact %}<td class="rb-row-sub">{% if run.owner_id %}{{ run.owner.username }}{% else %}архив{% endif %}</td>{% endif %}
+            <td class="num">{{ run.created_at|date:"d.m.Y H:i" }}</td>
+            {% if not compact %}
+            <td class="rb-row-actions">
+                <a class="rb-btn rb-btn-sm rb-btn-quiet" href="{{ r.copy_url }}">Скопировать</a>
+                {% if r.can_delete %}
+                <form method="post" action="{% url 'delete_run' run.id %}" data-confirm="Удалить расчёт «{{ run.name }}» и все его файлы?">
+                    {% csrf_token %}
+                    <button type="submit" class="rb-btn rb-btn-sm rb-btn-quiet rb-danger-text">Удалить</button>
+                </form>
+                {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+    {% endwith %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>

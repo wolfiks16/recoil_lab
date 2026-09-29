@@ -55,3 +55,13 @@ class FormattingTests(SimpleTestCase):
             {"t0": 2.0, "t1": 3.0, "stage": 1},
             {"t0": 4.0, "t1": 5.0, "stage": 0},
         ])
+
+
+class RuPluralTests(SimpleTestCase):
+    def test_forms(self):
+        from .templatetags.recoil_extras import ru_plural
+
+        forms = "тормоз,тормоза,тормозов"
+        self.assertEqual([ru_plural(n, forms) for n in (1, 2, 5, 11, 12, 21, 22, 25, 101, 111)],
+                         ["тормоз", "тормоза", "тормозов", "тормозов", "тормозов",
+                          "тормоз", "тормоза", "тормозов", "тормоз", "тормозов"])

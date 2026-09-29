@@ -86,3 +86,16 @@ def param_field_groups(form, fields: tuple[str, ...] | None = None) -> list[dict
         if items:
             groups.append({"title": title, "fields": items})
     return groups
+
+
+def param_summary(obj) -> str:
+    """Краткая сводка параметрического тормоза: «N = 16, B̄₃ = 0.83 Тл, δ = 0.005 м, γ = 1.77e+07 (Ом·м)⁻¹»."""
+    parts = []
+    for field in SUMMARY_FIELDS:
+        value = getattr(obj, field, None)
+        if value is None:
+            continue
+        _f, _label, symbol, unit, _g = SPEC_BY_FIELD[field]
+        text = f"{value:g}" if isinstance(value, float) else str(value)
+        parts.append(f"{symbol} = {text}{(' ' + unit) if unit else ''}")
+    return ", ".join(parts)

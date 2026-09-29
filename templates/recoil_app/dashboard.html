@@ -1,160 +1,106 @@
 {% extends "recoil_app/base_v2.html" %}
 {% load recoil_extras %}
-{% load static %}
 
-{% block title %}Дашборд · RecoilLab{% endblock %}
-{% block shell_active %}dashboard{% endblock %}
-{% block user_initials %}И.К.{% endblock %}
-
-{% block head_extra %}
-<style>
-    .rb-content { max-width: none; }
-
-    .rb-quick-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 14px;
-        margin-top: 18px;
-    }
-    .rb-quick-card {
-        background: var(--rb-panel-bg-white);
-        border: 1px solid var(--rb-panel-border);
-        border-radius: var(--rb-radius-lg);
-        padding: 22px;
-        text-decoration: none;
-        color: inherit;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        transition: all .15s;
-    }
-    .rb-quick-card:hover {
-        border-color: var(--rb-blue);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 18px rgba(61, 115, 235, 0.12);
-    }
-    .rb-quick-card-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: var(--rb-text);
-    }
-    .rb-quick-card-sub {
-        font-size: 12px;
-        color: var(--rb-text-muted);
-    }
-    .rb-quick-card-arrow {
-        margin-top: auto;
-        font-family: "JetBrains Mono", Consolas, monospace;
-        font-size: 13px;
-        color: var(--rb-blue);
-        font-weight: 600;
-    }
-</style>
-{% endblock %}
+{% block title %}Рабочий стол — RecoilLab{% endblock %}
 
 {% block content %}
 
-{# === HERO === #}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
         <div>
-            <div class="rb-hero-title">
-                <h1>Дашборд</h1>
-            </div>
-            <div class="rb-hero-sub">
-                Обзор по базе расчётов и быстрый переход к разделам
-            </div>
+            <h1 class="rb-h1">Рабочий стол</h1>
+            <p class="rb-lead">Последние расчёты, незавершённые пошаговые сессии и фоновые задачи.</p>
+        </div>
+        <div class="rb-hero-actions">
+            <a class="rb-btn rb-btn-primary" href="{% url 'index' %}">Новый расчёт</a>
         </div>
     </div>
 </section>
 
-{% if messages %}
-{% for message in messages %}
-<div class="rb-status-banner rb-status-banner-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warn{% else %}ok{% endif %}" style="margin-bottom: 16px;">
-    <div class="rb-status-banner-icon">{% if message.tags == 'error' %}!{% elif message.tags == 'warning' %}⚠{% else %}✓{% endif %}</div>
-    <div>
-        <div class="rb-status-banner-sub">{{ message }}</div>
-    </div>
-</div>
-{% endfor %}
-{% endif %}
-
-{# === STAT CARDS === #}
-<div class="rb-stats-row">
-    <div class="rb-stat rb-stat-blue">
-        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <path d="M3 9h18M9 21V9"/>
-        </svg>
-        <div class="rb-stat-label">Всего расчётов</div>
-        <div class="rb-stat-value">{{ stats.total }}</div>
-        <div class="rb-stat-hint"><a href="{% url 'results' %}" style="color: inherit;">в базе →</a></div>
-    </div>
-
-    <div class="rb-stat rb-stat-purple">
-        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-        </svg>
-        <div class="rb-stat-label">За неделю</div>
-        <div class="rb-stat-value">{{ stats.last_week }}</div>
-        <div class="rb-stat-hint"><a href="{% url 'results' %}?filter=recent" style="color: inherit;">последние 7 дней →</a></div>
-    </div>
-
-    <div class="rb-stat rb-stat-green">
-        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-        </svg>
-        <div class="rb-stat-label">Успешных</div>
-        <div class="rb-stat-value">{{ stats.success }}</div>
-        <div class="rb-stat-hint"><a href="{% url 'results' %}?filter=success" style="color: inherit;">вернулись к нулю →</a></div>
-    </div>
-
-    <div class="rb-stat rb-stat-amber">
-        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <div class="rb-stat-label">С предупреждениями</div>
-        <div class="rb-stat-value">{{ stats.warnings }}</div>
-        <div class="rb-stat-hint"><a href="{% url 'results' %}?filter=warnings" style="color: inherit;">требуют внимания →</a></div>
-    </div>
-
-    <div class="rb-stat rb-stat-red">
-        <svg class="rb-stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>
-        </svg>
-        <div class="rb-stat-label">В каталоге</div>
-        <div class="rb-stat-value">{{ stats.catalog }}</div>
-        <div class="rb-stat-hint"><a href="{% url 'catalog_list' %}" style="color: inherit;">тормоза →</a></div>
-    </div>
-</div>
-
-{# === БЫСТРЫЕ ДЕЙСТВИЯ === #}
-<div class="rb-quick-grid">
-    <a class="rb-quick-card" href="{% url 'index' %}">
-        <div class="rb-quick-card-title">Новый расчёт</div>
-        <div class="rb-quick-card-sub">Загрузить характеристики, задать параметры и тормоза, запустить симуляцию</div>
-        <div class="rb-quick-card-arrow">→</div>
+<section class="rb-protocol rb-workspace-stats" aria-label="Сводка по базе расчётов">
+    <a class="rb-protocol-cell rb-protocol-link" href="{% url 'results' %}">
+        <div class="rb-protocol-q">Всего расчётов</div>
+        <div class="rb-protocol-val">{{ stats.total }}</div>
     </a>
-    <a class="rb-quick-card" href="{% url 'results' %}">
-        <div class="rb-quick-card-title">Результаты расчётов</div>
-        <div class="rb-quick-card-sub">Поиск, фильтры, открытие предыдущих расчётов и выбор пары для сравнения</div>
-        <div class="rb-quick-card-arrow">→</div>
+    <a class="rb-protocol-cell rb-protocol-link" href="{% url 'results' %}?filter=recent">
+        <div class="rb-protocol-q">За неделю</div>
+        <div class="rb-protocol-val">{{ stats.last_week }}</div>
     </a>
-    <a class="rb-quick-card" href="{% url 'compare' %}">
-        <div class="rb-quick-card-title">Сравнить расчёты</div>
-        <div class="rb-quick-card-sub">Overlay-графики и дельта-таблица по двум расчётам</div>
-        <div class="rb-quick-card-arrow">→</div>
+    <a class="rb-protocol-cell rb-protocol-link" href="{% url 'results' %}?filter=success">
+        <div class="rb-protocol-q">Цикл завершён</div>
+        <div class="rb-protocol-val">{{ stats.success }}</div>
     </a>
-    <a class="rb-quick-card" href="{% url 'catalog_list' %}">
-        <div class="rb-quick-card-title">Каталог тормозов</div>
-        <div class="rb-quick-card-sub">Сохранённые параметры и характеристики F(v) для быстрой подстановки</div>
-        <div class="rb-quick-card-arrow">→</div>
+    <a class="rb-protocol-cell rb-protocol-link{% if stats.warnings %} is-warn{% endif %}" href="{% url 'results' %}?filter=warnings">
+        <div class="rb-protocol-q">С предупреждениями</div>
+        <div class="rb-protocol-val">{{ stats.warnings }}</div>
     </a>
+    <a class="rb-protocol-cell rb-protocol-link" href="{% url 'catalog_list' %}">
+        <div class="rb-protocol-q">Тормозов в каталоге</div>
+        <div class="rb-protocol-val">{{ stats.catalog }}</div>
+    </a>
+</section>
+
+<div class="rb-split">
+    <section class="rb-panel">
+        <div class="rb-panel-head">
+            <h2>Последние расчёты</h2>
+            <div class="rb-panel-actions"><a class="rb-btn rb-btn-sm" href="{% url 'results' %}">Все расчёты</a></div>
+        </div>
+        {% if recent_rows %}
+            {% include "recoil_app/includes/run_table.html" with rows=recent_rows compact=True %}
+        {% elif user.is_authenticated %}
+            <div class="rb-empty-inline">
+                Расчётов пока нет. <a href="{% url 'index' %}">Создайте первый</a> — откат по входному файлу, свободное падение или пошаговый.
+            </div>
+        {% else %}
+            <div class="rb-empty-inline">
+                <a href="{% url 'login' %}">Войдите</a>, чтобы видеть свои расчёты и запускать новые.
+            </div>
+        {% endif %}
+    </section>
+
+    <aside class="rb-split-side">
+        <section class="rb-panel">
+            <div class="rb-panel-head"><h2>Фоновые задачи</h2></div>
+            {% if background_tasks %}
+            <ul class="rb-link-list">
+                {% for t in background_tasks %}
+                <li><a href="{{ t.url }}">{{ t.label }}</a><span class="rb-row-sub">{{ t.status }}</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="rb-panel-note">Сейчас ничего не считается. Подбор тормоза и досчёт длинной пошаговой сессии идут в фоне — они появятся здесь.</p>
+            {% endif %}
+        </section>
+
+        <section class="rb-panel">
+            <div class="rb-panel-head">
+                <h2>Незавершённые сессии</h2>
+                <div class="rb-panel-actions"><a class="rb-btn rb-btn-sm" href="{% url 'iterative_list' %}">Все</a></div>
+            </div>
+            {% if sessions %}
+            <ul class="rb-link-list">
+                {% for c in sessions %}
+                <li>
+                    <a href="{% url 'iterative_detail' c.id %}">{{ c.name }}</a>
+                    <span class="rb-row-sub">{{ c.get_mode_display|lower }}, этапов: {{ c.state.stages|length }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="rb-panel-note">Открытых пошаговых сессий нет.</p>
+            {% endif %}
+        </section>
+
+        <section class="rb-panel">
+            <div class="rb-panel-head"><h2>Инструменты</h2></div>
+            <ul class="rb-link-list">
+                <li><a href="{% url 'compare' %}">Сравнение двух расчётов</a><span class="rb-row-sub">одна осциллограмма, разница по показателям</span></li>
+                <li><a href="{% url 'optimize_list' %}">Подбор тормоза</a><span class="rb-row-sub">параметры по пределам отката и времени цикла</span></li>
+                <li><a href="{% url 'catalog_list' %}">Каталог тормозов</a><span class="rb-row-sub">готовые параметры и таблицы F(v)</span></li>
+            </ul>
+        </section>
+    </aside>
 </div>
 
 {% endblock %}

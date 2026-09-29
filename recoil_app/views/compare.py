@@ -3,10 +3,7 @@
 from django.shortcuts import render
 
 from ..forms import CompareRunsForm
-from ..services.compare_data import (
-    build_compare_metrics_table,
-    build_compare_overlay_charts,
-)
+from ..services.compare_data import build_compare_metrics_table, build_compare_page
 from ..services.permissions import can_view_run, runs_visible_to
 
 
@@ -20,7 +17,7 @@ def compare_view(request):
 
     run_a = None
     run_b = None
-    overlay_charts = {}
+    page: dict = {}
     metrics_table: list[dict] = []
 
     if form.is_valid():
@@ -29,7 +26,7 @@ def compare_view(request):
         # Двойная проверка — если кто-то подсунул чужой run_id в URL,
         # form.queryset выше уже отрежет, но на всякий случай:
         if can_view_run(request.user, run_a) and can_view_run(request.user, run_b):
-            overlay_charts = build_compare_overlay_charts(run_a, run_b)
+            page = build_compare_page(run_a, run_b)
             metrics_table = build_compare_metrics_table(run_a, run_b)
         else:
             run_a = run_b = None
@@ -41,7 +38,7 @@ def compare_view(request):
             "form": form,
             "run_a": run_a,
             "run_b": run_b,
-            "overlay_charts": overlay_charts,
             "metrics_table": metrics_table,
+            **page,
         },
     )

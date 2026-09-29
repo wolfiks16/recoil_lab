@@ -124,7 +124,7 @@
 
 {% if stage2 %}
 <section class="rb-panel">
-    <div class="rb-panel-head"><h2>Подбор параметров тормоз{{ study.n_brakes|pluralize:"а,ов" }}</h2></div>
+    <div class="rb-panel-head"><h2>Подбор параметров {% if study.n_brakes == 1 %}тормоза{% else %}тормозов{% endif %}</h2></div>
     <div class="rb-panel-body">
 
     {% if stage2.kind == 'multistart_failed' %}

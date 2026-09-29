@@ -23,7 +23,7 @@
             </div>
             <div class="rb-hero-sub">
                 <span>Расчёт <a href="{% url 'run_detail_v2' run.id %}">{{ run.name }}</a></span>
-                <span>{{ thermal_run.repetitions }} цикл{{ thermal_run.repetitions|pluralize:",а,ов" }}, пауза {{ thermal_run.pause_s|smart_num }} с</span>
+                <span>{{ thermal_run.repetitions }} {{ thermal_run.repetitions|ru_plural:"цикл,цикла,циклов" }}, пауза {{ thermal_run.pause_s|smart_num }} с</span>
                 <span>создан {{ thermal_run.created_at|date:"d.m.Y, H:i" }}</span>
             </div>
         </div>

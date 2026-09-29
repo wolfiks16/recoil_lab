@@ -62,7 +62,13 @@ def catalog_list_view(request):
         {
             "page": page,
             "paginator": paginator,
-            "items": page.object_list,
+            "rows": [
+                {"item": item,
+                 "can_edit": can_edit_catalog(request.user, item),
+                 "can_delete": can_delete_catalog(request.user, item)}
+                for item in page.object_list
+            ],
+            "can_create": can_create_catalog(request.user),
             "q": q,
             "filter_value": flt,
             "sort_value": sort,

@@ -404,15 +404,10 @@ class BrakeCatalog(BrakeParametersMixin):
     def short_summary(self) -> str:
         """Короткое описание для отображения в списках."""
         if self.is_parametric:
-            parts = []
-            if self.gamma is not None:
-                parts.append(f"γ={self.gamma:g}")
-            if self.delta is not None:
-                parts.append(f"δ={self.delta:g}")
-            if self.n is not None:
-                parts.append(f"n={self.n}")
-            return " · ".join(parts) if parts else "параметрический"
-        return "F(v) — табличная характеристика"
+            from .services.brake_params import param_summary
+
+            return param_summary(self) or "параметры не заданы"
+        return "таблица F(v)"
 
 
 # ============================================================================

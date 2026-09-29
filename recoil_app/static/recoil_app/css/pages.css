@@ -445,3 +445,60 @@
     margin-bottom: 12px;
     font-size: 14px;
 }
+
+/* ============================================================================
+   РАБОЧИЙ СТОЛ И СПИСОК РАСЧЁТОВ
+   ============================================================================ */
+.rb-app a.rb-protocol-link { text-decoration: none; color: inherit; }
+.rb-app a.rb-protocol-link:hover { background: #F6F8FB; }
+.rb-app a.rb-protocol-link:hover .rb-protocol-q { color: var(--rb-blue-dark); text-decoration: underline; }
+.rb-link-list { list-style: none; margin: 0; padding: 0; }
+.rb-link-list li { display: flex; flex-direction: column; gap: 1px; padding: 9px 16px; border-top: 1px solid #EEF1F4; }
+.rb-link-list li:first-child { border-top: 0; }
+.rb-link-list a { font-weight: 600; text-decoration: none; }
+.rb-link-list a:hover { text-decoration: underline; }
+
+.rb-run-table .rb-row-title { margin-right: 6px; }
+.rb-run-table td { white-space: nowrap; }
+.rb-run-table td.rb-col-wrap { white-space: normal; }
+.rb-run-table .rb-col-status { min-width: 130px; max-width: 190px; }
+.rb-run-table .rb-status { display: block; margin: 1px 0; }
+@media (max-width: 1500px) { .rb-run-table .rb-row-actions .rb-btn { padding-left: 6px; padding-right: 6px; } }
+.rb-col-pick { width: 36px; }
+.rb-col-pick input { width: 16px; height: 16px; accent-color: var(--rb-blue); margin: 0; }
+.rb-run-table tr.is-picked td { background: rgba(61, 115, 235, 0.06); }
+.rb-status { display: inline-block; font-size: 13px; color: var(--rb-text-soft); margin-right: 8px; }
+.rb-status::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: #A3AFBD; }
+.rb-status-ok::before { background: var(--rb-success); }
+.rb-status-warn::before { background: var(--rb-warn); }
+.rb-status-info::before { background: var(--rb-blue); }
+
+.rb-cmp-bar {
+    position: sticky; bottom: 16px; z-index: 40; margin-top: 16px;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+    padding: 10px 14px; background: var(--rb-panel-bg-white);
+    border: 1px solid var(--rb-panel-border-strong); border-radius: var(--rb-radius);
+    box-shadow: var(--rb-shadow-md);
+}
+.rb-cmp-bar[hidden] { display: none; }
+.rb-cmp-bar-text { display: flex; flex-direction: column; min-width: 0; flex: 1; font-size: 14px; }
+.rb-cmp-bar-text span { color: var(--rb-text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-cmp-bar .rb-btn-primary[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+
+/* ============================================================================
+   СРАВНЕНИЕ (compare.html)
+   ============================================================================ */
+.rb-cmp-selector { padding: 14px 16px; margin-bottom: 16px; }
+.rb-cmp-selector-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 10px 12px; align-items: end; }
+.rb-cmp-swap { margin-bottom: 1px; }
+.rb-cmp-errors { margin-top: 10px; }
+.rb-cmp-key { display: inline-block; width: 16px; height: 0; border-top: 3px solid; margin-right: 6px; vertical-align: 3px; }
+.rb-cmp-key-a { border-color: #3D73EB; }
+.rb-cmp-key-b { border-color: #B44D7A; border-top-style: dashed; }
+.rb-cmp-table th a { color: inherit; }
+.rb-cmp-small { height: 380px; }
+@media (max-width: 800px) {
+    .rb-cmp-selector-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.rb-same { font-family: var(--rb-font-ui); color: var(--rb-text-muted); }
+.rb-run-table .rb-status { white-space: nowrap; }
