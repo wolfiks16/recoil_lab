@@ -569,92 +569,8 @@
     .rb-flash-list { padding: 12px 16px 0; }
 }
 
-/* Layout с боковой панелью модулей: используется на result-странице */
-.rb-with-sidepanel {
-    display: grid;
-    grid-template-columns: 1fr 240px;
-    gap: 24px;
-    align-items: start;
-}
-
-@media (max-width: 1280px) {
-    .rb-with-sidepanel {
-        grid-template-columns: 1fr;
-    }
-    .rb-modules-panel {
-        position: static !important;
-    }
-}
-
-.rb-modules-panel {
-    position: sticky;
-    top: calc(var(--rb-topbar-h) + 24px);
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 16px;
-    max-height: calc(100vh - var(--rb-topbar-h) - 48px);
-    overflow-y: auto;
-}
-
-.rb-modules-panel-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--rb-text-soft);
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--rb-panel-border);
-}
-
-.rb-modules-actions {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-
-.rb-modules-actions .rb-btn-sm {
-    flex: 1;
-    padding: 4px 8px;
-    font-size: 11px;
-}
-
-.rb-module-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 4px;
-    border-radius: var(--rb-radius-sm);
-    cursor: pointer;
-    transition: background .15s;
-    font-size: 13px;
-    color: var(--rb-text);
-    font-weight: 500;
-}
-
-.rb-module-toggle:hover {
-    background: var(--rb-panel-bg-alt);
-}
-
-.rb-module-toggle input[type="checkbox"] {
-    margin: 0;
-    accent-color: var(--rb-blue);
-    cursor: pointer;
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-}
-
-.rb-module-toggle.is-disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
 .rb-module-section {
     transition: opacity .2s;
-}
-
-.rb-module-section.is-hidden {
-    display: none !important;
 }
 
 /* === ТИПОГРАФИЯ === */
@@ -843,97 +759,6 @@
 .rb-panel-body { padding: 14px 16px; }
 .rb-panel-note { padding: 8px 16px 12px; font-size: 13px; color: var(--rb-text-soft); }
 
-/* === KPI КАРТОЧКА (осталась на тепле/оптимизации; на результате — протокол) === */
-.rb-kpi-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
-}
-
-.rb-kpi {
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 14px 16px;
-    position: relative;
-    overflow: hidden;
-}
-
-.rb-kpi-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--rb-text-soft);
-    margin-bottom: 4px;
-}
-
-.rb-kpi-value {
-    font-family: var(--rb-font-mono);
-    font-variant-numeric: tabular-nums;
-    font-weight: 500;
-    font-size: 24px;
-    line-height: 1.2;
-    color: var(--rb-text);
-}
-
-.rb-kpi-unit {
-    font-family: var(--rb-font-ui);
-    font-weight: 400;
-    font-size: 13px;
-    color: var(--rb-text-soft);
-    margin-left: 4px;
-}
-
-.rb-kpi-hint {
-    font-size: 12px;
-    color: var(--rb-text-soft);
-    margin-top: 4px;
-}
-
-.rb-kpi-status-ok      .rb-kpi-hint { color: var(--rb-success-dark); }
-.rb-kpi-status-warn    .rb-kpi-hint { color: var(--rb-warn-dark); }
-.rb-kpi-status-danger  .rb-kpi-hint { color: var(--rb-danger-dark); }
-
-/* Карточка с подзначениями (диапазон min/max).
-   Главное `value` не показывается, только два подзначения столбиком. */
-.rb-kpi-range .rb-kpi-main { display: none; }
-
-.rb-kpi-range-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 4px;
-}
-
-.rb-kpi-range-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 3px 0;
-}
-
-.rb-kpi-range-label {
-    color: var(--rb-text-soft);
-    font-size: 12px;
-    font-weight: 500;
-    flex-shrink: 0;
-}
-
-.rb-kpi-range-value {
-    font-family: var(--rb-font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: 17px;
-    font-weight: 500;
-    color: var(--rb-text);
-    line-height: 1.2;
-}
-
-.rb-kpi-range-unit {
-    color: var(--rb-text-soft);
-    font-size: 12px;
-    margin-left: 3px;
-}
-
 /* === БАННЕР СТАТУСА === */
 .rb-status-banner {
     display: flex;
@@ -1020,32 +845,7 @@
 
 .rb-hero-actions form { display: inline-flex; margin: 0; }
 
-/* === GRID ДЛЯ ГРАФИКОВ === */
-.rb-plot-grid {
-    display: grid;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.rb-plot-grid-2 { grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); }
-
-.rb-plot-grid-main {
-    grid-template-columns: 8fr 4fr;
-}
-
-@media (max-width: 1100px) {
-    .rb-plot-grid-main { grid-template-columns: 1fr; }
-}
-
-/* Доп. графики — 2 колонки вместо auto-fit (лучше читается) */
-.rb-plot-grid-pair {
-    grid-template-columns: repeat(2, 1fr);
-}
-
-@media (max-width: 1280px) {
-    .rb-plot-grid-pair { grid-template-columns: 1fr; }
-}
-
+/* === КАРТОЧКА ГРАФИКА (страница пошаговой сессии) === */
 .rb-plot-card {
     background: var(--rb-panel-bg-white);
     border: 1px solid var(--rb-panel-border);
@@ -1200,32 +1000,6 @@
 .rb-file-meta {
     font-size: 13px;
     color: var(--rb-text-soft);
-}
-
-/* === KPI-ГРУППЫ (несколько рядов с заголовками) === */
-.rb-kpi-group {
-    margin-bottom: 18px;
-}
-
-.rb-kpi-group-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
-.rb-kpi-group-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--rb-text);
-}
-
-.rb-kpi-group .rb-kpi {
-    padding: 12px 14px;
-}
-
-.rb-kpi-group .rb-kpi-value {
-    font-size: 20px;
 }
 
 /* === ТАБЫ === */
@@ -1428,53 +1202,12 @@
 /* === RESPONSIVE === */
 @media (max-width: 900px) {
     .rb-hero h1 { font-size: 22px; }
-    .rb-kpi-value { font-size: 20px; }
 }
 
 
 /* ============================================================================
-   DASHBOARD — стат-карточки, фильтры, run-карточки, пагинация
+   СПИСКИ — фильтры, поиск, пустое состояние, пагинация
    ============================================================================ */
-
-/* === STAT CARDS (большие карточки с цифрами наверху дашборда) === */
-.rb-stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-}
-
-.rb-stat {
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 14px 16px;
-    position: relative;
-}
-
-.rb-stat-icon { display: none; }
-
-.rb-stat-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--rb-text-soft);
-    margin-bottom: 4px;
-}
-
-.rb-stat-value {
-    font-family: var(--rb-font-mono);
-    font-variant-numeric: tabular-nums;
-    font-weight: 500;
-    font-size: 26px;
-    line-height: 1.2;
-    color: var(--rb-text);
-}
-
-.rb-stat-hint {
-    font-size: 13px;
-    color: var(--rb-text-soft);
-    margin-top: 4px;
-}
 
 /* === FILTER BAR === */
 .rb-filter-bar {
@@ -1574,115 +1307,6 @@
 
 .rb-sort-select:focus {
     border-color: var(--rb-blue);
-}
-
-/* === RUN CARDS GRID === */
-.rb-runs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-}
-
-.rb-run-card {
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 14px 16px;
-    transition: border-color .15s;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-}
-
-.rb-run-card:hover {
-    border-color: var(--rb-panel-border-strong);
-}
-
-.rb-run-card-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 6px;
-}
-
-.rb-run-card-name,
-.rb-app a.rb-run-card-name {
-    font-weight: 700;
-    font-size: 15px;
-    color: var(--rb-text);
-    text-decoration: none;
-    overflow-wrap: anywhere;
-    line-height: 1.3;
-}
-
-.rb-run-card-name:hover,
-.rb-app a.rb-run-card-name:hover {
-    color: var(--rb-blue-dark);
-    text-decoration: underline;
-}
-
-.rb-run-card-badges {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.rb-run-card-meta {
-    font-size: 13px;
-    color: var(--rb-text-soft);
-    margin-bottom: 10px;
-}
-
-.rb-run-card-metrics {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 12px;
-    margin-bottom: 12px;
-    padding: 10px 0;
-    border-top: 1px solid #EEF1F4;
-    border-bottom: 1px solid #EEF1F4;
-}
-
-.rb-run-card-metric-label {
-    font-size: 12px;
-    color: var(--rb-text-soft);
-    font-weight: 500;
-}
-
-.rb-run-card-metric-value {
-    font-family: var(--rb-font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--rb-text);
-    margin-top: 2px;
-}
-
-.rb-run-card-metric-unit {
-    font-family: var(--rb-font-ui);
-    font-size: 12px;
-    color: var(--rb-text-soft);
-    margin-left: 3px;
-}
-
-.rb-run-card-actions {
-    display: flex;
-    gap: 6px;
-    margin-top: auto;
-}
-
-.rb-run-card-actions .rb-btn {
-    flex: 1;
-    justify-content: center;
-    padding: 5px 8px;
-    font-size: 13px;
-}
-
-/* Inline-форма удаления */
-.rb-run-card-actions form {
-    display: contents;
 }
 
 /* === EMPTY STATE === */
