@@ -33,7 +33,19 @@
             modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
             toImageButtonOptions: { filename: 'oscillogram', scale: 2 }
         };
+        // Высота — от контейнера (он тянется до высоты боковой колонки, минимум 640 px):
+        // задаём её явно, чтобы первая отрисовка не зависела от отложенного autosize.
+        if (el.clientHeight > 0) fig.layout.height = el.clientHeight;
         Plotly.newPlot(el, fig.data, fig.layout, config);
+        // После загрузки шрифтов боковая колонка может стать выше — подогнать высоту ещё раз.
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+                var h = el.clientHeight;
+                if (h > 0 && el._fullLayout && Math.abs(h - el._fullLayout.height) > 2) {
+                    Plotly.relayout(el, { height: h });
+                }
+            });
+        }
 
         var t = fig.data[0].x;
         var ch = fig.data.map(function (trace) { return trace.y; });

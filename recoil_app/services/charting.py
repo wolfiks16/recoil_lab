@@ -1481,7 +1481,9 @@ def make_oscillogram_figure(data: dict, *, free_fall: bool = False) -> go.Figure
             range=[data["t0"], data["t_end"]],
         ),
         shapes=shapes, annotations=annotations,
-        height=640 if has_ribbon else 600,
+        # Высота — от контейнера (CSS .rb-osc-panel .rb-osc): осциллограмма тянется до высоты
+        # боковой колонки страницы результата, минимум 640 px.
+        autosize=True,
     )
     return fig
 

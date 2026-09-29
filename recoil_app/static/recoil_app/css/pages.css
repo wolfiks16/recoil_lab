@@ -368,6 +368,12 @@
 .rb-readout span { color: var(--rb-text-soft); margin-right: 6px; font-weight: 600; }
 .rb-readout b { font: 500 14px var(--rb-font-mono); font-variant-numeric: tabular-nums; }
 .rb-osc { height: 640px; }
+/* Страница результата: левая колонка тянется до высоты боковой (этапы, параметры, тормоза),
+   осциллограмма забирает эту высоту — под ней не остаётся пустоты. */
+.rb-result-main { align-items: stretch; }
+.rb-result-left { display: flex; flex-direction: column; min-width: 0; }
+.rb-result-left > .rb-osc-panel { flex: 1 1 auto; display: flex; flex-direction: column; }
+.rb-osc-panel .rb-osc { flex: 1 1 auto; height: auto; min-height: 640px; max-height: 1000px; }
 .rb-osc-hint { margin-left: auto; }
 .rb-seg > button[aria-pressed="true"] { background: var(--rb-blue); color: #FFFFFF; }
 
@@ -403,12 +409,12 @@
 
 @media (max-width: 900px) {
     .rb-osc { height: 560px; }
+    .rb-osc-panel .rb-osc { min-height: 560px; }
     .rb-osc-hint { display: none; }
 }
 .rb-lazy.is-loaded { min-height: 0; }
 .rb-grid-2 > .rb-panel + .rb-panel,
-.rb-split > .rb-panel + .rb-panel,
-.rb-stack > .rb-panel + .rb-panel { margin-top: 0; }
+.rb-split > .rb-panel + .rb-panel { margin-top: 0; }
 
 /* ============================================================================
    ЕДИНЫЙ РЕДАКТОР ПАРАМЕТРОВ ТОРМОЗА (includes/brake_param_grid.html):
@@ -572,3 +578,7 @@
 }
 .rb-same { font-family: var(--rb-font-ui); color: var(--rb-text-muted); }
 .rb-run-table .rb-status { white-space: nowrap; }
+
+/* Единый вертикальный шаг между блоками страницы: у соседних блоков контента всегда
+   ≥ 16 px (вертикальные поля схлопываются, поэтому больший отступ, например у шапки, сохраняется). */
+.rb-content > * + * { margin-top: 16px; }

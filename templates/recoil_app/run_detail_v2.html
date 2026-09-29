@@ -71,9 +71,9 @@
 </section>
 {% endif %}
 
-<div class="rb-split">
-    <div class="rb-stack">
-        <section class="rb-panel" aria-labelledby="osc-title">
+<div class="rb-split rb-result-main">
+    <div class="rb-result-left">
+        <section class="rb-panel rb-osc-panel" aria-labelledby="osc-title">
             <div class="rb-panel-head">
                 <h2 id="osc-title">Осциллограмма {% if run.is_free_fall %}расчёта{% else %}цикла{% endif %}</h2>
                 {% if osc_extra and osc_extra.ranges|length > 1 %}
@@ -106,23 +106,6 @@
             </div>
             {% endif %}
         </section>
-
-        {% if 'v_x' in lazy_charts or 'fmag_v' in lazy_charts %}
-        <div class="rb-grid-2">
-            {% if 'v_x' in lazy_charts %}
-            <section class="rb-panel">
-                <div class="rb-panel-head"><h2>Фазовая траектория v(x)</h2></div>
-                <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'v_x' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
-            </section>
-            {% endif %}
-            {% if 'fmag_v' in lazy_charts %}
-            <section class="rb-panel">
-                <div class="rb-panel-head"><h2>Сила торможения от скорости</h2></div>
-                <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'fmag_v' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
-            </section>
-            {% endif %}
-        </div>
-        {% endif %}
     </div>
 
     <aside class="rb-split-side">
@@ -184,6 +167,24 @@
         </section>
     </aside>
 </div>
+
+{# v(x) и F(v) — на всю ширину страницы, поровну (под боковой колонкой было пусто) #}
+{% if 'v_x' in lazy_charts or 'fmag_v' in lazy_charts %}
+<div class="rb-grid-2">
+    {% if 'v_x' in lazy_charts %}
+    <section class="rb-panel">
+        <div class="rb-panel-head"><h2>Фазовая траектория v(x)</h2></div>
+        <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'v_x' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
+    </section>
+    {% endif %}
+    {% if 'fmag_v' in lazy_charts %}
+    <section class="rb-panel">
+        <div class="rb-panel-head"><h2>Сила торможения от скорости</h2></div>
+        <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'fmag_v' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
+    </section>
+    {% endif %}
+</div>
+{% endif %}
 
 {# === Вторичные разделы === #}
 {% if 'energy' in lazy_charts or energy_summary %}
@@ -298,5 +299,5 @@
 {% endif %}
 <script src="{% static 'recoil_app/js/modules.js' %}?v=3"></script>
 <script src="{% static 'recoil_app/js/stage_toggle.js' %}?v=3"></script>
-<script src="{% static 'recoil_app/js/result_page.js' %}?v=3"></script>
+<script src="{% static 'recoil_app/js/result_page.js' %}?v=6"></script>
 {% endblock %}
