@@ -1,77 +1,64 @@
 {% extends "recoil_app/base_v2.html" %}
 {% load recoil_extras %}
 
-{% block title %}Итерационный расчёт · RecoilLab{% endblock %}
-{% block shell_active %}iterative{% endblock %}
-{% block shell_crumb %}Итерационный расчёт{% endblock %}
+{% block title %}Пошаговые сессии — RecoilLab{% endblock %}
 
 {% block content %}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
         <div>
-            <div class="rb-hero-title"><h1>Итерационный расчёт</h1></div>
-            <div class="rb-hero-sub">
-                Пошаговое интегрирование с перестройкой тормозов по ходу движения ·
-                шаг, N шагов или до точки через Δx · на накате конфигурация возвращается сама,
-                в тех же точках и в обратном порядке
-            </div>
+            <h1 class="rb-h1">Пошаговые сессии</h1>
         </div>
         <div class="rb-hero-actions">
             {% if can_create %}
-            <a class="rb-btn rb-btn-grad" href="{% url 'iterative_new' %}">+ Новый итерационный расчёт</a>
+            <a class="rb-btn rb-btn-primary" href="{% url 'iterative_new' %}">Новая сессия</a>
             {% endif %}
         </div>
     </div>
 </section>
 
-{% if messages %}
-<section class="rb-module-section">
-    {% for m in messages %}<div class="rb-flash rb-flash-{{ m.tags }}">{{ m }}</div>{% endfor %}
-</section>
-{% endif %}
-
-<section class="rb-module-section">
-<div class="rb-card">
 {% if calcs %}
-    <table class="rb-params-table" style="width:100%;">
+<section class="rb-panel">
+    <div class="rb-table-wrap">
+    <table class="rb-table">
         <thead>
-            <tr style="text-align:left;">
-                <th>Название</th><th>Режим</th><th>Статус</th><th class="num">Этапов</th>
-                <th>Итог</th><th>Автор</th><th>Изменён</th>
+            <tr>
+                <th>Сессия</th><th>Режим</th><th>Статус</th><th class="num">Этапов</th>
+                <th>Итоговый расчёт</th><th>Автор</th><th class="num">Изменена</th>
             </tr>
         </thead>
         <tbody>
         {% for c in calcs %}
             <tr>
-                <td><a class="rb-run-card-name" href="{% url 'iterative_detail' c.id %}">{{ c.name }}</a></td>
+                <td><a class="rb-row-title" href="{% url 'iterative_detail' c.id %}">{{ c.name }}</a></td>
                 <td>{{ c.get_mode_display }}</td>
                 <td>
-                    {% if c.is_active %}<span class="rb-badge rb-badge-blue">идёт</span>
-                    {% elif c.is_finishing %}<span class="rb-badge rb-badge-warn">досчитывается…</span>
-                    {% else %}<span class="rb-badge rb-badge-ok">завершён</span>{% endif %}
+                    {% if c.is_active %}<span class="rb-status rb-status-info">идёт</span>
+                    {% elif c.is_finishing %}<span class="rb-status rb-status-warn">досчитывается</span>
+                    {% else %}<span class="rb-status rb-status-ok">завершена</span>{% endif %}
                 </td>
                 <td class="num">{{ c.state.stages|length }}</td>
                 <td>
                     {% if c.result_run %}<a href="{% url 'run_detail_v2' c.result_run.id %}">{{ c.result_run.name }}</a>
                     {% else %}<span class="rb-text-muted">—</span>{% endif %}
                 </td>
-                <td class="rb-text-muted">{{ c.owner.username|default:"—" }}</td>
-                <td class="rb-text-muted">{{ c.updated_at|date:"d.m.Y · H:i" }}</td>
+                <td class="rb-row-sub">{{ c.owner.username|default:"—" }}</td>
+                <td class="num">{{ c.updated_at|date:"d.m.Y H:i" }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
-{% else %}
-    <div style="padding:32px; text-align:center;">
-        <div class="rb-text-muted" style="margin-bottom:12px;">Итерационных расчётов ещё нет.</div>
-        {% if can_create %}
-        <a class="rb-btn rb-btn-grad" href="{% url 'iterative_new' %}">+ Начать первый</a>
-        {% else %}
-        <div class="rb-text-muted">Войдите, чтобы запускать расчёты.</div>
-        {% endif %}
     </div>
-{% endif %}
-</div>
 </section>
+{% else %}
+<div class="rb-empty">
+    <div class="rb-empty-title">Пошаговых сессий пока нет</div>
+    {% if can_create %}
+    <div class="rb-empty-sub">Задайте параметры и тормоза, дальше считайте по шагам и меняйте конфигурацию в нужных точках отката.</div>
+    <a class="rb-btn rb-btn-primary" href="{% url 'iterative_new' %}">Начать сессию</a>
+    {% else %}
+    <div class="rb-empty-sub">Войдите, чтобы запускать расчёты.</div>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}

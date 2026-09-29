@@ -1,0 +1,92 @@
+{% load recoil_extras %}
+{% comment %}
+Карточка одного тормоза в форме нового расчёта (откат и свободное падение).
+Параметры include: f — форма тормоза (или empty_form), index, number,
+catalog_items, catalog_count. Для empty_form index="__prefix__", number="__number__"
+(calc_form.js подставляет номер при добавлении). Разметка карточки и шаблона
+пустой формы одинаковая — «Дублировать» копирует поля по порядку.
+{% endcomment %}
+{% with cat_id=f.catalog_source_id.value|default_if_none:""|stringformat:"s" %}
+<div class="brake-card brake-form-item" data-brake-index="{{ index }}">
+    <div class="rb-cad-brake-head">
+        <div class="rb-cad-brake-head-title">
+            <span class="rb-cad-brake-head-prefix">Тормоз {{ number }}</span>
+            <span class="rb-cad-brake-head-name" data-brake-display-name></span>
+        </div>
+        <div class="rb-cad-brake-head-actions">
+            <button type="button" class="rb-btn rb-btn-sm rb-cad-save-to-catalog-btn"
+                    title="Сохранить параметры этого тормоза в общий каталог">Сохранить в каталог</button>
+            <button type="button" class="rb-btn rb-btn-sm copy-brake-btn" title="Добавить копию этого тормоза">Дублировать</button>
+            <button type="button" class="rb-btn rb-btn-sm rb-btn-quiet rb-danger-text delete-brake-btn">Удалить</button>
+        </div>
+    </div>
+
+    <div class="brake-card__body">
+        {{ f.curve_source_brake_id }}
+        {{ f.catalog_source_id }}
+
+        <div class="rb-source-toggle" role="group" aria-label="Откуда взять параметры">
+            <button type="button" class="rb-source-tab{% if not cat_id %} is-active{% endif %}" data-source-mode="manual">Задать вручную</button>
+            <button type="button" class="rb-source-tab is-last{% if cat_id %} is-active{% endif %}" data-source-mode="catalog"
+                    {% if catalog_count == 0 %}disabled title="В каталоге пока нет тормозов"{% endif %}>Взять из каталога</button>
+            {% if catalog_count == 0 %}
+            <a class="rb-source-add-link" href="{% url 'catalog_new' %}" target="_blank" rel="noopener">Добавить тормоз в каталог</a>
+            {% endif %}
+        </div>
+
+        {% if catalog_count > 0 %}
+        <div class="rb-catalog-picker"{% if not cat_id %} hidden{% endif %}>
+            <label>Тормоз из каталога
+                <select class="rb-catalog-select">
+                    <option value="">Выберите тормоз</option>
+                    {% for item in catalog_items %}
+                        <option value="{{ item.id }}" data-model-type="{{ item.model_type }}"{% if item.id|stringformat:"s" == cat_id %} selected{% endif %}>
+                            {{ item.name }} ({{ item.summary }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <div class="rb-catalog-picker-info">{% if cat_id %}Параметры подставлены из каталога — их можно поправить; таблица F(v) копируется в расчёт.{% endif %}</div>
+        </div>
+        {% endif %}
+
+        {% if f.non_field_errors %}
+        <div class="field-error">{{ f.non_field_errors|join:" " }}</div>
+        {% endif %}
+
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="{{ f.name.id_for_label }}">Имя тормоза</label>
+                {{ f.name }}
+                {% if f.name.errors %}<div class="field-error">{{ f.name.errors|join:" " }}</div>{% endif %}
+            </div>
+            <div class="form-field">
+                <label for="{{ f.model_type.id_for_label }}">Как задана сила F(v)</label>
+                {{ f.model_type }}
+                {% if f.model_type.errors %}<div class="field-error">{{ f.model_type.errors|join:" " }}</div>{% endif %}
+            </div>
+        </div>
+
+        <div class="brake-parametric-fields">
+            {% brake_param_grid f %}
+        </div>
+
+        <div class="brake-curve-fields" style="display: none;">
+            {% if f.curve_source_brake_id.value %}
+            <div class="notice">Таблица F(v) будет взята из копируемого расчёта, если не загрузить новую.</div>
+            {% endif %}
+            <div class="form-field">
+                <label for="{{ f.force_curve_file.id_for_label }}">{{ f.force_curve_file.label }}</label>
+                {{ f.force_curve_file }}
+                {% if f.force_curve_file.errors %}<div class="field-error">{{ f.force_curve_file.errors|join:" " }}</div>{% endif %}
+                {% if f.force_curve_file.help_text %}<div class="rb-param-hint">{{ f.force_curve_file.help_text }}</div>{% endif %}
+            </div>
+            <div class="curve-preview-block" style="display: none;">
+                <div class="curve-preview-title">Предпросмотр F(v)</div>
+                <div class="curve-preview-plot"></div>
+            </div>
+            <div class="curve-preview-error" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+{% endwith %}

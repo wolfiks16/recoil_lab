@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 
 from ..forms import BrakeCatalogForm
 from ..models import BrakeCatalog, MagneticBrakeConfig
+from ..services.brake_params import param_rows
 from ..services.charting import build_brake_geometry_3d, make_brake_curve_fragment
 from ..services.curve_parser import parse_force_curve_sheet
 from ..services.permissions import (
@@ -61,7 +62,13 @@ def catalog_list_view(request):
         {
             "page": page,
             "paginator": paginator,
-            "items": page.object_list,
+            "rows": [
+                {"item": item,
+                 "can_edit": can_edit_catalog(request.user, item),
+                 "can_delete": can_delete_catalog(request.user, item)}
+                for item in page.object_list
+            ],
+            "can_create": can_create_catalog(request.user),
             "q": q,
             "filter_value": flt,
             "sort_value": sort,
@@ -116,34 +123,8 @@ def catalog_detail_view(request, pk):
     """
     obj = get_object_or_404(BrakeCatalog, pk=pk)
 
-    parametric_cards: list[dict] = []
-    if obj.is_parametric:
-        param_specs = [
-            # (model_attr, label, symbol, unit, accent, group)
-            ("gamma", "Удельная проводимость",        "γ",            "(Ом·м)⁻¹", "blue",   "material"),
-            ("delta", "Толщина шины",                  "δ",            "м",     "blue",   "material"),
-            ("mu",    "Магнитная проницаемость шины",  "μ",            "Гн/м",  "blue",   "material"),
-            ("bz",    "Индукция в рабочем зазоре",     "B̄₃",           "Тл",    "amber",  "material"),
-            ("n",     "Количество блоков",             "N",            "",      "purple", "geometry"),
-            ("xm",    "Размер магнита по оси X",       "x_m",          "м",     "green",  "geometry"),
-            ("ym",    "Размер магнита по оси Y",       "y_m",          "м",     "green",  "geometry"),
-            ("dh1",   "Выступ 1-го края шины",         "Δh₁",          "м",     "green",  "geometry"),
-            ("dh2",   "Выступ 2-го края шины",         "Δh₂",          "м",     "green",  "geometry"),
-            ("dm",    "Промежутки между магнитами",    "d_m",          "м",     "green",  "geometry"),
-            ("lya",   "Параметр λa",                   "λa",           "",      "red",    "extra"),
-            ("wn0",   "Начальное состояние wn",        "w_n0",         "",      "red",    "extra"),
-        ]
-
-        for attr, label, symbol, unit, accent, group in param_specs:
-            value = getattr(obj, attr)
-            parametric_cards.append({
-                "label":  label,
-                "symbol": symbol,
-                "value":  value,
-                "unit":   unit,
-                "accent": accent,
-                "group":  group,
-            })
+    # Подписи/символы/единицы — единый источник services/brake_params.
+    parametric_cards: list[dict] = param_rows(obj) if obj.is_parametric else []
 
     curve_html = ""
     curve_points: list[dict] = []
@@ -220,7 +201,7 @@ def catalog_edit_view(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, f"Тормоз «{obj.name}» обновлён.")
-            return redirect("catalog_list")
+            return redirect("catalog_detail", pk=obj.pk)
     else:
         form = BrakeCatalogForm(instance=obj)
 
@@ -231,6 +212,7 @@ def catalog_edit_view(request, pk):
             "form": form,
             "is_edit": True,
             "object": obj,
+            "perm_can_delete": can_delete_catalog(request.user, obj),
         },
     )
 

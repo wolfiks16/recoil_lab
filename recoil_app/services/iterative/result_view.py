@@ -22,7 +22,7 @@ PARAM_LABELS = [
 def _state_text(slot) -> str:
     kind = slot_kind(slot)
     if kind == "curve":
-        return f"{KIND_LABELS[kind]} · {curve_summary(slot)}"
+        return f"{KIND_LABELS[kind]}, {curve_summary(slot)}"
     return KIND_LABELS[kind]
 
 

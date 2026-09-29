@@ -1,133 +1,94 @@
 {% extends "recoil_app/base_v2.html" %}
-{% load static %}
+{% load static recoil_extras %}
 
-{% block title %}Каталог тормозов · RecoilLab{% endblock %}
-{% block shell_active %}catalog{% endblock %}
-{% block shell_crumb %}Каталог{% endblock %}
-{% block user_initials %}И.К.{% endblock %}
-
-{% block head_extra %}
-<style>
-    .rb-content { max-width: none; }
-</style>
-{% endblock %}
+{% block title %}Каталог тормозов — RecoilLab{% endblock %}
 
 {% block content %}
 
-{# === HERO === #}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
         <div>
-            <div class="rb-hero-title">
-                <h1>Каталог тормозов</h1>
-            </div>
-            <div class="rb-hero-sub">
-                Глобальная библиотека: всего {{ total_count }} ·
-                параметрических {{ parametric_count }} · табличных {{ curve_count }}
-            </div>
+            <h1 class="rb-h1">Каталог тормозов</h1>
         </div>
         <div class="rb-hero-actions">
-            <a class="rb-btn rb-btn-grad" href="{% url 'catalog_new' %}">+ Добавить тормоз</a>
-            <a class="rb-btn" href="{% url 'dashboard' %}">← На дашборд</a>
+            {% if can_create %}<a class="rb-btn rb-btn-primary" href="{% url 'catalog_new' %}">Добавить тормоз</a>{% endif %}
         </div>
     </div>
 </section>
 
-{% if messages %}
-{% for message in messages %}
-<div class="rb-status-banner rb-status-banner-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warn{% else %}ok{% endif %}" style="margin-bottom: 16px;">
-    <div class="rb-status-banner-icon">{% if message.tags == 'error' %}!{% elif message.tags == 'warning' %}⚠{% else %}✓{% endif %}</div>
-    <div>
-        <div class="rb-status-banner-sub">{{ message }}</div>
-    </div>
-</div>
-{% endfor %}
-{% endif %}
-
-{# === ФИЛЬТР-БАР === #}
-<form method="get" action="{% url 'catalog_list' %}">
+<form method="get" action="{% url 'catalog_list' %}" role="search">
 <div class="rb-filter-bar">
     <div class="rb-search">
-        <svg class="rb-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <svg class="rb-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input type="text" name="q" value="{{ q }}" placeholder="Поиск по имени или описанию..." autocomplete="off">
+        <input type="search" name="q" value="{{ q }}" placeholder="Поиск по имени и описанию" autocomplete="off" aria-label="Поиск по имени и описанию">
     </div>
-
-    <div class="rb-filter-pills" role="tablist">
-        <button type="submit" name="filter" value="all"        class="rb-filter-pill {% if filter_value == 'all' %}is-active{% endif %}">Все</button>
-        <button type="submit" name="filter" value="parametric" class="rb-filter-pill {% if filter_value == 'parametric' %}is-active{% endif %}">Параметрические</button>
-        <button type="submit" name="filter" value="curve"      class="rb-filter-pill {% if filter_value == 'curve' %}is-active{% endif %}">Табличные</button>
+    <div class="rb-filter-pills" role="group" aria-label="Тип характеристики">
+        <button type="submit" name="filter" value="all" class="rb-filter-pill{% if filter_value == 'all' %} is-active{% endif %}">Все</button>
+        <button type="submit" name="filter" value="parametric" class="rb-filter-pill{% if filter_value == 'parametric' %} is-active{% endif %}">Параметрические</button>
+        <button type="submit" name="filter" value="curve" class="rb-filter-pill{% if filter_value == 'curve' %} is-active{% endif %}">Таблица F(v)</button>
     </div>
-
-    <select name="sort" class="rb-sort-select" onchange="this.form.submit()">
-        <option value="name"          {% if sort_value == 'name' %}selected{% endif %}>По имени (A→Я)</option>
-        <option value="-name"         {% if sort_value == '-name' %}selected{% endif %}>По имени (Я→A)</option>
-        <option value="-created_at"   {% if sort_value == '-created_at' %}selected{% endif %}>Новые сверху</option>
-        <option value="created_at"    {% if sort_value == 'created_at' %}selected{% endif %}>Старые сверху</option>
-        <option value="-updated_at"   {% if sort_value == '-updated_at' %}selected{% endif %}>Недавно изменённые</option>
+    <select name="sort" class="rb-sort-select" aria-label="Сортировка" data-autosubmit>
+        <option value="name" {% if sort_value == 'name' %}selected{% endif %}>По имени, А–Я</option>
+        <option value="-name" {% if sort_value == '-name' %}selected{% endif %}>По имени, Я–А</option>
+        <option value="-created_at" {% if sort_value == '-created_at' %}selected{% endif %}>Сначала новые</option>
+        <option value="created_at" {% if sort_value == 'created_at' %}selected{% endif %}>Сначала старые</option>
+        <option value="-updated_at" {% if sort_value == '-updated_at' %}selected{% endif %}>Недавно изменённые</option>
     </select>
 </div>
 </form>
 
-{# === КАРТОЧКИ === #}
-{% if items %}
-<div class="rb-runs-grid">
-    {% for item in items %}
-    <div class="rb-run-card {% if item.is_parametric %}is-success{% else %}is-warn{% endif %}">
-
-        <div class="rb-run-card-head">
-            <a class="rb-run-card-name" href="{% url 'catalog_detail' item.pk %}">{{ item.name }}</a>
-            <div class="rb-run-card-badges">
-                {% if item.is_parametric %}
-                    <span class="rb-badge rb-badge-blue">парам.</span>
-                {% else %}
-                    <span class="rb-badge rb-badge-accent">curve</span>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="rb-run-card-meta">
-            #{{ item.pk }} · обновлён {{ item.updated_at|date:"d.m.Y · H:i" }}
-        </div>
-
-        {% if item.description %}
-        <div style="font-size: 12px; color: var(--rb-text-soft); margin-bottom: 12px; line-height: 1.4;">
-            {{ item.description|truncatechars:140 }}
-        </div>
-        {% endif %}
-
-        <div class="rb-run-card-metrics" style="grid-template-columns: 1fr;">
-            <div>
-                <div class="rb-run-card-metric-label">Характеристика</div>
-                <div class="rb-run-card-metric-value" style="font-size: 12px;">
-                    {{ item.short_summary }}
-                </div>
-            </div>
-        </div>
-
-        <div class="rb-run-card-actions">
-            <a class="rb-btn rb-btn-primary rb-btn-sm" href="{% url 'catalog_detail' item.pk %}">Открыть</a>
-            <a class="rb-btn rb-btn-sm" href="{% url 'catalog_edit' item.pk %}">✎</a>
-            <form method="post" action="{% url 'catalog_delete' item.pk %}" onsubmit="return confirm('Удалить тормоз «{{ item.name|escapejs }}» из каталога?');">
-                {% csrf_token %}
-                <button type="submit" class="rb-btn rb-btn-danger rb-btn-sm">×</button>
-            </form>
-        </div>
+{% if rows %}
+<section class="rb-panel">
+    <div class="rb-table-wrap">
+    <table class="rb-table">
+        <thead>
+            <tr>
+                <th>Тормоз</th>
+                <th>Как задана сила</th>
+                <th>Параметры</th>
+                <th class="num">Изменён</th>
+                <th><span class="rb-visually-hidden">Действия</span></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in rows %}
+        {% with item=r.item %}
+            <tr>
+                <td>
+                    <a class="rb-row-title" href="{% url 'catalog_detail' item.pk %}">{{ item.name }}</a>
+                    {% if item.description %}<div class="rb-row-sub">{{ item.description|truncatechars:110 }}</div>{% endif %}
+                </td>
+                <td>{% if item.is_parametric %}параметрическая модель{% else %}таблица F(v){% endif %}</td>
+                <td class="rb-row-sub">{% if item.is_parametric %}{{ item.short_summary }}{% else %}{% if item.curve_file %}файл загружен{% else %}файл не загружен{% endif %}{% endif %}</td>
+                <td class="num">{{ item.updated_at|date:"d.m.Y H:i" }}</td>
+                <td class="rb-row-actions">
+                    <a class="rb-btn rb-btn-sm rb-btn-quiet" href="{% url 'index' %}?catalog={{ item.pk }}">В новый расчёт</a>
+                    {% if r.can_edit %}<a class="rb-btn rb-btn-sm rb-btn-quiet" href="{% url 'catalog_edit' item.pk %}">Изменить</a>{% endif %}
+                    {% if r.can_delete %}
+                    <form method="post" action="{% url 'catalog_delete' item.pk %}" data-confirm="Удалить тормоз «{{ item.name }}» из каталога? Расчёты, где он использовался, не изменятся.">
+                        {% csrf_token %}
+                        <button type="submit" class="rb-btn rb-btn-sm rb-btn-quiet rb-danger-text">Удалить</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endwith %}
+        {% endfor %}
+        </tbody>
+    </table>
     </div>
-    {% endfor %}
-</div>
+</section>
 
 {% if paginator.num_pages > 1 %}
-<nav class="rb-pagination">
+<nav class="rb-pagination" aria-label="Страницы">
     {% if page.has_previous %}
-        <a href="?page={{ page.previous_page_number }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}">‹</a>
+        <a href="?page={{ page.previous_page_number }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}" aria-label="Предыдущая страница">‹</a>
     {% else %}<span class="is-disabled">‹</span>{% endif %}
     {% for n in paginator.page_range %}
         {% if n == page.number %}
-            <span class="is-current">{{ n }}</span>
+            <span class="is-current" aria-current="page">{{ n }}</span>
         {% elif n == 1 or n == paginator.num_pages or n >= page.number|add:'-2' and n <= page.number|add:'2' %}
             <a href="?page={{ n }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}">{{ n }}</a>
         {% elif n == page.number|add:'-3' or n == page.number|add:'3' %}
@@ -135,32 +96,28 @@
         {% endif %}
     {% endfor %}
     {% if page.has_next %}
-        <a href="?page={{ page.next_page_number }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}">›</a>
+        <a href="?page={{ page.next_page_number }}{% if qs_keep_str %}&{{ qs_keep_str }}{% endif %}" aria-label="Следующая страница">›</a>
     {% else %}<span class="is-disabled">›</span>{% endif %}
-    <span class="rb-pagination-info">стр. {{ page.number }} из {{ paginator.num_pages }} · всего {{ paginator.count }}</span>
+    <span class="rb-pagination-info">страница {{ page.number }} из {{ paginator.num_pages }}, всего {{ paginator.count }}</span>
 </nav>
 {% endif %}
 
 {% else %}
-
 <div class="rb-empty">
-    <svg class="rb-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 9h18"/>
-        <path d="M3 15h18"/>
-        <path d="M9 3v18"/>
-        <path d="M15 3v18"/>
-    </svg>
     {% if q or filter_value != 'all' %}
         <div class="rb-empty-title">Ничего не найдено</div>
-        <div class="rb-empty-sub">Попробуйте изменить фильтры</div>
+        <div class="rb-empty-sub">Измените запрос или фильтр.</div>
         <a class="rb-btn" href="{% url 'catalog_list' %}">Сбросить фильтры</a>
     {% else %}
         <div class="rb-empty-title">Каталог пуст</div>
-        <div class="rb-empty-sub">Добавьте первый тормоз — он будет доступен во всех расчётах</div>
-        <a class="rb-btn rb-btn-grad" href="{% url 'catalog_new' %}">+ Добавить тормоз</a>
+        <div class="rb-empty-sub">Добавьте тормоз — его можно будет подставить в любой новый расчёт. Сохранить тормоз можно и из формы расчёта.</div>
+        {% if can_create %}<a class="rb-btn rb-btn-primary" href="{% url 'catalog_new' %}">Добавить тормоз</a>{% endif %}
     {% endif %}
 </div>
-
 {% endif %}
 
+{% endblock %}
+
+{% block body_extra %}
+<script src="{% static 'recoil_app/js/results.js' %}?v=3"></script>
 {% endblock %}

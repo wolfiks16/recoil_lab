@@ -1,3 +1,4 @@
+{% load recoil_extras %}
 {% comment %}
 Один тормоз в редакторе конфигурации итерационного расчёта.
 Параметры: form, number, removable (кнопка «Убрать»), existing (тормоз уже в расчёте),
@@ -15,7 +16,7 @@ new_badge (бейдж «новый» — у тормоза, добавленно
         {% endif %}
         <span class="it-slot-spacer"></span>
         {% if removable %}
-        <button type="button" class="rb-btn rb-btn-sm rb-btn-danger" data-remove-slot>× Убрать</button>
+        <button type="button" class="rb-btn rb-btn-sm rb-btn-danger" data-remove-slot>Убрать тормоз</button>
         {% endif %}
     </div>
 
@@ -32,7 +33,7 @@ new_badge (бейдж «новый» — у тормоза, добавленно
         <label class="it-field it-field-wide">
             <span class="it-field-label">Подставить из каталога</span>
             <select class="it-catalog-select" data-catalog-select>
-                <option value="">— не выбрано —</option>
+                <option value="">Не выбрано</option>
                 {% for item in catalog_items %}
                 <option value="{{ item.id }}" data-model-type="{{ item.model_type }}">{{ item.name }} ({{ item.summary }})</option>
                 {% endfor %}
@@ -42,13 +43,7 @@ new_badge (бейдж «новый» — у тормоза, добавленно
     </div>
 
     <div class="it-slot-params" data-kind-block="parametric">
-        {% for field in form.param_fields %}
-        <label class="it-field">
-            <span class="it-field-label">{{ field.label }}</span>
-            {{ field }}
-            {% if field.errors %}<span class="it-field-error">{{ field.errors|join:" " }}</span>{% endif %}
-        </label>
-        {% endfor %}
+        {% brake_param_grid form %}
     </div>
 
     <div class="it-slot-curve" data-kind-block="curve">

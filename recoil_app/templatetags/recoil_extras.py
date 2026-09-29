@@ -108,3 +108,43 @@ def smart_num(value):
     # %g подбирает формат сам
     s = f"{f:.6g}"
     return s
+
+
+@register.filter(name="ru_plural")
+def ru_plural(value, forms):
+    """Русское множественное число: {{ n|ru_plural:"тормоз,тормоза,тормозов" }} → «тормоза».
+
+    Встроенный pluralize знает только две формы (для 3 форм возвращает пустую строку).
+    """
+    try:
+        n = abs(int(value))
+    except (TypeError, ValueError):
+        return ""
+    one, few, many = (forms.split(",") + ["", "", ""])[:3]
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return few
+    return many
+
+
+@register.filter(name="mul1000")
+def mul1000(value):
+    """м → мм (и т.п.): умножить на 1000; нечисло — пустая строка."""
+    try:
+        return float(value) * 1000.0
+    except (TypeError, ValueError):
+        return ""
+
+
+@register.inclusion_tag("recoil_app/includes/brake_param_grid.html")
+def brake_param_grid(form, required_mark=False):
+    """Единая сетка параметров вихретокового тормоза (группы, символ, подпись, единица).
+
+    {% brake_param_grid brake_form %} — в форме расчёта, свободного падения,
+    пошаговой сессии и каталога параметры выглядят и подписаны одинаково.
+    """
+    from ..services.brake_params import hidden_param_fields, param_field_groups
+
+    return {"groups": param_field_groups(form), "hidden": hidden_param_fields(form),
+            "required_mark": required_mark}

@@ -1,0 +1,15 @@
+{# Иконка пункта навигации (видна всегда; в свёрнутом меню остаётся только она). #}
+<svg class="rb-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{% if key == "dashboard" %}<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
+{% elif key == "results" %}<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+{% elif key == "iterative" %}<path d="M4 18h4v-4h4v-4h4V6h4"/>
+{% elif key == "compare" %}<path d="M3 17c3-6 6-10 9-10s6 4 9 10"/><path d="M3 12c3 3 6 5 9 5s6-2 9-5" stroke-dasharray="2 3"/>
+{% elif key == "optimize" %}<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+{% elif key == "catalog" %}<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M9 10v10"/>
+{% elif key == "new" %}<path d="M12 5v14M5 12h14"/>
+{% elif key == "users" %}<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20c-.5-2.4-1.8-4-3.5-4.9"/>
+{% elif key == "collapse" %}<path d="M15 6l-6 6 6 6"/>
+{% elif key == "menu" %}<path d="M4 7h16M4 12h16M4 17h16"/>
+{% elif key == "logout" %}<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>
+{% endif %}
+</svg>

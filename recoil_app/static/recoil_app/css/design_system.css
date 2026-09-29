@@ -1,14 +1,16 @@
-/* RecoilLab Design System v2
-   Палитра, типографика, базовые компоненты для нового UI.
-   Цель: единая визуальная грамматика для всех страниц нового дизайна.
+/* RecoilLab Design System v3 («протокол испытания + осциллограмма»)
+   Палитра, типографика, базовые компоненты.
 
-   Брендинг:
+   Брендинг (палитра сохранена):
      - Основной синий:   #3D73EB
      - Акцент (магента): #B44D7A
-     - Градиент:         linear-gradient(135deg, #3D73EB → #B44D7A)
+     - Градиент:         linear-gradient(135deg, #3D73EB → #B44D7A) — ТОЛЬКО фирменные
+       элементы: полоса под верхней строкой, «Новый расчёт», одна главная кнопка экрана.
+   Цвет = физическая величина (на цветах той же палитры):
+     x — rb-blue, v — rb-green, a — rb-accent, F — rb-amber (для текста — тёмные варианты).
    Типографика:
-     - UI-шрифт:    Manrope (можно подменить системным)
-     - Числа/код:   JetBrains Mono (фоллбек: Consolas, monospace)
+     - UI-шрифт:  Manrope — всё, включая подписи и заголовки (без КАПСА и разрядки).
+     - Числа:     JetBrains Mono — только числовые значения (tabular-nums).
 */
 
 /* === Self-hosted fonts (offline-friendly) === */
@@ -115,25 +117,44 @@
     --rb-ws-text-soft: #B0BBC9;
     --rb-ws-text-muted: #6F7B8A;
 
-    /* Текст */
+    /* Текст. Контраст на белом: text 15.6:1, soft 5.5:1, muted 4.7:1 (AA для мелкого). */
     --rb-text: #1B2430;
     --rb-text-soft: #5A6A7F;
-    --rb-text-muted: #7A8899;
+    --rb-text-muted: #66758A;
 
-    /* Тени */
-    --rb-shadow-sm: 0 2px 8px rgba(23, 43, 77, 0.06);
-    --rb-shadow-md: 0 8px 24px rgba(27, 36, 48, 0.08);
-    --rb-shadow-lg: 0 20px 48px rgba(27, 36, 48, 0.12);
+    /* Цвет = величина. Линии — яркие серии, текст/подписи — тёмные (контраст ≥ 4.5:1). */
+    --q-x: #3D73EB;  --q-x-text: #2C5FD0;
+    --q-v: #10B981;  --q-v-text: #047857;
+    --q-a: #B44D7A;  --q-a-text: #9A3F68;
+    --q-f: #F59E0B;  --q-f-text: #B45309;
 
-    /* Радиусы */
+    /* Статусы (текст) */
+    --rb-ok-text: #047857;
+    --rb-warn-text: #B45309;
+    --rb-err-text: #B91C1C;
+
+    /* Шрифты */
+    --rb-font-ui: Manrope, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    --rb-font-mono: "JetBrains Mono", "SF Mono", Consolas, Monaco, monospace;
+
+    /* Тени — только у всплывающего (меню, тосты); карточки плоские, с рамкой */
+    --rb-shadow-sm: none;
+    --rb-shadow-md: 0 8px 24px rgba(27, 36, 48, 0.10);
+    --rb-shadow-lg: 0 20px 48px rgba(27, 36, 48, 0.14);
+
+    /* Радиусы: мелкие элементы 6, панели 8 */
     --rb-radius-sm: 6px;
-    --rb-radius: 10px;
-    --rb-radius-lg: 14px;
-    --rb-radius-xl: 18px;
+    --rb-radius: 8px;
+    --rb-radius-lg: 8px;
+    --rb-radius-xl: 12px;
+
+    /* Фокус с клавиатуры */
+    --rb-focus: 0 0 0 2px #FFFFFF, 0 0 0 4px #3D73EB;
 
     /* Размеры shell */
     --rb-topbar-h: 52px;
-    --rb-rail-w: 64px;
+    --rb-rail-w: 232px;
+    --rb-rail-w-collapsed: 60px;
 }
 
 /* === БАЗОВЫЕ ЭЛЕМЕНТЫ === */
@@ -142,7 +163,9 @@
 }
 
 .rb-app {
-    font-family: Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-family: var(--rb-font-ui);
+    font-size: 14px;
+    line-height: 1.45;
     color: var(--rb-text);
     background: var(--rb-panel-bg);
     min-height: 100vh;
@@ -150,69 +173,282 @@
     padding: 0;
 }
 
-.rb-mono {
-    font-family: "JetBrains Mono", "SF Mono", Consolas, Monaco, monospace;
-    font-feature-settings: "tnum" 1;
+.rb-app a { color: var(--rb-blue-dark); }
+
+/* Видимый фокус с клавиатуры — везде одинаковый */
+.rb-app :focus-visible {
+    outline: 2px solid var(--rb-blue);
+    outline-offset: 2px;
 }
 
-/* === SHELL: топбар + рейл === */
+.rb-mono, .rb-num {
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.rb-muted-note { font-size: 13px; color: var(--rb-text-soft); }
+.rb-visually-hidden {
+    position: absolute !important; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rb-app *, .rb-app *::before, .rb-app *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* === SHELL: боковая навигация + основная колонка ===
+   Разметка — base_v2.html (рендерит сервер). Навигация с подписями и группами,
+   сворачивается до иконок (класс .rb-nav-collapsed на <html>), на узком экране —
+   выезжающая панель (.rb-nav-open). */
+.rb-skip-link {
+    position: absolute;
+    left: 12px;
+    top: 8px;
+    z-index: 1000;
+    background: var(--rb-panel-bg-white);
+    color: var(--rb-text);
+    padding: 8px 12px;
+    border-radius: var(--rb-radius-sm);
+    transform: translateY(-200%);
+}
+.rb-skip-link:focus { transform: none; box-shadow: var(--rb-shadow-md); }
+
 .rb-shell {
     display: grid;
-    grid-template-columns: var(--rb-rail-w) 1fr;
-    grid-template-rows: var(--rb-topbar-h) 1fr;
+    grid-template-columns: var(--rb-rail-w) minmax(0, 1fr);
     min-height: 100vh;
 }
+.rb-nav-collapsed .rb-shell { grid-template-columns: var(--rb-rail-w-collapsed) minmax(0, 1fr); }
 
-.rb-topbar {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    display: flex;
-    align-items: center;
-    background: var(--rb-panel-bg-white);
-    border-bottom: 1px solid var(--rb-panel-border);
-    padding: 0 16px 0 0;
+.rb-nav {
     position: sticky;
     top: 0;
-    z-index: 100;
-    height: var(--rb-topbar-h);
-    overflow: hidden;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--rb-ws-bg);
+    color: #C9D1DB;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px 12px;
+    z-index: 60;
+    scrollbar-width: thin;
+    scrollbar-color: #2A3548 transparent;
 }
 
-.rb-logo {
-    width: var(--rb-rail-w);
-    height: var(--rb-topbar-h);
-    background: var(--rb-ws-bg);
+.rb-nav-brand {
     display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+}
+.rb-app a.rb-nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #FFFFFF;
+    min-width: 0;
+    flex: 1;
+    border-radius: var(--rb-radius-sm);
+}
+.rb-nav-logo svg { width: 34px; height: 34px; flex-shrink: 0; }
+.rb-nav-brand-text {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+.rb-nav-brand-text small {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #8B96A5;
+}
+
+.rb-nav-collapse {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: var(--rb-radius-sm);
+    background: transparent;
+    color: #8B96A5;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.rb-nav-collapse:hover { background: var(--rb-ws-bg-elevated); color: #FFFFFF; }
+.rb-nav-collapse .rb-nav-icon { width: 18px; height: 18px; transition: transform .15s; }
+.rb-nav-collapsed .rb-nav-collapse .rb-nav-icon { transform: rotate(180deg); }
+
+.rb-nav-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* «Новый расчёт» — фирменная кнопка (градиент) */
+.rb-app a.rb-nav-new {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: var(--rb-radius-sm);
+    background: var(--rb-grad);
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.rb-app a.rb-nav-new:hover { background: linear-gradient(135deg, #2F62D6 0%, #9E3F69 100%); }
+.rb-app a.rb-nav-new.is-active { box-shadow: 0 0 0 2px #0F1724, 0 0 0 3px rgba(255, 255, 255, 0.55); }
+
+.rb-nav-groups { display: flex; flex-direction: column; gap: 14px; }
+.rb-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.rb-nav-group-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8B96A5;
+    padding: 0 10px 4px;
+    white-space: nowrap;
+}
+
+.rb-app a.rb-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: var(--rb-radius-sm);
+    color: #D2D9E2;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.rb-app a.rb-nav-item .rb-nav-icon { color: #8B96A5; }
+.rb-app a.rb-nav-item:hover { background: #1F2A3B; color: #FFFFFF; }
+.rb-app a.rb-nav-item.is-active {
+    background: var(--rb-ws-bg-elevated);
+    color: #FFFFFF;
+    box-shadow: inset 3px 0 0 var(--rb-blue);
+}
+.rb-app a.rb-nav-item.is-active .rb-nav-icon { color: var(--rb-blue-soft); }
+
+.rb-nav :focus-visible { outline: 2px solid var(--rb-blue-soft); outline-offset: 1px; }
+
+.rb-nav-foot {
+    margin-top: auto;
+    border-top: 1px solid var(--rb-ws-border);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.rb-app a.rb-nav-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: var(--rb-radius-sm);
+    color: #FFFFFF;
+    text-decoration: none;
+    min-width: 0;
+}
+.rb-app a.rb-nav-user:hover, .rb-app a.rb-nav-user.is-active { background: var(--rb-ws-bg-elevated); }
+.rb-nav-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #243044;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.rb-nav-user .rb-nav-label { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.rb-nav-user-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-nav-user-role { font-size: 12px; color: #8B96A5; }
+.rb-nav-logout { margin: 0; }
+.rb-nav-link-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: var(--rb-radius-sm);
+    background: transparent;
+    color: #AEB8C5;
+    font: 500 14px var(--rb-font-ui);
+    cursor: pointer;
+    text-align: left;
+}
+.rb-nav-link-btn .rb-nav-icon { width: 18px; height: 18px; }
+.rb-nav-link-btn:hover { background: #1F2A3B; color: #FFFFFF; }
+.rb-nav-guest { display: flex; gap: 12px; padding: 4px 10px; flex-wrap: wrap; }
+.rb-app a.rb-nav-link { color: #D2D9E2; font-size: 14px; }
+.rb-app a.rb-nav-link:hover { color: #FFFFFF; }
+
+/* Свёрнутое меню: только иконки, подписи — во всплывающем title */
+.rb-nav-collapsed .rb-nav { padding: 14px 8px; align-items: center; }
+.rb-nav-collapsed .rb-nav-brand { flex-direction: column; gap: 10px; }
+.rb-nav-collapsed .rb-nav-brand-text,
+.rb-nav-collapsed .rb-nav-label,
+.rb-nav-collapsed .rb-nav-group-title,
+.rb-nav-collapsed .rb-nav-guest { display: none; }
+.rb-nav-collapsed .rb-nav-groups { gap: 10px; }
+.rb-nav-collapsed .rb-nav-group + .rb-nav-group { border-top: 1px solid var(--rb-ws-border); padding-top: 10px; }
+.rb-nav-collapsed a.rb-nav-new,
+.rb-nav-collapsed a.rb-nav-item,
+.rb-nav-collapsed a.rb-nav-user,
+.rb-nav-collapsed .rb-nav-link-btn { justify-content: center; padding: 8px; }
+.rb-nav-collapsed .rb-nav-foot { align-items: center; }
+
+/* Основная колонка */
+.rb-main { min-width: 0; display: flex; flex-direction: column; }
+
+.rb-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: var(--rb-topbar-h);
+    padding: 8px 28px;
+    background: var(--rb-panel-bg-white);
+    border-bottom: 1px solid var(--rb-panel-border);
+}
+/* Фирменная полоса под верхней строкой — единственное «декоративное» место градиента */
+.rb-topbar::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: var(--rb-grad);
+}
+
+.rb-topbar-menu {
+    display: none;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius-sm);
+    background: var(--rb-panel-bg-white);
+    color: var(--rb-text);
+    cursor: pointer;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
 
-.rb-logo svg {
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-}
-
-.rb-logo-text {
-    margin-left: 12px;
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--rb-text);
-    letter-spacing: -0.01em;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.rb-logo-text .dot {
-    color: var(--rb-blue);
-    margin: 0 2px;
-}
-
 .rb-breadcrumb {
-    margin-left: 24px;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--rb-text-soft);
     flex: 1 1 auto;
     min-width: 0;
@@ -220,367 +456,171 @@
     white-space: nowrap;
     text-overflow: ellipsis;
 }
+.rb-app .rb-breadcrumb a { color: var(--rb-text-soft); text-decoration: none; }
+.rb-app .rb-breadcrumb a:hover { color: var(--rb-blue-dark); text-decoration: underline; }
+.rb-breadcrumb .sep { margin: 0 8px; color: var(--rb-text-muted); }
+.rb-breadcrumb .current { color: var(--rb-text); font-weight: 600; }
 
-.rb-breadcrumb a {
-    color: var(--rb-text-soft);
-    text-decoration: none;
-    transition: color .15s;
+/* Индикатор фоновых задач */
+.rb-tasks { margin-left: auto; font-size: 13px; color: var(--rb-text-soft); position: relative; flex-shrink: 0; }
+.rb-tasks-idle { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.rb-tasks-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #A3AFBD;
+    display: inline-block;
+    flex-shrink: 0;
 }
-
-.rb-breadcrumb a:hover {
-    color: var(--rb-blue);
+.rb-tasks-dot.is-running { background: var(--rb-blue); animation: rb-pulse 1.6s ease-in-out infinite; }
+@keyframes rb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
 }
-
-.rb-breadcrumb .sep {
-    margin: 0 8px;
-    color: var(--rb-text-muted);
-}
-
-.rb-breadcrumb .current {
-    color: var(--rb-text);
-    font-weight: 600;
-}
-
-.rb-status-pill {
+.rb-tasks-menu > summary {
+    list-style: none;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
+    gap: 8px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border: 1px solid var(--rb-panel-border);
     border-radius: 999px;
-    background: var(--rb-success-soft);
-    color: var(--rb-success-dark);
-    font-size: 11px;
+    color: var(--rb-blue-dark);
     font-weight: 600;
-    margin-left: 12px;
-    font-family: "JetBrains Mono", Consolas, monospace;
     white-space: nowrap;
-    flex-shrink: 0;
-    line-height: 1.4;
-    height: 22px;
 }
-
-.rb-status-pill::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    background: var(--rb-success);
-    border-radius: 50%;
-    animation: rb-pulse 2s ease-in-out infinite;
-    flex-shrink: 0;
-}
-
-@keyframes rb-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-}
-
-.rb-topbar-spacer {
-    flex: 0 0 auto;
-}
-
-.rb-user {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 4px 0 12px;
-    flex-shrink: 0;
-}
-
-.rb-avatar {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    border-radius: 50%;
-    background: var(--rb-grad);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 12px;
-    font-family: "JetBrains Mono", Consolas, monospace;
-    flex-shrink: 0;
-    line-height: 1;
-}
-
-/* Аватар-эмодзи: на пастельном фоне, чтобы цветной emoji не сливался с градиентом */
-.rb-avatar-emoji {
-    background: linear-gradient(135deg, rgba(61,115,235,0.12), rgba(180,77,122,0.12));
-    border: 1px solid rgba(15, 23, 36, 0.08);
-    font-family: inherit;
-    font-size: 18px;
-}
-
-.rb-user-link {
-    text-decoration: none;
-    color: inherit;
-    cursor: pointer;
-    transition: transform .15s ease;
-}
-.rb-user-link:hover .rb-avatar {
-    transform: scale(1.08);
-    box-shadow: 0 2px 8px rgba(61,115,235,0.25);
-}
-
-/* Rail (левая панель навигации) */
-.rb-rail {
-    grid-row: 2;
-    grid-column: 1;
-    background: var(--rb-ws-bg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 16px 0;
-    gap: 4px;
-    position: sticky;
-    top: var(--rb-topbar-h);
-    height: calc(100vh - var(--rb-topbar-h));
-    z-index: 50;
-}
-
-.rb-rail-item {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--rb-ws-text-muted);
-    text-decoration: none;
-    transition: all .15s;
-    position: relative;
-    cursor: pointer;
-}
-
-.rb-rail-item:hover {
-    background: var(--rb-ws-bg-elevated);
-    color: var(--rb-ws-text);
-}
-
-.rb-rail-item.active {
-    background: var(--rb-ws-bg-elevated);
-    color: var(--rb-blue-soft);
-}
-
-.rb-rail-item.active::before {
-    content: '';
+.rb-tasks-menu > summary::-webkit-details-marker { display: none; }
+.rb-tasks-list {
     position: absolute;
-    left: -16px;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    background: var(--rb-blue);
-    border-radius: 0 2px 2px 0;
+    right: 0;
+    top: calc(100% + 8px);
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: var(--rb-panel-bg-white);
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius);
+    box-shadow: var(--rb-shadow-md);
+    min-width: 300px;
+    z-index: 80;
 }
+.rb-tasks-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: var(--rb-radius-sm); }
+.rb-tasks-list li:hover { background: var(--rb-panel-bg-alt); }
+.rb-tasks-list span { color: var(--rb-text-soft); white-space: nowrap; }
 
-.rb-rail-item svg {
-    width: 20px;
-    height: 20px;
+/* Сообщения (Django messages) — над контентом */
+.rb-flash-list { display: flex; flex-direction: column; gap: 8px; padding: 16px 28px 0; }
+.rb-flash {
+    padding: 10px 14px;
+    border-radius: var(--rb-radius-sm);
+    font-size: 14px;
+    background: var(--rb-panel-bg-white);
+    border: 1px solid var(--rb-panel-border);
+    border-left: 3px solid var(--rb-blue);
 }
-
-/* Tooltip справа от иконки рейла. Появляется при hover/focus на data-tip. */
-.rb-rail-item[data-tip] { overflow: visible; }
-.rb-rail-item[data-tip]::after {
-    content: attr(data-tip);
-    position: absolute;
-    left: calc(100% + 14px);
-    top: 50%;
-    transform: translateY(-50%) translateX(-6px);
-    background: #0F1724;
-    color: white;
-    font-family: Manrope, sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 6px 10px;
-    border-radius: 6px;
-    white-space: nowrap;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.18);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .15s ease, transform .15s ease;
-    z-index: 100;
-}
-.rb-rail-item[data-tip]::before {
-    /* стрелочка-треугольник слева от плашки */
-    content: '';
-    position: absolute;
-    left: calc(100% + 8px);
-    top: 50%;
-    transform: translateY(-50%) translateX(-6px);
-    width: 0; height: 0;
-    border: 5px solid transparent;
-    border-right-color: #0F1724;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .15s ease, transform .15s ease;
-    z-index: 100;
-}
-.rb-rail-item[data-tip]:hover::after,
-.rb-rail-item[data-tip]:focus-visible::after,
-.rb-rail-item[data-tip]:hover::before,
-.rb-rail-item[data-tip]:focus-visible::before {
-    opacity: 1;
-    transform: translateY(-50%) translateX(0);
-}
+.rb-flash.rb-flash-success { border-left-color: var(--rb-success); }
+.rb-flash.rb-flash-warning { border-left-color: var(--rb-warn); background: #FFFBEB; }
+.rb-flash.rb-flash-error { border-left-color: var(--rb-danger); background: #FEF2F2; }
 
 /* Контент */
 .rb-content {
-    grid-row: 2;
-    grid-column: 2;
-    padding: 28px 32px 48px;
-    overflow-x: hidden;
+    padding: 24px 28px 48px;
     width: 100%;
-    max-width: 100%;
+    max-width: 1560px;
+    min-width: 0;
+}
+.rb-content:focus { outline: none; }
+
+.rb-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 36, 0.45);
+    z-index: 55;
 }
 
-/* Layout с боковой панелью модулей: используется на result-странице */
-.rb-with-sidepanel {
-    display: grid;
-    grid-template-columns: 1fr 240px;
-    gap: 24px;
-    align-items: start;
-}
-
-@media (max-width: 1280px) {
-    .rb-with-sidepanel {
-        grid-template-columns: 1fr;
+@media (max-width: 960px) {
+    .rb-shell,
+    .rb-nav-collapsed .rb-shell { grid-template-columns: minmax(0, 1fr); }
+    .rb-nav {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        width: min(280px, 86vw);
+        transform: translateX(-100%);
+        transition: transform .2s ease;
     }
-    .rb-modules-panel {
-        position: static !important;
-    }
-}
-
-.rb-modules-panel {
-    position: sticky;
-    top: calc(var(--rb-topbar-h) + 24px);
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 16px;
-    max-height: calc(100vh - var(--rb-topbar-h) - 48px);
-    overflow-y: auto;
-}
-
-.rb-modules-panel-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--rb-panel-border);
-}
-
-.rb-modules-actions {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-
-.rb-modules-actions .rb-btn-sm {
-    flex: 1;
-    padding: 4px 8px;
-    font-size: 11px;
-}
-
-.rb-module-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 4px;
-    border-radius: var(--rb-radius-sm);
-    cursor: pointer;
-    transition: background .15s;
-    font-size: 13px;
-    color: var(--rb-text);
-    font-weight: 500;
-}
-
-.rb-module-toggle:hover {
-    background: var(--rb-panel-bg-alt);
-}
-
-.rb-module-toggle input[type="checkbox"] {
-    margin: 0;
-    accent-color: var(--rb-blue);
-    cursor: pointer;
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-}
-
-.rb-module-toggle.is-disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+    .rb-nav-open .rb-nav { transform: none; }
+    /* На телефоне меню всегда полное — «свёрнутость» к нему не применяется */
+    .rb-nav-collapsed .rb-nav { padding: 14px 12px; align-items: stretch; }
+    .rb-nav-collapsed .rb-nav-brand { flex-direction: row; }
+    .rb-nav-collapsed .rb-nav-brand-text,
+    .rb-nav-collapsed .rb-nav-label,
+    .rb-nav-collapsed .rb-nav-group-title { display: revert; }
+    .rb-nav-collapsed .rb-nav-guest { display: flex; }
+    .rb-nav-collapsed a.rb-nav-new,
+    .rb-nav-collapsed a.rb-nav-item,
+    .rb-nav-collapsed a.rb-nav-user,
+    .rb-nav-collapsed .rb-nav-link-btn { justify-content: flex-start; }
+    .rb-nav-collapse { display: none; }
+    .rb-topbar { padding: 8px 16px; }
+    .rb-topbar-menu { display: inline-flex; }
+    .rb-tasks-idle { font-size: 0; gap: 0; }
+    .rb-content { padding: 18px 16px 40px; }
+    .rb-flash-list { padding: 12px 16px 0; }
 }
 
 .rb-module-section {
     transition: opacity .2s;
 }
 
-.rb-module-section.is-hidden {
-    display: none !important;
-}
-
 /* === ТИПОГРАФИЯ === */
 .rb-h1 {
-    font-size: 32px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: var(--rb-text);
     margin: 0 0 8px;
-    line-height: 1.15;
+    line-height: 1.2;
 }
 
 .rb-h2 {
-    font-size: 22px;
-    font-weight: 750;
-    letter-spacing: -0.01em;
+    font-size: 18px;
+    font-weight: 700;
     color: var(--rb-text);
-    margin: 0 0 14px;
+    margin: 0 0 12px;
+    line-height: 1.3;
 }
 
 .rb-h3 {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--rb-text);
     margin: 0 0 10px;
 }
 
+/* Подпись поля/группы: обычный регистр, без разрядки */
 .rb-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rb-text-soft);
 }
 
 .rb-text-soft  { color: var(--rb-text-soft); }
 .rb-text-muted { color: var(--rb-text-muted); }
 
-/* === ЦВЕТНОЙ HERO-БАР === */
-.rb-color-bar {
-    height: 4px;
-    width: 100%;
-    background: var(--rb-grad);
-    border-radius: 2px;
-    margin-bottom: 18px;
-}
-
 /* === БЕЙДЖИ === */
 .rb-badge {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
+    gap: 6px;
+    padding: 2px 10px;
     border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
     background: var(--rb-panel-bg-alt);
     color: var(--rb-text-soft);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    white-space: nowrap;
 }
 
 .rb-badge-blue   { background: rgba(61, 115, 235, 0.12); color: var(--rb-blue-dark); }
@@ -589,232 +629,161 @@
 .rb-badge-warn   { background: var(--rb-warn-soft);      color: var(--rb-warn-dark); }
 .rb-badge-danger { background: var(--rb-danger-soft);    color: var(--rb-danger-dark); }
 
-/* === КНОПКИ === */
+/* === КНОПКИ ===
+   Одна главная кнопка на экран — .rb-btn-primary (градиент бренда).
+   .rb-btn-grad — синоним primary (старые шаблоны). Остальное — обычная .rb-btn. */
 .rb-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 8px 16px;
+    padding: 7px 14px;
     border-radius: var(--rb-radius-sm);
     border: 1px solid var(--rb-panel-border-strong);
     background: var(--rb-panel-bg-white);
     color: var(--rb-text);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: all .15s;
+    transition: border-color .15s, color .15s, background-color .15s;
     text-decoration: none;
-    line-height: 1.2;
+    line-height: 1.3;
     font-family: inherit;
+    white-space: nowrap;
 }
 
-.rb-btn:hover {
+.rb-app a.rb-btn { color: var(--rb-text); }
+
+.rb-btn:hover,
+.rb-app a.rb-btn:hover {
     border-color: var(--rb-blue);
-    color: var(--rb-blue);
+    color: var(--rb-blue-dark);
 }
 
-.rb-btn-primary {
-    background: var(--rb-blue);
-    color: white;
-    border-color: var(--rb-blue);
+.rb-btn:disabled,
+.rb-btn[aria-disabled="true"] {
+    opacity: .5;
+    cursor: not-allowed;
 }
 
-.rb-btn-primary:hover {
-    background: var(--rb-blue-dark);
-    color: white;
-    border-color: var(--rb-blue-dark);
-}
-
-.rb-btn-grad {
+.rb-btn-primary,
+.rb-btn-grad,
+.rb-app a.rb-btn-primary,
+.rb-app a.rb-btn-grad {
     background: var(--rb-grad);
-    color: white;
+    color: #FFFFFF;
     border-color: transparent;
-    font-weight: 700;
 }
 
-.rb-btn-grad:hover {
-    color: white;
-    transform: translateY(-1px);
-    box-shadow: var(--rb-shadow-md);
+.rb-btn-primary:hover,
+.rb-btn-grad:hover,
+.rb-app a.rb-btn-primary:hover,
+.rb-app a.rb-btn-grad:hover {
+    color: #FFFFFF;
+    border-color: transparent;
+    background: linear-gradient(135deg, #2F62D6 0%, #9E3F69 100%);
 }
 
-.rb-btn-danger {
+.rb-btn-danger,
+.rb-app a.rb-btn-danger {
     background: var(--rb-panel-bg-white);
-    color: var(--rb-danger);
+    color: var(--rb-err-text);
+    border-color: #E8B4B4;
+}
+
+.rb-btn-danger:hover,
+.rb-app a.rb-btn-danger:hover {
+    background: var(--rb-danger-soft);
+    color: var(--rb-danger-dark);
     border-color: var(--rb-danger);
 }
 
-.rb-btn-danger:hover {
-    background: var(--rb-danger);
-    color: white;
+/* Тихая кнопка: без рамки (вторичные действия в строках таблиц) */
+.rb-btn-quiet {
+    border-color: transparent;
+    background: transparent;
 }
+.rb-btn-quiet:hover { background: var(--rb-panel-bg-alt); border-color: transparent; }
 
-.rb-btn-sm { padding: 5px 10px; font-size: 12px; }
+.rb-btn-sm { padding: 4px 10px; font-size: 13px; }
 
-/* === КАРТОЧКИ === */
+.rb-btn-group { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* === КАРТОЧКИ / ПАНЕЛИ === */
 .rb-card {
     background: var(--rb-panel-bg-white);
     border: 1px solid var(--rb-panel-border);
     border-radius: var(--rb-radius-lg);
-    padding: 18px 20px;
-    box-shadow: var(--rb-shadow-sm);
+    padding: 16px 18px;
 }
 
-.rb-card-tight { padding: 14px 16px; }
+.rb-card-tight { padding: 12px 14px; }
 
 .rb-card-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     margin-bottom: 10px;
 }
 
 .rb-card-title-text {
-    font-size: 11px;
+    font-size: 15px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
+    color: var(--rb-text);
 }
 
-/* === KPI КАРТОЧКА === */
-.rb-kpi-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
-}
-
-.rb-kpi {
+/* Панель с шапкой (заголовок + действия) — основной контейнер новых страниц */
+.rb-panel {
     background: var(--rb-panel-bg-white);
     border: 1px solid var(--rb-panel-border);
     border-radius: var(--rb-radius-lg);
-    padding: 16px 18px;
-    position: relative;
-    overflow: hidden;
+    min-width: 0;
 }
-
-.rb-kpi::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 4px;
-    height: 100%;
-    background: var(--rb-blue);
-}
-
-.rb-kpi-blue::before   { background: var(--rb-blue); }
-.rb-kpi-red::before    { background: var(--rb-accent); }
-.rb-kpi-green::before  { background: var(--rb-success); }
-.rb-kpi-amber::before  { background: var(--rb-warn); }
-.rb-kpi-purple::before { background: var(--rb-series-5); }
-.rb-kpi-gray::before   { background: var(--rb-text-muted); }
-
-.rb-kpi-label {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--rb-text-muted);
-    margin-bottom: 6px;
-}
-
-.rb-kpi-value {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-weight: 700;
-    font-size: 28px;
-    line-height: 1;
-    color: var(--rb-text);
-    letter-spacing: -0.02em;
-}
-
-.rb-kpi-unit {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-weight: 500;
-    font-size: 14px;
-    color: var(--rb-text-muted);
-    margin-left: 4px;
-}
-
-.rb-kpi-hint {
-    font-size: 11px;
-    color: var(--rb-text-soft);
-    margin-top: 6px;
-    font-family: "JetBrains Mono", Consolas, monospace;
-}
-
-.rb-kpi-status-ok      .rb-kpi-hint { color: var(--rb-success-dark); }
-.rb-kpi-status-warn    .rb-kpi-hint { color: var(--rb-warn-dark); }
-.rb-kpi-status-danger  .rb-kpi-hint { color: var(--rb-danger-dark); }
-
-/* Карточка с подзначениями (диапазон min/max).
-   Главное `value` не показывается, только два подзначения столбиком. */
-.rb-kpi-range .rb-kpi-main { display: none; }
-
-.rb-kpi-range-rows {
+.rb-panel + .rb-panel { margin-top: 16px; }
+.rb-panel-head {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rb-panel-border);
 }
-
-.rb-kpi-range-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-family: "JetBrains Mono", Consolas, monospace;
-    padding: 3px 0;
-}
-
-.rb-kpi-range-label {
-    color: var(--rb-text-muted);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-
-.rb-kpi-range-value {
-    font-size: 18px;
+.rb-panel-head h2, .rb-panel-title {
+    margin: 0;
+    font-size: 16px;
     font-weight: 700;
     color: var(--rb-text);
-    line-height: 1;
 }
-
-.rb-kpi-range-unit {
-    color: var(--rb-text-muted);
-    font-size: 10px;
-    margin-left: 2px;
-    font-weight: 500;
-}
+.rb-panel-head .rb-panel-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.rb-panel-body { padding: 14px 16px; }
+.rb-panel-note { padding: 8px 16px 12px; font-size: 13px; color: var(--rb-text-soft); }
 
 /* === БАННЕР СТАТУСА === */
 .rb-status-banner {
     display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 18px;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
     border-radius: var(--rb-radius);
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     border: 1px solid;
 }
 
-.rb-status-banner-ok     { background: var(--rb-success-soft); border-color: rgba(16, 185, 129, 0.2); color: var(--rb-success-dark); }
-.rb-status-banner-warn   { background: var(--rb-warn-soft);    border-color: rgba(245, 158, 11, 0.2); color: var(--rb-warn-dark); }
-.rb-status-banner-danger { background: var(--rb-danger-soft);  border-color: rgba(239, 68, 68, 0.2);  color: var(--rb-danger-dark); }
+.rb-status-banner-ok     { background: var(--rb-success-soft); border-color: rgba(16, 185, 129, 0.25); color: var(--rb-success-dark); }
+.rb-status-banner-warn   { background: var(--rb-warn-soft);    border-color: rgba(245, 158, 11, 0.30); color: var(--rb-warn-dark); }
+.rb-status-banner-danger { background: var(--rb-danger-soft);  border-color: rgba(239, 68, 68, 0.25);  color: var(--rb-danger-dark); }
+.rb-status-banner-info   { background: rgba(61, 115, 235, 0.07); border-color: rgba(61, 115, 235, 0.25); color: var(--rb-blue-dark); }
 
+/* Иконка баннера — маленькая точка-статус (без символов ✓/⚠) */
 .rb-status-banner-icon {
-    width: 28px;
-    height: 28px;
+    width: 10px;
+    height: 10px;
+    margin-top: 5px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
+    background: currentColor;
     flex-shrink: 0;
+    font-size: 0;
 }
 
 .rb-status-banner-title {
@@ -824,45 +793,48 @@
 }
 
 .rb-status-banner-sub {
-    font-size: 12px;
-    font-family: "JetBrains Mono", Consolas, monospace;
-    opacity: 0.85;
+    font-size: 13px;
 }
 
-/* === HERO === */
+.rb-status-banner-sub.is-pre { white-space: pre-line; }
+
+/* === HERO (шапка страницы) === */
 .rb-hero {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
 }
 
 .rb-hero-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px 24px;
     flex-wrap: wrap;
 }
 
 .rb-hero-title {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
+    align-items: center;
+    gap: 8px 12px;
     flex-wrap: wrap;
 }
 
 .rb-hero h1 {
-    font-size: 30px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
     margin: 0;
     color: var(--rb-text);
-    font-family: "JetBrains Mono", Consolas, monospace;
+    overflow-wrap: anywhere;
 }
 
 .rb-hero-sub {
     color: var(--rb-text-soft);
-    font-size: 13px;
+    font-size: 14px;
     margin-top: 6px;
-    font-family: "JetBrains Mono", Consolas, monospace;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
 }
 
 .rb-hero-actions {
@@ -871,82 +843,53 @@
     flex-wrap: wrap;
 }
 
-/* === GRID ДЛЯ ГРАФИКОВ === */
-.rb-plot-grid {
-    display: grid;
-    gap: 16px;
-    margin-bottom: 24px;
-}
+.rb-hero-actions form { display: inline-flex; margin: 0; }
 
-.rb-plot-grid-2 { grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); }
-
-.rb-plot-grid-main {
-    grid-template-columns: 8fr 4fr;
-}
-
-@media (max-width: 1100px) {
-    .rb-plot-grid-main { grid-template-columns: 1fr; }
-}
-
-/* Доп. графики — 2 колонки вместо auto-fit (лучше читается) */
-.rb-plot-grid-pair {
-    grid-template-columns: repeat(2, 1fr);
-}
-
-@media (max-width: 1280px) {
-    .rb-plot-grid-pair { grid-template-columns: 1fr; }
-}
-
+/* === КАРТОЧКА ГРАФИКА (страница пошаговой сессии) === */
 .rb-plot-card {
     background: var(--rb-panel-bg-white);
     border: 1px solid var(--rb-panel-border);
     border-radius: var(--rb-radius-lg);
-    padding: 16px;
+    padding: 14px 16px;
     overflow: hidden;
+    min-width: 0;
 }
 
-.rb-plot-card-featured {
-    border: 2px solid var(--rb-blue);
-    background: linear-gradient(180deg, rgba(61, 115, 235, 0.02), white 80px);
-}
+.rb-plot-card-featured { /* устар.: больше не выделяем рамкой */ }
 
 .rb-plot-card-title {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     margin-bottom: 8px;
 }
 
 .rb-plot-card-title-text {
-    font-size: 11px;
+    font-size: 15px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
+    color: var(--rb-text);
 }
 
-/* === ТАБЛИЦА ПАРАМЕТРОВ === */
+/* === ТАБЛИЦА ПАРАМЕТРОВ / ДАННЫХ === */
 .rb-params-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 .rb-params-table th {
     text-align: left;
-    padding: 8px 12px;
-    background: var(--rb-panel-bg-alt);
-    color: var(--rb-text-muted);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 700;
+    padding: 7px 12px;
+    color: var(--rb-text-soft);
+    font-size: 13px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--rb-panel-border);
 }
 
 .rb-params-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--rb-panel-border);
+    padding: 7px 12px;
+    border-bottom: 1px solid #EEF1F4;
     color: var(--rb-text);
 }
 
@@ -954,16 +897,58 @@
     border-bottom: none;
 }
 
-.rb-params-table .num {
+.rb-params-table .num,
+.rb-params-table td.num {
     text-align: right;
-    font-weight: 600;
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    white-space: nowrap;
 }
+
+/* Таблица-список (реестры: результаты, каталог, сессии) */
+.rb-table-wrap { overflow-x: auto; }
+.rb-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.rb-table th {
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--rb-text-soft);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--rb-panel-border);
+    white-space: nowrap;
+    background: var(--rb-panel-bg-white);
+}
+.rb-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #EEF1F4;
+    vertical-align: middle;
+}
+.rb-table tbody tr:last-child td { border-bottom: 0; }
+.rb-table tbody tr:hover td { background: #F6F8FB; }
+.rb-table td.num, .rb-table th.num {
+    text-align: right;
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    white-space: nowrap;
+}
+.rb-table th.num { font-family: var(--rb-font-ui); }
+.rb-table .rb-row-title { font-weight: 600; color: var(--rb-text); text-decoration: none; }
+.rb-table .rb-row-title:hover { color: var(--rb-blue-dark); text-decoration: underline; }
+.rb-table .rb-row-sub { font-size: 13px; color: var(--rb-text-soft); }
+.rb-table .rb-row-actions { text-align: right; white-space: nowrap; }
+.rb-table .rb-row-actions form { display: inline; margin: 0; }
 
 /* === ENERGY SUMMARY === */
 .rb-energy-summary {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 8px 24px;
     margin-bottom: 12px;
 }
 
@@ -971,95 +956,50 @@
     display: inline-flex;
     align-items: baseline;
     gap: 6px;
-    padding: 8px 14px;
-    background: var(--rb-panel-bg-alt);
-    border-radius: var(--rb-radius);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .rb-energy-pill-label {
-    color: var(--rb-text-muted);
-    font-size: 11px;
+    color: var(--rb-text-soft);
 }
 
 .rb-energy-pill-value {
-    font-weight: 700;
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
     color: var(--rb-text);
 }
+
+.rb-energy-pill.is-ok .rb-energy-pill-value   { color: var(--rb-ok-text); }
+.rb-energy-pill.is-warn .rb-energy-pill-value { color: var(--rb-warn-text); }
+.rb-energy-pill.is-bad .rb-energy-pill-value  { color: var(--rb-err-text); }
 
 /* === FILE LIST === */
 .rb-file-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    background: var(--rb-panel-bg-alt);
-    border-radius: var(--rb-radius-sm);
-    margin-bottom: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid #EEF1F4;
     text-decoration: none;
     color: var(--rb-text);
-    transition: background .15s;
 }
+.rb-file-row:last-child { border-bottom: 0; }
 
-.rb-file-row:hover {
-    background: rgba(61, 115, 235, 0.08);
-}
+.rb-app a.rb-file-row { color: var(--rb-text); }
+.rb-app a.rb-file-row:hover .rb-file-name { color: var(--rb-blue-dark); text-decoration: underline; }
 
-.rb-file-icon {
-    width: 6px;
-    height: 24px;
-    background: var(--rb-blue);
-    border-radius: 1px;
-    flex-shrink: 0;
-}
-
-.rb-file-row.is-report  .rb-file-icon { background: var(--rb-success); }
-.rb-file-row.is-archive .rb-file-icon { background: var(--rb-accent); }
+.rb-file-icon { display: none; }
 
 .rb-file-name {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     flex: 1;
 }
 
 .rb-file-meta {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 11px;
-    color: var(--rb-text-muted);
-}
-
-/* === KPI-ГРУППЫ (несколько рядов с заголовками) === */
-.rb-kpi-group {
-    margin-bottom: 18px;
-}
-
-.rb-kpi-group-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
-}
-
-.rb-kpi-group-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--rb-text-muted);
-}
-
-.rb-kpi-group .rb-kpi {
-    padding: 12px 14px;
-}
-
-.rb-kpi-group .rb-kpi-value {
-    font-size: 22px;
-}
-
-.rb-kpi-group .rb-kpi-unit {
-    font-size: 12px;
+    font-size: 13px;
+    color: var(--rb-text-soft);
 }
 
 /* === ТАБЫ === */
@@ -1071,17 +1011,17 @@
 }
 
 .rb-tab {
-    padding: 8px 16px;
+    padding: 8px 14px;
     cursor: pointer;
     border: none;
     background: transparent;
-    color: var(--rb-text-muted);
-    font-size: 13px;
+    color: var(--rb-text-soft);
+    font-size: 14px;
     font-weight: 600;
     font-family: inherit;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
-    transition: all .15s;
+    transition: color .15s, border-color .15s;
 }
 
 .rb-tab:hover {
@@ -1089,8 +1029,38 @@
 }
 
 .rb-tab.is-active {
-    color: var(--rb-blue);
+    color: var(--rb-blue-dark);
     border-bottom-color: var(--rb-blue);
+}
+
+/* Сегментный переключатель (режим / участок цикла) */
+.rb-seg {
+    display: inline-flex;
+    border: 1px solid var(--rb-panel-border-strong);
+    border-radius: var(--rb-radius-sm);
+    overflow: hidden;
+    background: var(--rb-panel-bg-white);
+}
+.rb-seg > button, .rb-seg > a {
+    font: 600 13px var(--rb-font-ui);
+    border: 0;
+    border-left: 1px solid var(--rb-panel-border);
+    background: transparent;
+    padding: 6px 12px;
+    cursor: pointer;
+    color: var(--rb-text-soft);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.rb-seg > :first-child { border-left: 0; }
+.rb-seg > button:hover, .rb-seg > a:hover { color: var(--rb-text); background: var(--rb-panel-bg-alt); }
+.rb-seg > .is-active, .rb-seg > [aria-pressed="true"], .rb-seg > [aria-current="page"] {
+    background: var(--rb-blue);
+    color: #FFFFFF;
+}
+.rb-seg > .is-active:hover, .rb-seg > [aria-pressed="true"]:hover, .rb-seg > [aria-current="page"]:hover {
+    background: var(--rb-blue-dark);
+    color: #FFFFFF;
 }
 
 .rb-tab-panel {
@@ -1119,18 +1089,17 @@
     border-bottom: none !important;
     margin-bottom: 0;
     color: var(--rb-text-soft);
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .rb-tabs-pills .rb-tab:hover {
-    background: rgba(61, 115, 235, 0.06);
-    color: var(--rb-blue);
+    color: var(--rb-text);
 }
 
 .rb-tabs-pills .rb-tab.is-active {
     background: var(--rb-panel-bg-white);
-    color: var(--rb-blue);
-    box-shadow: 0 1px 2px rgba(23, 43, 77, 0.06);
+    color: var(--rb-blue-dark);
+    box-shadow: inset 0 0 0 1px var(--rb-panel-border);
 }
 
 /* === SECTION ===
@@ -1140,28 +1109,25 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--rb-panel-border);
 }
 
 .rb-section-collapsible-title {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     color: var(--rb-text);
 }
 
 .rb-collapsible-toggle {
     background: transparent;
     border: none;
-    color: var(--rb-text-muted);
-    font-size: 11px;
+    color: var(--rb-text-soft);
+    font-size: 13px;
     cursor: pointer;
     padding: 4px 8px;
     border-radius: var(--rb-radius-sm);
-    transition: all .15s;
 }
 
 .rb-collapsible-toggle:hover {
@@ -1169,23 +1135,63 @@
     color: var(--rb-text);
 }
 .rb-section {
-    margin-bottom: 28px;
+    margin-bottom: 24px;
 }
 
 .rb-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 14px;
+    gap: 8px 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
 }
 
 .rb-section-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
+    color: var(--rb-text);
 }
+
+/* Сворачиваемая секция на <details> — без JS, с клавиатуры */
+.rb-fold {
+    background: var(--rb-panel-bg-white);
+    border: 1px solid var(--rb-panel-border);
+    border-radius: var(--rb-radius-lg);
+    margin-bottom: 16px;
+    min-width: 0;
+}
+.rb-fold > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    font-size: 16px;
+    font-weight: 700;
+    user-select: none;
+}
+.rb-fold > summary::-webkit-details-marker { display: none; }
+.rb-fold > summary::before {
+    content: '';
+    width: 8px; height: 8px;
+    border-right: 2px solid var(--rb-text-soft);
+    border-bottom: 2px solid var(--rb-text-soft);
+    transform: rotate(-45deg);
+    transition: transform .15s;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+.rb-fold[open] > summary::before { transform: rotate(45deg); }
+.rb-fold > summary .rb-fold-meta {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--rb-text-soft);
+}
+.rb-fold > summary .rb-fold-actions { margin-left: auto; display: flex; gap: 8px; }
+.rb-fold[open] > summary { border-bottom: 1px solid var(--rb-panel-border); }
+.rb-fold-body { padding: 14px 16px; min-width: 0; }
 
 /* === Plotly tweaks (чтоб не вываливался за границы карточек) === */
 .rb-plot-card .plotly-graph-div,
@@ -1195,86 +1201,13 @@
 
 /* === RESPONSIVE === */
 @media (max-width: 900px) {
-    :root {
-        --rb-rail-w: 56px;
-    }
-    .rb-content { padding: 20px 16px; }
-    .rb-hero h1 { font-size: 24px; }
-    .rb-kpi-value { font-size: 22px; }
-    .rb-rail-item { width: 36px; height: 36px; }
+    .rb-hero h1 { font-size: 22px; }
 }
 
 
 /* ============================================================================
-   DASHBOARD — стат-карточки, фильтры, run-карточки, пагинация
+   СПИСКИ — фильтры, поиск, пустое состояние, пагинация
    ============================================================================ */
-
-/* === STAT CARDS (большие карточки с цифрами наверху дашборда) === */
-.rb-stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-}
-
-.rb-stat {
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 20px 22px;
-    position: relative;
-    overflow: hidden;
-}
-
-.rb-stat::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 4px;
-    background: var(--rb-blue);
-}
-
-.rb-stat-blue::before   { background: var(--rb-blue); }
-.rb-stat-green::before  { background: var(--rb-success); }
-.rb-stat-amber::before  { background: var(--rb-warn); }
-.rb-stat-red::before    { background: var(--rb-accent); }
-.rb-stat-purple::before { background: var(--rb-series-5); }
-
-.rb-stat-icon {
-    position: absolute;
-    top: 18px;
-    right: 18px;
-    width: 28px;
-    height: 28px;
-    color: var(--rb-text-muted);
-    opacity: 0.4;
-}
-
-.rb-stat-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--rb-text-muted);
-    margin-bottom: 8px;
-}
-
-.rb-stat-value {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-weight: 800;
-    font-size: 38px;
-    line-height: 1;
-    color: var(--rb-text);
-    letter-spacing: -0.02em;
-}
-
-.rb-stat-hint {
-    font-size: 12px;
-    color: var(--rb-text-soft);
-    margin-top: 8px;
-    font-family: "JetBrains Mono", Consolas, monospace;
-}
 
 /* === FILTER BAR === */
 .rb-filter-bar {
@@ -1307,10 +1240,11 @@
     color: var(--rb-text-muted);
 }
 
-.rb-search input:focus {
+.rb-search input:focus,
+.rb-search input:focus-visible {
     outline: none;
     border-color: var(--rb-blue);
-    box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.12);
+    box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.18);
 }
 
 .rb-search-icon {
@@ -1332,28 +1266,30 @@
     border-radius: var(--rb-radius);
 }
 
-.rb-filter-pill {
-    padding: 6px 12px;
+.rb-filter-pill,
+.rb-app a.rb-filter-pill {
+    padding: 5px 12px;
     border: none;
     background: transparent;
     color: var(--rb-text-soft);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     border-radius: var(--rb-radius-sm);
-    transition: all .15s;
     text-decoration: none;
     font-family: inherit;
 }
 
-.rb-filter-pill:hover {
-    color: var(--rb-blue);
+.rb-filter-pill:hover,
+.rb-app a.rb-filter-pill:hover {
+    color: var(--rb-text);
 }
 
-.rb-filter-pill.is-active {
+.rb-filter-pill.is-active,
+.rb-app a.rb-filter-pill.is-active {
     background: var(--rb-panel-bg-white);
-    color: var(--rb-blue);
-    box-shadow: 0 1px 2px rgba(23, 43, 77, 0.06);
+    color: var(--rb-blue-dark);
+    box-shadow: inset 0 0 0 1px var(--rb-panel-border);
 }
 
 .rb-sort-select {
@@ -1362,7 +1298,7 @@
     border-radius: var(--rb-radius-sm);
     background: var(--rb-panel-bg-white) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236F7B8A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right 10px center;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--rb-text);
     appearance: none;
@@ -1370,133 +1306,7 @@
 }
 
 .rb-sort-select:focus {
-    outline: none;
     border-color: var(--rb-blue);
-}
-
-/* === RUN CARDS GRID === */
-.rb-runs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-}
-
-.rb-run-card {
-    background: var(--rb-panel-bg-white);
-    border: 1px solid var(--rb-panel-border);
-    border-radius: var(--rb-radius-lg);
-    padding: 18px 20px;
-    transition: all .15s;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    overflow: hidden;
-}
-
-.rb-run-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 4px;
-    height: 100%;
-    background: var(--rb-text-muted);
-    transition: background .15s;
-}
-
-.rb-run-card.is-success::before { background: var(--rb-success); }
-.rb-run-card.is-warn::before    { background: var(--rb-warn); }
-
-.rb-run-card:hover {
-    border-color: var(--rb-blue);
-    box-shadow: var(--rb-shadow-md);
-    transform: translateY(-1px);
-}
-
-.rb-run-card-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.rb-run-card-name {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-weight: 700;
-    font-size: 15px;
-    color: var(--rb-text);
-    text-decoration: none;
-    word-break: break-all;
-    line-height: 1.2;
-}
-
-.rb-run-card-name:hover {
-    color: var(--rb-blue);
-}
-
-.rb-run-card-badges {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.rb-run-card-meta {
-    font-size: 11px;
-    color: var(--rb-text-muted);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    margin-bottom: 12px;
-}
-
-.rb-run-card-metrics {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 12px;
-    margin-bottom: 14px;
-    padding: 10px 0;
-    border-top: 1px solid var(--rb-panel-border);
-    border-bottom: 1px solid var(--rb-panel-border);
-}
-
-.rb-run-card-metric-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
-    font-weight: 700;
-}
-
-.rb-run-card-metric-value {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--rb-text);
-    margin-top: 2px;
-}
-
-.rb-run-card-metric-unit {
-    font-size: 10px;
-    color: var(--rb-text-muted);
-    font-weight: 500;
-    margin-left: 2px;
-}
-
-.rb-run-card-actions {
-    display: flex;
-    gap: 6px;
-    margin-top: auto;
-}
-
-.rb-run-card-actions .rb-btn {
-    flex: 1;
-    justify-content: center;
-    padding: 6px 8px;
-    font-size: 12px;
-}
-
-/* Inline-форма удаления */
-.rb-run-card-actions form {
-    display: contents;
 }
 
 /* === EMPTY STATE === */
@@ -1509,24 +1319,21 @@
 }
 
 .rb-empty-icon {
-    width: 56px;
-    height: 56px;
-    margin: 0 auto 18px;
-    color: var(--rb-text-muted);
-    opacity: 0.5;
+    display: none;
 }
 
 .rb-empty-title {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 700;
     color: var(--rb-text);
     margin-bottom: 6px;
 }
 
 .rb-empty-sub {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--rb-text-soft);
-    margin-bottom: 18px;
+    margin: 0 auto 16px;
+    max-width: 60ch;
 }
 
 /* === PAGINATION === */
@@ -1577,9 +1384,8 @@
 
 .rb-pagination-info {
     margin-left: 14px;
-    font-size: 12px;
-    color: var(--rb-text-muted);
-    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    color: var(--rb-text-soft);
 }
 
 
@@ -1617,14 +1423,11 @@
 }
 
 .rb-cad-sidebar-section-title {
-    padding: 14px 18px 10px;
-    font-size: 10px;
+    padding: 12px 16px 10px;
+    font-size: 15px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--rb-text-muted);
+    color: var(--rb-text);
     border-bottom: 1px solid var(--rb-panel-border);
-    background: var(--rb-panel-bg-alt);
 }
 
 /* Поля параметров откатной системы */
@@ -1642,11 +1445,9 @@
 }
 
 .rb-cad-field-label {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--rb-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rb-text-soft);
     display: flex;
     justify-content: space-between;
     align-items: baseline;
@@ -1654,42 +1455,57 @@
 }
 
 .rb-cad-field-symbol {
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 11px;
-    color: var(--rb-blue);
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: 0;
+    font-family: var(--rb-font-mono);
+    font-size: 12px;
+    color: var(--rb-blue-dark);
+    font-weight: 500;
 }
 
 .rb-cad-field input[type="text"],
 .rb-cad-field input[type="number"],
 .rb-cad-field input[type="file"],
+.rb-cad-field input[type="date"],
+.rb-cad-field input[type="email"],
+.rb-cad-field input[type="password"],
 .rb-cad-field select,
-.rb-cad-field textarea {
+.rb-cad-field textarea,
+.rb-input {
     width: 100%;
     padding: 7px 10px;
     border: 1px solid var(--rb-panel-border-strong);
     border-radius: var(--rb-radius-sm);
     background: var(--rb-panel-bg-white);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 12px;
+    font-family: var(--rb-font-ui);
+    font-size: 14px;
     color: var(--rb-text);
-    transition: all .15s;
+    transition: border-color .15s, box-shadow .15s;
+}
+/* Числа в полях — моноширинным (как в протоколе) */
+.rb-cad-field input[type="number"],
+.rb-input[type="number"] {
+    font-family: var(--rb-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
 }
 .rb-cad-field input:focus,
 .rb-cad-field select:focus,
-.rb-cad-field textarea:focus {
+.rb-cad-field textarea:focus,
+.rb-input:focus {
     outline: none;
     border-color: var(--rb-blue);
-    box-shadow: 0 0 0 2px rgba(61, 115, 235, 0.12);
+    box-shadow: 0 0 0 3px rgba(61, 115, 235, 0.18);
+}
+
+.rb-cad-field-hint {
+    font-size: 12px;
+    color: var(--rb-text-soft);
 }
 
 .rb-cad-field-error {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--rb-danger-dark);
     background: var(--rb-danger-soft);
-    padding: 3px 7px;
+    padding: 4px 8px;
     border-radius: var(--rb-radius-sm);
 }
 
@@ -1729,6 +1545,7 @@
     border-color: rgba(180, 77, 122, 0.40);
 }
 
+/* Номер тормоза в списке */
 .rb-cad-brake-item-icon {
     width: 20px;
     height: 20px;
@@ -1736,59 +1553,65 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--rb-text-muted);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 11px;
-    font-weight: 700;
+    color: var(--rb-text-soft);
+    font-family: var(--rb-font-mono);
+    font-size: 12px;
+    font-weight: 500;
 }
 
-.rb-cad-brake-item.is-active .rb-cad-brake-item-icon {
-    color: var(--rb-blue);
-}
+.rb-cad-brake-item.is-active .rb-cad-brake-item-icon { color: var(--rb-blue-dark); }
+.rb-cad-brake-item.has-errors .rb-cad-brake-item-icon { color: var(--rb-accent-dark); }
 
-.rb-cad-brake-item.has-errors .rb-cad-brake-item-icon {
-    color: var(--rb-accent);
+/* Статус заполненности — цветная точка (вместо ✓ ⚠ ○ ✗); текст — в title/aria-label. */
+.rb-status-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--rb-panel-border-strong);
 }
+.rb-status-dot.is-complete { background: var(--rb-success); }
+.rb-status-dot.is-partial  { background: var(--rb-warn); }
+.rb-status-dot.is-empty    { background: transparent; box-shadow: inset 0 0 0 2px var(--rb-panel-border-strong); }
+.rb-status-dot.is-error    { background: var(--rb-danger); }
 
 .rb-cad-brake-item-name {
     flex: 1;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--rb-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: "JetBrains Mono", Consolas, monospace;
 }
 
 .rb-cad-brake-item-badge {
-    font-size: 9px;
-    padding: 2px 5px;
-    border-radius: 3px;
+    font-size: 12px;
+    padding: 1px 8px;
+    border-radius: 999px;
     background: var(--rb-panel-bg-alt);
-    color: var(--rb-text-muted);
-    font-weight: 700;
-    text-transform: uppercase;
+    color: var(--rb-text-soft);
+    font-weight: 600;
     flex-shrink: 0;
 }
 
 .rb-cad-brake-item.is-active .rb-cad-brake-item-badge {
-    background: rgba(61, 115, 235, 0.20);
-    color: var(--rb-blue);
+    background: rgba(61, 115, 235, 0.14);
+    color: var(--rb-blue-dark);
 }
 
 .rb-cad-add-brake {
     margin-top: 6px;
     width: 100%;
-    padding: 9px;
+    padding: 8px;
     border: 1px dashed var(--rb-panel-border-strong);
     background: transparent;
     color: var(--rb-text-soft);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     border-radius: var(--rb-radius-sm);
     cursor: pointer;
-    transition: all .15s;
     font-family: inherit;
 }
 
@@ -1803,8 +1626,9 @@
     background: var(--rb-panel-bg-white);
     border: 1px solid var(--rb-panel-border);
     border-radius: var(--rb-radius-lg);
-    padding: 24px 28px;
-    min-height: 600px;
+    padding: 20px 24px;
+    min-height: 480px;
+    min-width: 0;
 }
 
 .rb-cad-main-empty {
@@ -1812,17 +1636,14 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 80px 20px;
-    color: var(--rb-text-muted);
+    padding: 60px 20px;
+    color: var(--rb-text-soft);
     text-align: center;
-    min-height: 500px;
+    min-height: 400px;
 }
 
 .rb-cad-main-empty-icon {
-    width: 48px;
-    height: 48px;
-    opacity: 0.5;
-    margin-bottom: 16px;
+    display: none;
 }
 
 /* Активная brake-card занимает всю центральную панель */
@@ -1846,11 +1667,9 @@
 }
 
 .rb-cad-brake-head-title {
-    font-family: "JetBrains Mono", Consolas, monospace;
     font-size: 18px;
     font-weight: 700;
     color: var(--rb-text);
-    letter-spacing: -0.01em;
 }
 
 .rb-cad-brake-head-actions {
@@ -1870,14 +1689,8 @@
     background: var(--rb-grad);
     color: white !important;
     border-color: transparent !important;
-    font-weight: 700;
-    padding: 10px 22px !important;
+    padding: 9px 20px !important;
     font-size: 14px !important;
-}
-
-.rb-cad-submit:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--rb-shadow-md);
 }
 
 /* Toast notification */

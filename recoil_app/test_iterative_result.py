@@ -146,9 +146,37 @@ class ResultPageTests(TestCase):
         response = self.client.get(reverse("run_detail_v2", args=[self.run.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Этапы конфигурации тормозов")
-        self.assertContains(response, "итерационный · этапов: 2")
+        self.assertContains(response, "пошаговый, этапов: 2")
         self.assertContains(response, "rs-changed")
         self.assertContains(response, reverse("iterative_detail", args=[self.calc.pk]))
+        # Осциллограмма из snapshot'а с лентой этапов, лёгкая страница
+        self.assertContains(response, 'id="osc-figure"')
+        self.assertContains(response, 'data-r="s"')
+        self.assertLess(len(response.content), 600_000)
+
+    def test_classic_charts_endpoint(self):
+        """«Отдельные графики» (прежний формат): JSON фигур по требованию, этапы — скрытыми полосами."""
+        page = self.client.get(reverse("run_detail_v2", args=[self.run.pk]))
+        self.assertContains(page, 'data-view="classic"')
+        response = self.client.get(reverse("run_chart", args=[self.run.pk, "classic"]))
+        self.assertEqual(response.status_code, 200)
+        figures = response.json()["figures"]
+        self.assertEqual(set(figures), {"x_t", "v_a_t", "forces_t", "drive_t"})
+        shapes = figures["x_t"]["layout"].get("shapes", [])
+        self.assertTrue(any(s.get("name") == "stage-band" and s.get("visible") is False for s in shapes))
+        self.run.snapshot.delete()
+        self.assertEqual(self.client.get(reverse("run_chart", args=[self.run.pk, "classic"])).status_code, 404)
+
+    def test_lazy_chart_endpoint(self):
+        ok = self.client.get(reverse("run_chart", args=[self.run.pk, "v_x"]))
+        self.assertEqual(ok.status_code, 200)
+        self.assertContains(ok, "plotly-graph-div")
+        self.assertEqual(self.client.get(reverse("run_chart", args=[self.run.pk, "nope"])).status_code, 404)
+        # Пропавший файл графика — понятное сообщение, без пути и Errno
+        Path(self.run.chart_v_x.path).unlink()
+        missing = self.client.get(reverse("run_chart", args=[self.run.pk, "v_x"]))
+        self.assertContains(missing, "не найден в хранилище")
+        self.assertNotContains(missing, "Errno")
 
         wb = openpyxl.load_workbook(self.run.report_file.path, read_only=True)
         self.assertIn("Этапы", wb.sheetnames)
@@ -156,4 +184,4 @@ class ResultPageTests(TestCase):
 
     def test_results_list_badge(self):
         response = self.client.get(reverse("results"))
-        self.assertContains(response, "итерац.")
+        self.assertContains(response, "пошаговый")

@@ -1,56 +1,48 @@
 {% extends "recoil_app/base_v2.html" %}
 {% load recoil_extras %}
 
-{% block title %}Оптимизация · RecoilLab{% endblock %}
-{% block shell_active %}optimize{% endblock %}
-{% block shell_crumb %}Оптимизация{% endblock %}
+{% block title %}Подбор тормоза — RecoilLab{% endblock %}
 
 {% block content %}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
         <div>
-            <div class="rb-hero-title"><h1>Обратное проектирование</h1></div>
-            <div class="rb-hero-sub">
-                Из конечных условий цикла (время, откат, скорость наката) и потолка ΣF —
-                синтез характеристики и подбор реализуемых параметров тормозов, с отбором по робастности
-            </div>
+            <h1 class="rb-h1">Подбор тормоза</h1>
+            <p class="rb-lead">
+                Обратная задача: по пределам цикла (откат, время, скорость в конце наката) и потолку
+                суммарной силы подбирается характеристика F(v) и реализуемые параметры тормозов.
+                Из подходящих вариантов выбирается самый устойчивый к разбросу параметров.
+            </p>
         </div>
         <div class="rb-hero-actions">
             {% if can_create %}
-            <a class="rb-btn rb-btn-grad" href="{% url 'optimize_new' %}">+ Новое исследование</a>
+            <a class="rb-btn rb-btn-primary" href="{% url 'optimize_new' %}">Новое исследование</a>
             {% endif %}
         </div>
     </div>
 </section>
 
-{% if messages %}
-<section class="rb-module-section">
-    {% for m in messages %}<div class="rb-flash rb-flash-{{ m.tags }}">{{ m }}</div>{% endfor %}
-</section>
-{% endif %}
-
-<section class="rb-module-section">
-<div class="rb-card">
 {% if studies %}
-    <table class="rb-params-table" style="width:100%;">
+<section class="rb-panel">
+    <div class="rb-table-wrap">
+    <table class="rb-table">
         <thead>
-            <tr style="text-align:left;">
-                <th>Название</th><th>Донор</th><th>Тормозов</th>
-                <th>Статус</th><th>Достижимо</th><th class="num">R</th><th>Создано</th>
+            <tr>
+                <th>Исследование</th><th>Исходный расчёт</th><th class="num">Тормозов</th>
+                <th>Статус</th><th>В пределах</th><th class="num">Устойчивость R</th><th class="num">Создано</th>
             </tr>
         </thead>
         <tbody>
         {% for s in studies %}
             <tr>
-                <td><a class="rb-run-card-name" href="{% url 'optimize_detail' s.id %}">{{ s.name }}</a></td>
-                <td class="rb-text-muted">{% if s.source_run %}{{ s.source_run.name }}{% else %}<em>удалён</em>{% endif %}</td>
-                <td class="num">{{ s.n_brakes }}{% if s.multistart %} · MS{% endif %}</td>
+                <td><a class="rb-row-title" href="{% url 'optimize_detail' s.id %}">{{ s.name }}</a></td>
+                <td class="rb-row-sub">{% if s.source_run %}{{ s.source_run.name }}{% else %}удалён{% endif %}</td>
+                <td class="num">{{ s.n_brakes }}{% if s.multistart %}, мультистарт{% endif %}</td>
                 <td>
                     {% if s.status == 'done' %}<span class="rb-badge rb-badge-ok">готово</span>
-                    {% elif s.status == 'running' %}<span class="rb-badge rb-badge-blue">считается…</span>
+                    {% elif s.status == 'running' %}<span class="rb-badge rb-badge-blue">считается</span>
                     {% elif s.status == 'pending' %}<span class="rb-badge rb-badge-blue">в очереди</span>
-                    {% else %}<span class="rb-badge rb-badge-warn">ошибка</span>{% endif %}
+                    {% else %}<span class="rb-badge rb-badge-danger">ошибка</span>{% endif %}
                 </td>
                 <td>
                     {% if s.status == 'done' %}
@@ -58,22 +50,23 @@
                         {% else %}<span class="rb-badge rb-badge-warn">нет</span>{% endif %}
                     {% else %}—{% endif %}
                 </td>
-                <td class="num">{{ s.best_R|smart_num }}</td>
-                <td class="rb-text-muted">{{ s.created_at|date:"d.m.Y · H:i" }}</td>
+                <td class="num">{% if s.best_R is not None %}{{ s.best_R|smart_num }}{% else %}—{% endif %}</td>
+                <td class="num">{{ s.created_at|date:"d.m.Y H:i" }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
-{% else %}
-    <div style="padding:32px; text-align:center;">
-        <div class="rb-text-muted" style="margin-bottom:12px;">Исследований ещё нет.</div>
-        {% if can_create %}
-        <a class="rb-btn rb-btn-grad" href="{% url 'optimize_new' %}">+ Создать первое</a>
-        {% else %}
-        <div class="rb-text-muted">Войдите, чтобы запускать подбор дизайна.</div>
-        {% endif %}
     </div>
-{% endif %}
-</div>
 </section>
+{% else %}
+<div class="rb-empty">
+    <div class="rb-empty-title">Исследований пока нет</div>
+    {% if can_create %}
+    <div class="rb-empty-sub">Возьмите готовый расчёт отката как исходный, задайте пределы — подбор пойдёт в фоне, страницу можно закрыть.</div>
+    <a class="rb-btn rb-btn-primary" href="{% url 'optimize_new' %}">Создать исследование</a>
+    {% else %}
+    <div class="rb-empty-sub">Войдите, чтобы запускать подбор тормоза.</div>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}

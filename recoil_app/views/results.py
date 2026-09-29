@@ -1,18 +1,17 @@
 """Страница «Результаты расчётов» (`/results/`).
 
-Полный список расчётов с поиском, фильтрами, сортировкой, пагинацией и
-плавающим баром выбора пары для сравнения. До этого жил на дашборде.
+Таблица расчётов с поиском, фильтрами, сортировкой, пагинацией и
+панелью выбора пары для сравнения.
 """
 
 from datetime import timedelta
 
 from django.core.paginator import Paginator
-from django.db.models import Q
 from django.shortcuts import render
 from django.utils import timezone
 
-from ..models import CalculationRun
 from ..services.permissions import runs_visible_to
+from ..services.run_list import WARNINGS_Q, run_rows
 
 
 def results_view(request):
@@ -37,7 +36,7 @@ def results_view(request):
     if flt == "success":
         qs = qs.filter(termination_reason="returned_to_zero")
     elif flt == "warnings":
-        qs = qs.filter(Q(spring_out_of_range=True) | Q(warnings_text__gt=""))
+        qs = qs.filter(WARNINGS_Q)
     elif flt == "recent":
         qs = qs.filter(created_at__gte=week_ago)
 
@@ -57,32 +56,7 @@ def results_view(request):
     page_num = request.GET.get("page") or 1
     page = paginator.get_page(page_num)
 
-    cards = []
-    for run in page.object_list:
-        if run.is_free_fall:
-            status = "free_fall"
-            status_label = "свободное падение"
-        elif run.termination_reason == "returned_to_zero":
-            status = "ok"
-            status_label = "завершён"
-        elif run.termination_reason == "time_limit":
-            status = "warn"
-            status_label = "по времени"
-        elif run.termination_reason:
-            status = "warn"
-            status_label = run.termination_reason
-        else:
-            status = "neutral"
-            status_label = "—"
-
-        has_warnings = bool(run.spring_out_of_range or (run.warnings_text or "").strip())
-
-        cards.append({
-            "run": run,
-            "status": status,
-            "status_label": status_label,
-            "has_warnings": has_warnings,
-        })
+    rows = run_rows(page.object_list, request.user)
 
     qs_keep: list[str] = []
     for key in ("q", "filter", "sort"):
@@ -95,7 +69,7 @@ def results_view(request):
         request,
         "recoil_app/results.html",
         {
-            "cards": cards,
+            "rows": rows,
             "page": page,
             "paginator": paginator,
             "q": q,

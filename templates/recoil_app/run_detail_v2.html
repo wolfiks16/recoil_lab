@@ -2,83 +2,45 @@
 {% load recoil_extras %}
 {% load static %}
 
-{% block title %}{{ run.name }} — Результат · RecoilLab{% endblock %}
-{% block shell_active %}result{% endblock %}
+{% block title %}{{ run.name }}: результат расчёта — RecoilLab{% endblock %}
 {% block shell_crumb %}{{ run.name }}{% endblock %}
-{% block user_initials %}И.К.{% endblock %}
-
-{% block head_extra %}
-<style>
-    /* На странице результата отключаем общий max-width контента */
-    .rb-content { max-width: none; }
-    /* Глобально скрываем графики Plotly во вкладках, кроме активной — иначе все сразу видны */
-    .rb-tab-panel:not(.is-active) { display: none; }
-    /* Этапы итерационного расчёта: параметры по этапам */
-    .rs-brake { border-top: 1px solid var(--rb-panel-border); padding: 6px 0; }
-    .rs-brake summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0; }
-    .rs-params { margin: 6px 0 8px; }
-    .rs-changed { background: rgba(180, 77, 122, 0.12); color: var(--rb-accent-dark); font-weight: 700; }
-    .rs-toggle-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
-    .rs-stage-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
-        color: var(--rb-text-soft); cursor: pointer; user-select: none; }
-</style>
-{% endblock %}
 
 {% block content %}
 
-{# === HERO === #}
 <section class="rb-hero">
-    <div class="rb-color-bar"></div>
     <div class="rb-hero-row">
         <div>
-            <div class="rb-hero-title">
-                <h1>{{ run.name }}</h1>
-                {% if run.is_free_fall %}
-                    <span class="rb-badge rb-badge-blue">свободное падение</span>
-                {% elif run.termination_reason == "returned_to_zero" %}
-                    <span class="rb-badge rb-badge-ok">завершён</span>
-                {% elif run.termination_reason == "time_limit" %}
-                    <span class="rb-badge rb-badge-warn">по времени</span>
-                {% elif run.termination_reason %}
-                    <span class="rb-badge rb-badge-warn">{{ run.termination_reason }}</span>
-                {% endif %}
-                {% if run.spring_out_of_range %}
-                    <span class="rb-badge rb-badge-warn">пружина вне таблицы</span>
-                {% endif %}
-                {% if run.is_iterative %}
-                    <span class="rb-badge rb-badge-accent">итерационный{% if stage_tables %} · этапов: {{ stage_tables.stages|length }}{% endif %}</span>
-                {% endif %}
-            </div>
-            <div class="rb-hero-sub">
-                Расчёт #{{ run.id }} · создан {{ run.created_at|date:"d.m.Y · H:i" }}
-                {% if brakes %} · тормозов: {{ brakes|length }}{% endif %}
-                {% if run.owner_id %}
-                    · автор <b>{{ run.owner.username }}</b>
-                {% else %}
-                    · <span style="font-style: italic; opacity: 0.7;">архив</span>
-                {% endif %}
+            <h1 class="rb-h1">{{ run.name }}</h1>
+            <div class="rb-result-status">
+                {% if status.text %}<span class="rb-chip rb-chip-{{ status.kind }}">{{ status.text }}</span>{% endif %}
+                {% if run.is_iterative %}<span class="rb-chip rb-chip-mode">пошаговый{% if stage_tables %}, этапов: {{ stage_tables.stages|length }}{% endif %}</span>{% endif %}
+                {% if run.spring_out_of_range %}<span class="rb-chip rb-chip-warn">пружина вне табличного диапазона</span>{% endif %}
+                <span class="rb-result-meta">
+                    {{ run.mass|smart_num }} кг, угол {{ run.angle_deg|floatformat:"-1" }}°, шаг {{ run.dt|smart_num }} с
+                </span>
+                <span class="rb-result-meta">
+                    создан {{ run.created_at|date:"d.m.Y, H:i" }}{% if run.owner_id %}, автор {{ run.owner.username }}{% else %}, архивный{% endif %}
+                </span>
             </div>
         </div>
         <div class="rb-hero-actions">
+            <a class="rb-btn rb-btn-primary" href="{% url 'compare' %}?run_a={{ run.id }}">Сравнить с другим расчётом</a>
             {% if run.is_free_fall %}
-            <a class="rb-btn" href="{% url 'free_fall_new' %}?from_run={{ run.id }}">↗ Скопировать</a>
+            <a class="rb-btn" href="{% url 'free_fall_new' %}?from_run={{ run.id }}" title="Новый расчёт с теми же параметрами и тормозами">Скопировать</a>
             {% else %}
-            <a class="rb-btn" href="{% url 'index' %}?from_run={{ run.id }}">↗ Скопировать</a>
+            <a class="rb-btn" href="{% url 'index' %}?from_run={{ run.id }}" title="Новый расчёт с теми же параметрами, тормозами и входным файлом">Скопировать</a>
             {% endif %}
-            <a class="rb-btn" href="{% url 'iterative_new' %}?from_run={{ run.id }}"
-               title="Итерационный расчёт с этими параметрами и тормозами">⏯ Итерационно</a>
             {% if iterative_calc %}
-            <a class="rb-btn" href="{% url 'iterative_detail' iterative_calc.id %}"
-               title="Сессия итерационного расчёта, из которой сохранён этот итог">⏯ Сессия</a>
+            <a class="rb-btn" href="{% url 'iterative_detail' iterative_calc.id %}" title="Пошаговая сессия, из которой сохранён этот итог">Открыть сессию</a>
+            {% else %}
+            <a class="rb-btn" href="{% url 'iterative_new' %}?from_run={{ run.id }}" title="Пошаговый расчёт с этими параметрами и тормозами">Пошагово</a>
             {% endif %}
-            <a class="rb-btn" href="{% url 'compare' %}?run_a={{ run.id }}">≡ Сравнить</a>
-            <a class="rb-btn rb-btn-grad" href="{% url 'thermal_list' run.id %}">🔥 Тепло{% if thermal_runs_total %} · {{ thermal_runs_total }}{% endif %}</a>
+            <a class="rb-btn" href="{% url 'thermal_list' run.id %}">Тепловой расчёт{% if thermal_runs_total %} ({{ thermal_runs_total }}){% endif %}</a>
             {% if run.report_file %}
-                <a class="rb-btn" href="{{ run.report_file.url }}" download>⬇ Excel</a>
+            <a class="rb-btn" href="{{ run.report_file.url }}" download>Скачать Excel</a>
             {% endif %}
             {% if perm_can_delete %}
-            <form method="post" action="{% url 'delete_run' run.id %}" style="display:inline-block;"
-                  onsubmit="return confirm('Удалить расчёт и все его файлы?');">
+            <form method="post" action="{% url 'delete_run' run.id %}" data-confirm="Удалить расчёт «{{ run.name }}» и все его файлы?">
                 {% csrf_token %}
                 <button type="submit" class="rb-btn rb-btn-danger">Удалить</button>
             </form>
@@ -87,480 +49,276 @@
     </div>
 </section>
 
-{# === LAYOUT === #}
-<div class="rb-with-sidepanel">
-
-<div>{# === MAIN COLUMN === #}
-
-{# --- Status banner --- #}
-<section class="rb-module-section" data-module="status">
-{% if run.is_free_fall %}
-<div class="rb-status-banner rb-status-banner-ok">
-    <div class="rb-status-banner-icon">↓</div>
-    <div>
-        <div class="rb-status-banner-title">Свободное падение</div>
-        <div class="rb-status-banner-sub">
-            Проинтегрировано до t_max = {{ run.t_max|smart_num }} с (без входной силы и пружины)
-            {% if run.v_final is not None %}
-                · скорость в конце ≈ {{ run.v_final|smart_num }} м/с
-            {% endif %}
-            {% if energy_summary and energy_summary.residual_pct is not None %}
-                · энергобаланс невязка {{ energy_summary.residual_pct|smart_num }}%
-            {% endif %}
-        </div>
-    </div>
-</div>
-{% elif run.termination_reason == "returned_to_zero" %}
-<div class="rb-status-banner rb-status-banner-ok">
-    <div class="rb-status-banner-icon">✓</div>
-    <div>
-        <div class="rb-status-banner-title">Расчёт завершён успешно</div>
-        <div class="rb-status-banner-sub">
-            Откатные части вернулись в исходное положение
-            {% if run.return_end_time %}за {{ run.return_end_time|floatformat:3 }} с{% endif %}
-            {% if energy_summary and energy_summary.residual_pct is not None %}
-                · энергобаланс невязка {{ energy_summary.residual_pct|smart_num }}%
-            {% endif %}
-        </div>
-    </div>
-</div>
-{% elif run.termination_reason == "time_limit" %}
+{% if warnings %}
 <div class="rb-status-banner rb-status-banner-warn">
-    <div class="rb-status-banner-icon">⚠</div>
+    <div class="rb-status-banner-icon"></div>
     <div>
-        <div class="rb-status-banner-title">Расчёт остановлен по лимиту времени</div>
-        <div class="rb-status-banner-sub">
-            Возврат в исходное положение не достигнут за t_max = {{ run.t_max }} с
-        </div>
+        <div class="rb-status-banner-title">Предупреждения расчёта</div>
+        <ul class="rb-warn-list">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
     </div>
 </div>
 {% endif %}
 
-{% if run.warnings_text %}
-<div class="rb-status-banner rb-status-banner-warn">
-    <div class="rb-status-banner-icon">!</div>
-    <div>
-        <div class="rb-status-banner-title">Предупреждения</div>
-        <div class="rb-status-banner-sub" style="white-space: pre-line;">{{ run.warnings_text }}</div>
+{% if protocol %}
+<section class="rb-protocol" aria-label="Итог расчёта">
+    {% for c in protocol %}
+    <div class="rb-protocol-cell{% if c.status %} is-{{ c.status }}{% endif %}">
+        <div class="rb-protocol-q">{% if c.quantity %}<i class="q-{{ c.quantity }}"></i>{% endif %}{{ c.label }}</div>
+        <div class="rb-protocol-val">{{ c.value }}{% if c.unit %}<small>{{ c.unit }}</small>{% endif %}</div>
+        {% if c.when %}<div class="rb-protocol-when">{{ c.when }}</div>{% endif %}
     </div>
-</div>
-{% endif %}
+    {% endfor %}
 </section>
+{% endif %}
 
-{# --- KPI-ГРУППЫ --- #}
-{% for group in kpi_groups %}
-<section class="rb-module-section rb-kpi-group" data-module="kpi-{{ group.key }}">
-    <div class="rb-kpi-group-head">
-        <div class="rb-kpi-group-title">{{ group.label }}</div>
-    </div>
-    <div class="rb-kpi-row">
-        {% for kpi in group.cards %}
-        <div class="rb-kpi rb-kpi-{{ kpi.accent }} rb-kpi-status-{{ kpi.status }}{% if kpi.subvalues %} rb-kpi-range{% endif %}">
-            <div class="rb-kpi-label">{{ kpi.label }}</div>
-            <div class="rb-kpi-main">
-                <span class="rb-kpi-value">{{ kpi.value }}</span><span class="rb-kpi-unit">{{ kpi.unit }}</span>
-            </div>
-            {% if kpi.subvalues %}
-                <div class="rb-kpi-range-rows">
-                    {% for sv in kpi.subvalues %}
-                    <div class="rb-kpi-range-row">
-                        <span class="rb-kpi-range-label">{{ sv.label }}</span>
-                        <span>
-                            <span class="rb-kpi-range-value">{{ sv.value }}</span><span class="rb-kpi-range-unit">{{ sv.unit }}</span>
-                        </span>
-                    </div>
-                    {% endfor %}
+<div class="rb-split rb-result-main">
+    <div class="rb-result-left">
+        <section class="rb-panel rb-osc-panel" aria-labelledby="osc-title">
+            <div class="rb-panel-head">
+                <h2 id="osc-title">{% if osc_figure %}Графики{% else %}Осциллограмма{% endif %} {% if run.is_free_fall %}расчёта{% else %}цикла{% endif %}</h2>
+                {% if osc_figure %}
+                <div class="rb-seg" role="group" aria-label="Вид графиков">
+                    <button type="button" data-view="osc" aria-pressed="true" title="x, v, a и F на общей оси времени">Осциллограмма</button>
+                    <button type="button" data-view="classic" aria-pressed="false" title="Прежний формат: каждый график отдельно">Отдельные графики</button>
                 </div>
-            {% endif %}
-            {% if kpi.hint %}<div class="rb-kpi-hint">{{ kpi.hint }}</div>{% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</section>
-{% endfor %}
-
-{# --- ГЛАВНЫЙ БЛОК: график (с табами выбора) + параметры/тормоза/артефакты справа --- #}
-<section class="rb-module-section" data-module="main-plot">
-<div class="rb-plot-grid rb-plot-grid-main">
-
-    <div class="rb-plot-card rb-plot-card-featured">
-        {% if stage_tables %}
-        <div class="rs-toggle-row">
-            <label class="rs-stage-toggle" title="Полосы этапов и линии переключений на графиках">
-                <input type="checkbox" data-stage-toggle> Этапы на графиках
-            </label>
-        </div>
-        {% endif %}
-        {# Верхний уровень: набор графиков (Общие / Откат / Накат) #}
-        <div class="rb-tabs rb-tabs-pills" data-tab-group="hero-set">
-            <button class="rb-tab is-active" data-tab="common" type="button">Общие</button>
-            {% if has_charts_recoil %}<button class="rb-tab" data-tab="recoil" type="button">Откат</button>{% endif %}
-            {% if has_charts_return %}<button class="rb-tab" data-tab="return" type="button">Накат</button>{% endif %}
-        </div>
-
-        {# === НАБОР: ОБЩИЕ === #}
-        <div class="rb-tab-panel is-active" data-tab-group="hero-set" data-tab="common">
-            <div class="rb-tabs" data-tab-group="hero-common">
-                <button class="rb-tab is-active" data-tab="x-t" type="button">x(t)</button>
-                {% if chart_html.chart_v_a_t %}<button class="rb-tab" data-tab="v-a" type="button">v · a (t)</button>{% endif %}
-                {% if chart_html.chart_v_x %}<button class="rb-tab" data-tab="v-x" type="button">v(x)</button>{% endif %}
-                {% if chart_html.chart_fmag_v %}<button class="rb-tab" data-tab="fmag-v" type="button">F_маг(v)</button>{% endif %}
-                {% if chart_html.chart_forces_secondary %}<button class="rb-tab" data-tab="forces" type="button">F(t) силы</button>{% endif %}
-            </div>
-
-            <div class="rb-tab-panel is-active" data-tab-group="hero-common" data-tab="x-t">
-                {% if has_annotated %}
-                    {{ chart_html.chart_x_t_annotated|safe }}
-                {% elif has_x_t %}
-                    {{ chart_html.chart_x_t|safe }}
-                {% else %}
-                    <div class="rb-text-muted" style="padding: 60px; text-align: center;">
-                        График x(t) недоступен
-                        {% if chart_errors %}
-                            <div style="margin-top: 12px; font-size: 11px; font-family: monospace; color: var(--rb-danger-dark); text-align: left;">
-                                {% for err in chart_errors %}<div>{{ err }}</div>{% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
+                {% endif %}
+                {% if osc_extra and osc_extra.ranges|length > 1 %}
+                <div class="rb-seg" role="group" aria-label="Участок цикла">
+                    <button type="button" data-range="all" aria-pressed="true">Весь {% if run.is_free_fall %}расчёт{% else %}цикл{% endif %}</button>
+                    {% if osc_extra.ranges.recoil %}<button type="button" data-range="recoil" aria-pressed="false">Откат</button>{% endif %}
+                    {% if osc_extra.ranges.return %}<button type="button" data-range="return" aria-pressed="false">Накат</button>{% endif %}
+                </div>
+                {% endif %}
+                {% if osc_figure %}
+                <span class="rb-panel-head-meta rb-osc-hint">выделите участок мышью, двойной щелчок — весь {% if run.is_free_fall %}расчёт{% else %}цикл{% endif %}</span>
                 {% endif %}
             </div>
-
-            {% if chart_html.chart_v_a_t %}
-            <div class="rb-tab-panel" data-tab-group="hero-common" data-tab="v-a">{{ chart_html.chart_v_a_t|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_v_x %}
-            <div class="rb-tab-panel" data-tab-group="hero-common" data-tab="v-x">{{ chart_html.chart_v_x|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_fmag_v %}
-            <div class="rb-tab-panel" data-tab-group="hero-common" data-tab="fmag-v">{{ chart_html.chart_fmag_v|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_forces_secondary %}
-            <div class="rb-tab-panel" data-tab-group="hero-common" data-tab="forces">{{ chart_html.chart_forces_secondary|safe }}</div>
-            {% endif %}
-        </div>
-
-        {# === НАБОР: ОТКАТ === #}
-        {% if has_charts_recoil %}
-        <div class="rb-tab-panel" data-tab-group="hero-set" data-tab="recoil">
-            <div class="rb-tabs" data-tab-group="hero-recoil">
-                {% if chart_html.chart_x_t_recoil %}<button class="rb-tab is-active" data-tab="x-t" type="button">x(t)</button>{% endif %}
-                {% if chart_html.chart_v_a_t_recoil %}<button class="rb-tab" data-tab="v-a" type="button">v · a (t)</button>{% endif %}
-                {% if chart_html.chart_forces_main_recoil %}<button class="rb-tab" data-tab="f-main" type="button">F движущая · F общая</button>{% endif %}
-                {% if chart_html.chart_forces_secondary_recoil %}<button class="rb-tab" data-tab="forces" type="button">F(t) силы</button>{% endif %}
+            {% if osc_figure %}
+            <div class="rb-view" data-view-panel="osc">
+            <div class="rb-readout" id="osc-readout" aria-live="off">
+                <div><span>t</span><b data-r="t">—</b></div>
+                <div><span class="q-x-text">x</span><b data-r="x">—</b></div>
+                <div><span class="q-v-text">v</span><b data-r="v">—</b></div>
+                <div><span class="q-a-text">a</span><b data-r="a">—</b></div>
+                <div><span class="q-f-text">|F|</span><b data-r="f">—</b></div>
+                {% if osc_extra.stage %}<div><span>этап</span><b data-r="s">—</b></div>{% endif %}
             </div>
-
-            {% if chart_html.chart_x_t_recoil %}
-            <div class="rb-tab-panel is-active" data-tab-group="hero-recoil" data-tab="x-t">{{ chart_html.chart_x_t_recoil|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_v_a_t_recoil %}
-            <div class="rb-tab-panel" data-tab-group="hero-recoil" data-tab="v-a">{{ chart_html.chart_v_a_t_recoil|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_forces_main_recoil %}
-            <div class="rb-tab-panel" data-tab-group="hero-recoil" data-tab="f-main">{{ chart_html.chart_forces_main_recoil|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_forces_secondary_recoil %}
-            <div class="rb-tab-panel" data-tab-group="hero-recoil" data-tab="forces">{{ chart_html.chart_forces_secondary_recoil|safe }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        {# === НАБОР: НАКАТ === #}
-        {% if has_charts_return %}
-        <div class="rb-tab-panel" data-tab-group="hero-set" data-tab="return">
-            <div class="rb-tabs" data-tab-group="hero-return">
-                {% if chart_html.chart_x_t_return %}<button class="rb-tab is-active" data-tab="x-t" type="button">x(t)</button>{% endif %}
-                {% if chart_html.chart_v_a_t_return %}<button class="rb-tab" data-tab="v-a" type="button">v · a (t)</button>{% endif %}
-                {% if chart_html.chart_forces_secondary_return %}<button class="rb-tab" data-tab="forces" type="button">F(t) силы</button>{% endif %}
+            <div id="osc" class="rb-osc" role="img" aria-label="Графики перемещения, скорости, ускорения и силы торможения от времени"></div>
+            <p class="rb-panel-note">Показано {{ osc_extra.n_shown }} из {{ osc_extra.n_full }} точек: ряд прорежен с сохранением пиков, разворота и переключений. Полные данные — в Excel-отчёте.</p>
             </div>
-
-            {% if chart_html.chart_x_t_return %}
-            <div class="rb-tab-panel is-active" data-tab-group="hero-return" data-tab="x-t">{{ chart_html.chart_x_t_return|safe }}</div>
+            {# Прежний формат: каждый график отдельно, цвета — как в новом интерфейсе. Грузится при первом переключении. #}
+            <div class="rb-view rb-classic" data-view-panel="classic" hidden data-classic-url="{% url 'run_chart' run.id 'classic' %}">
+                <div class="rb-tabs rb-classic-tabs" role="tablist" aria-label="График">
+                    <button type="button" class="rb-tab is-active" role="tab" aria-selected="true" data-classic-tab="x_t">Перемещение x(t)</button>
+                    <button type="button" class="rb-tab" role="tab" aria-selected="false" data-classic-tab="v_a_t">Скорость и ускорение</button>
+                    <button type="button" class="rb-tab" role="tab" aria-selected="false" data-classic-tab="forces_t">Силы F(t)</button>
+                    <button type="button" class="rb-tab" role="tab" aria-selected="false" data-classic-tab="drive_t" hidden>Движущая и суммарная</button>
+                </div>
+                <div class="rb-classic-plot" data-classic-plot="x_t"><div class="rb-lazy-placeholder">Загружаю графики</div></div>
+                <div class="rb-classic-plot" data-classic-plot="v_a_t" hidden></div>
+                <div class="rb-classic-plot" data-classic-plot="forces_t" hidden></div>
+                <div class="rb-classic-plot" data-classic-plot="drive_t" hidden></div>
+            </div>
+            {% else %}
+            <div class="rb-panel-body">
+                <p class="rb-chart-missing">Осциллограмма недоступна: расчёт сохранён до появления снимков данных. Нажмите «Скопировать» и пересчитайте, чтобы получить новую страницу результата.</p>
+                {% if 'x_t' in lazy_charts %}<div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'x_t' %}"><div class="rb-lazy-placeholder">Загружаю график x(t)</div></div>{% endif %}
+                {% if 'v_a_t' in lazy_charts %}<div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'v_a_t' %}"><div class="rb-lazy-placeholder">Загружаю график v(t), a(t)</div></div>{% endif %}
+            </div>
             {% endif %}
-            {% if chart_html.chart_v_a_t_return %}
-            <div class="rb-tab-panel" data-tab-group="hero-return" data-tab="v-a">{{ chart_html.chart_v_a_t_return|safe }}</div>
-            {% endif %}
-            {% if chart_html.chart_forces_secondary_return %}
-            <div class="rb-tab-panel" data-tab-group="hero-return" data-tab="forces">{{ chart_html.chart_forces_secondary_return|safe }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
+        </section>
     </div>
 
-    {# Боковая колонка: параметры → тормоза → артефакты #}
-    <div>
-        <div class="rb-card" style="margin-bottom: 12px;">
-            <div class="rb-card-title">
-                <span class="rb-card-title-text">Параметры</span>
+    <aside class="rb-split-side">
+        {% if stage_rows %}
+        <section class="rb-panel">
+            <div class="rb-panel-head">
+                <h2>Этапы тормозов</h2>
+                <label class="rb-check rb-check-sm" title="Полосы этапов и линии переключений на вторичных графиках">
+                    <input type="checkbox" data-stage-toggle> <span>на графиках</span>
+                </label>
             </div>
-            <table class="rb-params-table">
-                <tr><td>Масса</td><td class="num">{{ run.mass|smart_num }} кг</td></tr>
-                <tr><td>Угол α</td><td class="num">{{ run.angle_deg|floatformat:1 }}°</td></tr>
-                <tr><td>v₀</td><td class="num">{{ run.v0|floatformat:2 }} м/с</td></tr>
-                <tr><td>x₀</td><td class="num">{{ run.x0|floatformat:3 }} м</td></tr>
-                <tr><td>t_max</td><td class="num">{{ run.t_max|floatformat:3 }} с</td></tr>
-                <tr><td>Шаг dt</td><td class="num">{{ run.dt }} с</td></tr>
+            <table class="rb-params-table rb-stage-table">
+                <thead><tr><th>Этап</th><th>Включён</th><th>Тормоза</th></tr></thead>
+                {% for s in stage_rows %}
+                <tr>
+                    <td><span class="rb-swatch" style="--sw: {{ s.color }}"></span>{{ s.index }}</td>
+                    <td class="num">{% if s.x_mm %}x = {{ s.x_mm }} мм{% else %}исходная{% endif %}</td>
+                    <td>{{ s.kinds }}{% if s.changes %}<div class="rb-row-sub">{{ s.changes|join:"; " }}</div>{% endif %}</td>
+                </tr>
+                {% endfor %}
             </table>
-        </div>
-
-        {% if brakes %}
-        <div class="rb-card" style="margin-bottom: 12px;">
-            <div class="rb-card-title">
-                <span class="rb-card-title-text">Тормоза ({{ brakes|length }})</span>
-            </div>
-            {% if stage_tables %}
-            <div class="rb-text-muted" style="font-size: 11px; margin-bottom: 4px;">
-                Исходные параметры (у включённого позже — с этапа включения); по этапам — в блоке «Этапы конфигурации».
-            </div>
-            {% endif %}
-            {% for brake in brakes %}
-            <div style="padding: 8px 0; border-bottom: 1px solid var(--rb-panel-border);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="rb-mono" style="font-weight: 600; font-size: 13px;">{{ brake.display_name }}</span>
-                    {% if brake.model_type == "parametric" %}
-                        <span class="rb-badge rb-badge-blue">парам.</span>
-                    {% else %}
-                        <span class="rb-badge rb-badge-accent">curve</span>
-                    {% endif %}
-                </div>
-                <div class="rb-mono rb-text-muted" style="font-size: 11px; margin-top: 4px;">
-                    {% if brake.model_type == "parametric" %}
-                        γ={{ brake.gamma|floatformat:2 }} · δ={{ brake.delta|floatformat:2 }} · n={{ brake.n }}
-                    {% else %}
-                        F(v) — табличная характеристика
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+            <p class="rb-panel-note">Конфигурация зависит от положения{% if not run.is_free_fall %}: на накате возвращается в тех же точках, в обратном порядке{% endif %}.</p>
+        </section>
         {% endif %}
 
-        {# Артефакты — теперь здесь, в боковой колонке под тормозами #}
-        <div class="rb-card">
-            <div class="rb-card-title">
-                <span class="rb-card-title-text">Артефакты</span>
-            </div>
-            {% if run.report_file %}
-            <a class="rb-file-row is-report" href="{{ run.report_file.url }}" download>
-                <div class="rb-file-icon"></div>
-                <div class="rb-file-name">отчёт XLSX</div>
-                <div class="rb-file-meta">⬇</div>
-            </a>
-            {% endif %}
-            {% if run.input_file %}
-            <a class="rb-file-row" href="{{ run.input_file.url }}" download>
-                <div class="rb-file-icon"></div>
-                <div class="rb-file-name">исходник</div>
-                <div class="rb-file-meta">⬇</div>
-            </a>
-            {% endif %}
-            {% if not run.report_file and not run.input_file %}
-            <div class="rb-text-muted" style="font-size: 12px; padding: 8px 0;">Файлы не сгенерированы</div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-</section>
+        <section class="rb-panel">
+            <div class="rb-panel-head"><h2>Параметры</h2></div>
+            <dl class="rb-dl">
+                <dt>Масса</dt><dd>{{ run.mass|smart_num }} кг</dd>
+                <dt>Угол</dt><dd>{{ run.angle_deg|floatformat:"-1" }}°</dd>
+                <dt>Начальные x₀, v₀</dt><dd>{{ run.x0|smart_num }} м, {{ run.v0|smart_num }} м/с</dd>
+                <dt>Шаг интегрирования</dt><dd>{{ run.dt|smart_num }} с</dd>
+                <dt>Предел времени</dt><dd>{{ run.t_max|smart_num }} с</dd>
+            </dl>
+        </section>
 
-{# --- ЭТАПЫ ИТЕРАЦИОННОГО РАСЧЁТА --- #}
+        {% if brake_rows %}
+        <section class="rb-panel">
+            <div class="rb-panel-head"><h2>Тормоза</h2><span class="rb-panel-head-meta">{{ brake_rows|length }}</span></div>
+            <ul class="rb-brake-list">
+                {% for b in brake_rows %}
+                <li>
+                    <div class="rb-brake-list-head"><b>{{ b.name }}</b><span class="rb-badge {% if b.kind == 'параметры' %}rb-badge-blue{% else %}rb-badge-accent{% endif %}">{{ b.kind }}</span></div>
+                    <div class="rb-row-sub">{{ b.summary }}</div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if stage_rows %}<p class="rb-panel-note">Исходные параметры; по этапам — в разделе «Параметры тормозов по этапам».</p>{% endif %}
+        </section>
+        {% endif %}
+
+        <section class="rb-panel">
+            <div class="rb-panel-head"><h2>Файлы</h2></div>
+            <div class="rb-panel-body rb-files">
+                {% if run.report_file %}<a class="rb-file-row" href="{{ run.report_file.url }}" download><span class="rb-file-name">Отчёт Excel</span><span class="rb-file-meta">все точки и этапы</span></a>{% endif %}
+                {% if run.input_file %}<a class="rb-file-row" href="{{ run.input_file.url }}" download><span class="rb-file-name">Входной файл</span><span class="rb-file-meta">силы выстрела и пружины</span></a>{% endif %}
+                {% if not run.report_file and not run.input_file %}<p class="rb-muted-note">Файлов нет.</p>{% endif %}
+            </div>
+        </section>
+    </aside>
+</div>
+
+{# v(x) и F(v) — на всю ширину страницы, поровну (под боковой колонкой было пусто) #}
+{% if 'v_x' in lazy_charts or 'fmag_v' in lazy_charts %}
+<div class="rb-grid-2">
+    {% if 'v_x' in lazy_charts %}
+    <section class="rb-panel">
+        <div class="rb-panel-head"><h2>Фазовая траектория v(x)</h2></div>
+        <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'v_x' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
+    </section>
+    {% endif %}
+    {% if 'fmag_v' in lazy_charts %}
+    <section class="rb-panel">
+        <div class="rb-panel-head"><h2>Сила торможения от скорости</h2></div>
+        <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'fmag_v' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
+    </section>
+    {% endif %}
+</div>
+{% endif %}
+
+{# === Вторичные разделы === #}
+{% if 'energy' in lazy_charts or energy_summary %}
+<details class="rb-fold" open>
+    <summary>Энергобаланс
+        {% if energy_summary and energy_summary.residual_pct is not None %}<span class="rb-fold-meta">невязка {{ energy_summary.residual_pct|floatformat:"2u" }} %</span>{% endif %}
+    </summary>
+    <div class="rb-fold-body">
+        {% if energy_summary %}
+        <div class="rb-energy-summary">
+            {% if energy_summary.input_total is not None %}<div class="rb-energy-pill"><span class="rb-energy-pill-label">Подведено</span><span class="rb-energy-pill-value">{{ energy_summary.input_total|smart_num }} Дж</span></div>{% endif %}
+            {% if energy_summary.brake_total is not None %}<div class="rb-energy-pill"><span class="rb-energy-pill-label">Рассеяно тормозами</span><span class="rb-energy-pill-value">{{ energy_summary.brake_total|smart_num }} Дж</span></div>{% endif %}
+            {% if energy_summary.residual_pct is not None %}<div class="rb-energy-pill is-{{ energy_summary.residual_status }}"><span class="rb-energy-pill-label">Невязка</span><span class="rb-energy-pill-value">{{ energy_summary.residual_pct|smart_num }} %</span></div>{% endif %}
+        </div>
+        {% endif %}
+        {% if 'energy' in lazy_charts %}
+        <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'energy' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>
+        {% else %}
+        <p class="rb-muted-note">График энергобаланса не строился: расчёт сделан в старой версии. Пересчитайте, чтобы увидеть.</p>
+        {% endif %}
+    </div>
+</details>
+{% endif %}
+
+{% if 'forces' in lazy_charts or 'forces_main' in lazy_charts %}
+<details class="rb-fold">
+    <summary>Силы по времени<span class="rb-fold-meta">вход, пружина, тормоза, сумма</span></summary>
+    <div class="rb-fold-body">
+        {% if 'forces' in lazy_charts %}<div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'forces' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>{% endif %}
+        {% if 'forces_main' in lazy_charts %}<div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id 'forces_main' %}"><div class="rb-lazy-placeholder">Загружаю график</div></div>{% endif %}
+    </div>
+</details>
+{% endif %}
+
 {% if stage_tables %}
     {% include "recoil_app/includes/run_stages.html" %}
 {% endif %}
 
-{# --- ENERGY BALANCE --- #}
-{% if has_energy or energy_summary %}
-<section class="rb-module-section rb-section" data-module="energy">
-    <div class="rb-section-head">
-        <div class="rb-section-title">Энергобаланс</div>
-    </div>
-    <div class="rb-card">
-        {% if energy_summary %}
-        <div class="rb-energy-summary">
-            {% if energy_summary.input_total is not None %}
-            <div class="rb-energy-pill">
-                <span class="rb-energy-pill-label">Подведено:</span>
-                <span class="rb-energy-pill-value">{{ energy_summary.input_total|smart_num }} Дж</span>
-            </div>
-            {% endif %}
-            {% if energy_summary.brake_total is not None %}
-            <div class="rb-energy-pill">
-                <span class="rb-energy-pill-label">Рассеяно тормозами:</span>
-                <span class="rb-energy-pill-value">{{ energy_summary.brake_total|smart_num }} Дж</span>
-            </div>
-            {% endif %}
-            {% if energy_summary.residual_pct is not None %}
-            <div class="rb-energy-pill" style="background:
-                {% if energy_summary.residual_pct < 1 %}var(--rb-success-soft)
-                {% elif energy_summary.residual_pct < 3 %}var(--rb-warn-soft)
-                {% else %}var(--rb-danger-soft){% endif %};">
-                <span class="rb-energy-pill-label">Невязка:</span>
-                <span class="rb-energy-pill-value">{{ energy_summary.residual_pct|smart_num }}%</span>
-            </div>
-            {% endif %}
+{% if geometry_brakes %}
+<details class="rb-fold">
+    <summary>Геометрия тормозов<span class="rb-fold-meta">3D-модель магнитной системы</span></summary>
+    <div class="rb-fold-body">
+        {% if geometry_brakes|length > 1 %}
+        <div class="rb-tabs" data-tab-group="brake-3d">
+            {% for b in geometry_brakes %}
+            <button class="rb-tab{% if forloop.first %} is-active{% endif %}" data-tab="{{ b.tab }}" type="button">{{ b.name }}</button>
+            {% endfor %}
         </div>
         {% endif %}
-
-        {% if has_energy %}
-            {{ chart_html.chart_energy|safe }}
-        {% else %}
-            <div class="rb-text-muted" style="padding: 24px; text-align: center; font-size: 13px;">
-                График энергобаланса не сгенерирован (расчёт выполнен в старой версии).
-                <br>Пересчитайте, чтобы увидеть.
-            </div>
-        {% endif %}
+        {% for b in geometry_brakes %}
+        <div class="rb-tab-panel{% if forloop.first %} is-active{% endif %}" data-tab-group="brake-3d" data-tab="{{ b.tab }}">
+            <div class="rb-lazy" data-lazy-chart="{% url 'run_chart' run.id b.key %}"><div class="rb-lazy-placeholder">Строю 3D-модель</div></div>
+        </div>
+        {% endfor %}
     </div>
-</section>
+</details>
 {% endif %}
 
-{# Блок «Анализ фаз» удалён — графики фаз теперь в hero, в верхних табах Откат/Накат #}
-
-{# --- ГЕОМЕТРИЯ ТОРМОЗОВ · 3D --- #}
-{% if brakes_geometry %}
-<section class="rb-module-section rb-section" data-module="geometry-3d">
-    <div class="rb-section-head">
-        <div class="rb-section-title">Геометрия тормозов · 3D</div>
-    </div>
-    <div class="rb-card">
-        {% if brakes_geometry|length == 1 %}
-            {% with item=brakes_geometry.0 %}
-                {% if item.html %}
-                    {{ item.html|safe }}
-                {% else %}
-                    <div class="rb-text-muted" style="padding: 40px; text-align: center; font-size: 13px;">
-                        Для тормоза «{{ item.brake.display_name }}» 3D-модель недоступна:
-                        нужна параметрическая модель с заполненными n, x_m, y_m, Δh₁, Δh₂, d_m.
-                    </div>
-                {% endif %}
-            {% endwith %}
-        {% else %}
-            <div class="rb-tabs" data-tab-group="brake-3d">
-                {% for item in brakes_geometry %}
-                <button class="rb-tab{% if forloop.first %} is-active{% endif %}"
-                        data-tab="b{{ forloop.counter0 }}" type="button">
-                    {{ item.brake.display_name }}
-                </button>
-                {% endfor %}
-            </div>
-            {% for item in brakes_geometry %}
-            <div class="rb-tab-panel{% if forloop.first %} is-active{% endif %}"
-                 data-tab-group="brake-3d" data-tab="b{{ forloop.counter0 }}">
-                {% if item.html %}
-                    {{ item.html|safe }}
-                {% else %}
-                    <div class="rb-text-muted" style="padding: 40px; text-align: center; font-size: 13px;">
-                        3D-модель недоступна для «{{ item.brake.display_name }}»:
-                        нужна параметрическая модель с заполненными n, x_m, y_m, Δh₁, Δh₂, d_m.
-                    </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-        {% endif %}
-    </div>
-</section>
-{% endif %}
-
-{# --- ТЕПЛОВЫЕ СЦЕНАРИИ --- #}
-<section class="rb-module-section rb-section" data-module="thermal">
-    <div class="rb-section-head">
-        <div class="rb-section-title">Тепловые сценарии</div>
-        <a class="rb-btn rb-btn-sm" href="{% url 'thermal_list' run.id %}">Все ({{ thermal_runs_total }}) →</a>
-    </div>
-    <div class="rb-card">
-    {% if thermal_runs_preview %}
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;">
+<details class="rb-fold"{% if thermal_runs_preview %} open{% endif %}>
+    <summary>Тепловые сценарии<span class="rb-fold-meta">{% if thermal_runs_total %}{{ thermal_runs_total }}{% else %}пока нет{% endif %}</span></summary>
+    <div class="rb-fold-body">
+        {% if thermal_runs_preview %}
+        <table class="rb-table">
+            <thead><tr><th>Сценарий</th><th class="num">Циклов</th><th class="num">Пауза, с</th><th class="num">Макс. температура, °C</th><th>Где</th></tr></thead>
+            <tbody>
             {% for tr in thermal_runs_preview %}
-            <a href="{% url 'thermal_detail' run.id tr.id %}" style="text-decoration: none; color: inherit; padding: 10px 12px; border: 1px solid var(--rb-panel-border); border-radius: 6px; display: block;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <span style="font-weight: 600; font-size: 13px;">{{ tr.name }}</span>
-                    {% if tr.network_preset == 'nine_node' %}
-                        <span class="rb-badge rb-badge-blue">9-узл.</span>
-                    {% else %}
-                        <span class="rb-badge rb-badge-accent">упрощ.</span>
-                    {% endif %}
-                </div>
-                <div class="rb-text-muted" style="font-size: 11px; margin-bottom: 6px;">
-                    {{ tr.repetitions }} цикл{{ tr.repetitions|pluralize:",а,ов" }} · пауза {{ tr.pause_s|smart_num }} с
-                </div>
-                {% if tr.max_temp_c %}
-                <div style="font-family: var(--rb-font-mono, monospace); font-size: 12px;">
-                    T_max = <strong>{{ tr.max_temp_c|smart_num }} °C</strong>
-                    {% if tr.max_temp_node_name %}<span class="rb-text-muted">· {{ tr.max_temp_node_name }}</span>{% endif %}
-                </div>
-                {% endif %}
-            </a>
+            <tr>
+                <td><a class="rb-row-title" href="{% url 'thermal_detail' run.id tr.id %}">{{ tr.name }}</a></td>
+                <td class="num">{{ tr.repetitions }}</td>
+                <td class="num">{{ tr.pause_s|smart_num }}</td>
+                <td class="num">{% if tr.max_temp_c %}{{ tr.max_temp_c|smart_num }}{% else %}—{% endif %}</td>
+                <td class="rb-row-sub">{{ tr.max_temp_node_name|default:"—" }}</td>
+            </tr>
             {% endfor %}
-        </div>
-    {% else %}
-        <div style="padding: 24px; text-align: center;">
-            <div class="rb-text-muted" style="font-size: 13px; margin-bottom: 12px;">
-                Тепловых сценариев ещё нет.
-            </div>
-            <a class="rb-btn rb-btn-grad" href="{% url 'thermal_new' run.id %}">+ Создать тепловой сценарий</a>
-        </div>
-    {% endif %}
+            </tbody>
+        </table>
+        <p class="rb-fold-actions-row"><a class="rb-btn rb-btn-sm" href="{% url 'thermal_list' run.id %}">Все сценарии ({{ thermal_runs_total }})</a> <a class="rb-btn rb-btn-sm" href="{% url 'thermal_new' run.id %}">Новый сценарий</a></p>
+        {% else %}
+        <p class="rb-muted-note">Сценарий повторяет этот цикл N раз с паузами и считает нагрев тормозов.</p>
+        <p class="rb-fold-actions-row"><a class="rb-btn rb-btn-sm" href="{% url 'thermal_new' run.id %}">Создать тепловой сценарий</a></p>
+        {% endif %}
     </div>
-</section>
+</details>
 
-</div>{# /MAIN COLUMN #}
-
-{# === SIDE PANEL: модули === #}
-<aside class="rb-modules-panel">
-    <div class="rb-modules-panel-title">Модули</div>
-    <div class="rb-modules-actions">
-        <button class="rb-btn rb-btn-sm" id="rb-modules-show-all" type="button">Показать все</button>
-        <button class="rb-btn rb-btn-sm" id="rb-modules-hide-all" type="button">Скрыть все</button>
+{% if kpi_groups %}
+<details class="rb-fold">
+    <summary>Все показатели<span class="rb-fold-meta">по фазам и в конце расчёта</span></summary>
+    <div class="rb-fold-body rb-kpi-tables">
+        {% for group in kpi_groups %}
+        <div>
+            <h3 class="rb-h3">{{ group.label }}</h3>
+            <table class="rb-params-table">
+                {% for kpi in group.cards %}
+                <tr>
+                    <td>{{ kpi.label }}</td>
+                    <td class="num">{% if kpi.subvalues %}{% for sv in kpi.subvalues %}{{ sv.label }} {{ sv.value }}{% if not forloop.last %}; {% endif %}{% endfor %} {{ kpi.unit }}{% else %}{{ kpi.value }} {{ kpi.unit }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% endfor %}
     </div>
-
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="status" checked>
-        <span>Статус расчёта</span>
-    </label>
-
-    {% for group in kpi_groups %}
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="kpi-{{ group.key }}" checked>
-        <span>KPI · {{ group.label }}</span>
-    </label>
-    {% endfor %}
-
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="main-plot" checked>
-        <span>Главный график · параметры</span>
-    </label>
-
-    {% if stage_tables %}
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="stages" checked>
-        <span>Этапы конфигурации</span>
-    </label>
-    {% endif %}
-
-    {% if has_energy or energy_summary %}
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="energy" checked>
-        <span>Энергобаланс</span>
-    </label>
-    {% endif %}
-
-    {% if brakes_geometry %}
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="geometry-3d" checked>
-        <span>Геометрия тормозов · 3D</span>
-    </label>
-    {% endif %}
-
-    <label class="rb-module-toggle">
-        <input type="checkbox" class="rb-module-checkbox" data-module="thermal" checked>
-        <span>Тепловые сценарии</span>
-    </label>
-</aside>
-
-</div>{# /rb-with-sidepanel #}
+</details>
+{% endif %}
 
 {% endblock %}
 
 {% block body_extra %}
-<script src="{% static 'recoil_app/js/modules.js' %}"></script>
-{% if stage_tables %}
-<script src="{% static 'recoil_app/js/stage_toggle.js' %}"></script>
+{% if osc_figure %}
+{{ osc_figure|json_script:"osc-figure" }}
+{{ osc_extra|json_script:"osc-extra" }}
 {% endif %}
+<script src="{% static 'recoil_app/js/modules.js' %}?v=3"></script>
+<script src="{% static 'recoil_app/js/stage_toggle.js' %}?v=3"></script>
+<script src="{% static 'recoil_app/js/result_page.js' %}?v=8"></script>
 {% endblock %}

@@ -31,7 +31,9 @@ from ..services.permissions import (
     can_edit_iterative,
     can_run_calc,
     can_view_iterative,
+    can_view_run,
     iterative_visible_to,
+    visible_run,
 )
 from ..services.run_pipeline import build_initial_from_run
 from .run import _build_catalog_items
@@ -65,6 +67,8 @@ def iterative_new_view(request):
     if request.method == "POST":
         form = IterativeCalcForm(request.POST, request.FILES)
         slot_formset = IterativeSlotFormSet(request.POST, request.FILES, prefix=SLOTS_PREFIX)
+        if form.is_valid() and slot_formset.is_valid() and form.cleaned_data.get("source_run") is not None                 and not can_view_run(request.user, form.cleaned_data["source_run"]):
+            form.add_error("input_file", "Для отката загрузите файл характеристик F(t), F(x).")
         if form.is_valid() and slot_formset.is_valid():
             cd = form.cleaned_data
             try:
@@ -86,16 +90,15 @@ def iterative_new_view(request):
                 form.add_error(None, str(exc))
             else:
                 return redirect("iterative_detail", calc_id=calc.id)
-        source_id = request.POST.get("source_run_id")
-        source_run = CalculationRun.objects.filter(pk=source_id).first() if source_id else None
+        source_run = visible_run(request.user, request.POST.get("source_run_id"))
     else:
         initial, slots_initial = {}, [{"kind": "parametric", "lya": 2.5, "wn0": 1.0}]
-        source_run = CalculationRun.objects.filter(pk=request.GET.get("from_run") or 0).first()
+        source_run = visible_run(request.user, request.GET.get("from_run"))
         if source_run is not None:
             initial, _ = build_initial_from_run(source_run.id)
             initial["mode"] = source_run.mode
-            if source_run.input_file:
-                initial["source_run_id"] = source_run.id
+            if not source_run.input_file:
+                initial.pop("source_run_id", None)
             slots_initial = slots_initial_from_run(source_run) or slots_initial
         form = IterativeCalcForm(initial=initial)
         slot_formset = IterativeSlotFormSet(initial=slots_initial, prefix=SLOTS_PREFIX)

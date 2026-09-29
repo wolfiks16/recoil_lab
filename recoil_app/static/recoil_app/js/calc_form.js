@@ -73,7 +73,6 @@
         return "partial";
     }
 
-    const STATUS_ICONS = { complete: "✓", partial: "⚠", empty: "○", error: "✗" };
     const STATUS_TITLES = {
         complete: "Все параметры заполнены",
         partial: "Заполнены не все параметры",
@@ -100,8 +99,9 @@
             li.innerHTML = `
                 <div class="rb-cad-brake-item-icon">${index + 1}</div>
                 <div class="rb-cad-brake-item-name" title="${name}">${name}</div>
-                <span class="rb-cad-brake-item-status is-${status}" title="${STATUS_TITLES[status]}">${STATUS_ICONS[status]}</span>
-                <div class="rb-cad-brake-item-badge">${type === "curve" ? "F(v)" : "пар"}</div>
+                <span class="rb-cad-brake-item-status is-${status}" title="${STATUS_TITLES[status]}"
+                      role="img" aria-label="${STATUS_TITLES[status]}"></span>
+                <div class="rb-cad-brake-item-badge">${type === "curve" ? "таблица F(v)" : "параметры"}</div>
             `;
 
             li.addEventListener("click", () => {
@@ -148,7 +148,8 @@
     function syncBrakeHeader() {
         const items = formsContainer.querySelectorAll(".brake-form-item");
         items.forEach((card, index) => {
-            const name = getBrakeName(card, index);
+            const nameInput = card.querySelector('input[name$="-name"]');
+            const name = nameInput ? (nameInput.value || "").trim() : "";
             const display = card.querySelector("[data-brake-display-name]");
             if (display) display.textContent = name;
             const prefix = card.querySelector(".rb-cad-brake-head-prefix");
@@ -563,8 +564,8 @@
         if (info) {
             const parts = [item.summary];
             if (item.description) parts.push(item.description);
-            if (item.is_curve) parts.push("Файл F(v) будет взят из каталога");
-            info.textContent = parts.join(" — ");
+            if (item.is_curve) parts.push("Таблица F(v) будет скопирована из каталога");
+            info.textContent = parts.join(". ");
         }
 
         if (window.__rbRebuildBrakeList) window.__rbRebuildBrakeList();

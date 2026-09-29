@@ -10,6 +10,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.forms import BaseFormSet, formset_factory
 
 from .models import CalculationRun, IterativeCalc, MagneticBrakeConfig, UserProfile
+from .services.brake_params import apply_fixed_param_defaults
 from .services.curve_parser import parse_force_curve_file
 
 
@@ -22,7 +23,9 @@ class CalculationForm(forms.Form):
             "title": "Только английские буквы, цифры, дефис и подчёркивание",
         }),
     )
-    input_file = forms.FileField(label="Файл характеристик Excel")
+    # Необязателен при копировании расчёта: тогда берётся файл донора (source_run_id).
+    input_file = forms.FileField(label="Файл характеристик Excel", required=False)
+    source_run_id = forms.IntegerField(required=False, widget=forms.HiddenInput())
 
     mass = forms.FloatField(
         label="Масса",
@@ -73,6 +76,25 @@ class CalculationForm(forms.Form):
             raise forms.ValidationError("Расчёт с таким названием уже существует.")
 
         return name
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("input_file"):
+            return cleaned
+        # «Скопировать»: без нового файла берём входной файл донора — только доступного пользователю.
+        from .services.permissions import can_view_run
+
+        source_id = cleaned.get("source_run_id")
+        source = CalculationRun.objects.filter(pk=source_id).first() if source_id else None
+        if source is None or not source.input_file or not can_view_run(self.user, source):
+            self.add_error("input_file", "Загрузите входной файл: силы выстрела от времени и пружины от перемещения.")
+        else:
+            cleaned["source_run"] = source
+        return cleaned
 
 
 class FreeFallForm(forms.Form):
@@ -195,7 +217,7 @@ class MagneticBrakeForm(forms.Form):
     )
 
     def clean(self):
-        cleaned_data = super().clean()
+        cleaned_data = apply_fixed_param_defaults(super().clean())
         model_type = cleaned_data.get("model_type")
 
         if model_type == MagneticBrakeConfig.MODEL_TYPE_PARAMETRIC:
@@ -340,7 +362,7 @@ class BrakeCatalogForm(forms.ModelForm):
         }
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = apply_fixed_param_defaults(super().clean())
         model_type = cleaned.get("model_type")
 
         if model_type == BrakeCatalog.MODEL_TYPE_PARAMETRIC:
@@ -1129,7 +1151,7 @@ class IterativeSlotForm(forms.Form):
         return [self[name] for name in self.PARAM_FIELDS]
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = apply_fixed_param_defaults(super().clean())
         kind = cleaned.get("kind")
         cleaned["parsed_points"] = None
 

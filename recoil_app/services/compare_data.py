@@ -1,76 +1,96 @@
 """Подготовка данных для страницы сравнения двух расчётов.
 
-Overlay-графики двух уровней (Общие / Откат / Накат, как на странице результата)
-и дельта-таблица 12 метрик. Графики строит `services.charting`, эта прослойка
-только собирает входные данные и проводит их в нужный шаблон фрагмента.
+Ключевые показатели A/B с разницей, осциллограмма A/B на общей оси времени,
+v(x) и |F|(|v|) (все графики — из прореженных snapshot'ов, как на странице
+результата) и подробная дельта-таблица 12 метрик. Графики строит
+`services.charting`, здесь только сборка данных.
 """
 
 from __future__ import annotations
 
+import json
+
+import numpy as np
+import plotly.io as pio
+
 from ..models import CalculationRun
-from .charting import (
-    has_phase,
-    make_compare_fmag_v_fragment,
-    make_compare_forces_main_recoil_fragment,
-    make_compare_forces_secondary_fragment,
-    make_compare_v_a_t_fragment,
-    make_compare_v_a_t_phase_fragment,
-    make_compare_v_x_fragment,
-    make_compare_x_t_fragment,
-    make_compare_x_t_phase_fragment,
-)
-from .snapshot import extract_overlay_data, extract_snapshot_parts
+from .charting import make_compare_oscillogram_figure, make_compare_phase_figures
+from .result_page import G, build_oscillogram_data, fmt_number, load_series
+from .snapshot import extract_snapshot_parts
 
 
-def build_compare_overlay_charts(run_a: CalculationRun, run_b: CalculationRun) -> dict:
-    """Вложенная структура overlay-фрагментов:
-
-        {
-          "common": {x_t, v_a_t, v_x, fmag_v, forces_secondary},
-          "recoil": {x_t, v_a_t, forces_main, forces_secondary},   # если есть фаза
-          "return": {x_t, v_a_t, forces_secondary},                # если есть фаза
-          "has_recoil": bool,
-          "has_return": bool,
-        }
-
-    Фазовые наборы пишутся только если хотя бы у одного из расчётов есть данные
-    для фазы — иначе пустые табы не показываются.
-    """
-    snap_a = extract_overlay_data(run_a)
-    snap_b = extract_overlay_data(run_b)
-    name_a = run_a.name or f"#{run_a.id}"
-    name_b = run_b.name or f"#{run_b.id}"
-
-    out: dict = {
-        "common": {
-            "x_t":               make_compare_x_t_fragment(snap_a, snap_b, name_a, name_b),
-            "v_a_t":             make_compare_v_a_t_fragment(snap_a, snap_b, name_a, name_b),
-            "v_x":               make_compare_v_x_fragment(snap_a, snap_b, name_a, name_b),
-            "fmag_v":            make_compare_fmag_v_fragment(snap_a, snap_b, name_a, name_b),
-            "forces_secondary":  make_compare_forces_secondary_fragment(snap_a, snap_b, name_a, name_b),
-        },
-    }
-
-    has_rec = has_phase(snap_a, "recoil") or has_phase(snap_b, "recoil")
-    has_ret = has_phase(snap_a, "return") or has_phase(snap_b, "return")
-    out["has_recoil"] = has_rec
-    out["has_return"] = has_ret
-
-    if has_rec:
-        out["recoil"] = {
-            "x_t":              make_compare_x_t_phase_fragment(snap_a, snap_b, name_a, name_b, "recoil"),
-            "v_a_t":            make_compare_v_a_t_phase_fragment(snap_a, snap_b, name_a, name_b, "recoil"),
-            "forces_main":      make_compare_forces_main_recoil_fragment(snap_a, snap_b, name_a, name_b),
-            "forces_secondary": make_compare_forces_secondary_fragment(snap_a, snap_b, name_a, name_b, phase="recoil"),
-        }
-    if has_ret:
-        out["return"] = {
-            "x_t":              make_compare_x_t_phase_fragment(snap_a, snap_b, name_a, name_b, "return"),
-            "v_a_t":            make_compare_v_a_t_phase_fragment(snap_a, snap_b, name_a, name_b, "return"),
-            "forces_secondary": make_compare_forces_secondary_fragment(snap_a, snap_b, name_a, name_b, phase="return"),
-        }
-
+def _key_metrics(run: CalculationRun, series: dict | None) -> dict:
+    """Числовые ключевые показатели расчёта (None — нет данных)."""
+    out = {"x_max": None, "v_max": None, "a_max": None, "f_max": None,
+           "T": run.return_end_time, "v_end": None, "resid": run.energy_residual_pct}
+    if series is not None:
+        out["x_max"] = float(np.max(series["x"])) * 1000.0
+        out["v_max"] = float(np.max(np.abs(series["v"])))
+        out["a_max"] = float(np.max(np.abs(series["a"]))) / G
+        out["f_max"] = float(np.max(series["f"])) / 1000.0
+        idx = series["return_end_index"]
+        if idx is not None:
+            out["v_end"] = abs(float(series["v"][min(idx, len(series["v"]) - 1)]))
+    elif run.x_max is not None:
+        out["x_max"] = run.x_max * 1000.0
+    if run.is_free_fall and run.v_final is not None:
+        out["v_end"] = abs(run.v_final)
     return out
+
+
+KEY_ROWS = [
+    ("x_max", "Максимальный откат", "мм", 1, "x"),
+    ("v_max", "Максимальная скорость", "м/с", 3, "v"),
+    ("a_max", "Пиковое ускорение", "g", 1, "a"),
+    ("f_max", "Сила торможения, максимум", "кН", 2, "f"),
+    ("T", "Время цикла", "с", 3, ""),
+    ("v_end", "Скорость в конце", "м/с", 3, ""),
+    ("resid", "Невязка энергобаланса", "%", 2, ""),
+]
+
+
+def build_compare_page(run_a: CalculationRun, run_b: CalculationRun) -> dict:
+    """Сравнение: ключевые показатели A/B с разницей + осциллограмма A/B + v(x), |F|(|v|).
+
+    Графики — из snapshot'ов, прореженных как на странице результата (лёгкие).
+    Расчёт без snapshot'а (архивный) — только показатели из полей модели.
+    """
+    series_a, series_b = load_series(run_a), load_series(run_b)
+    ma, mb = _key_metrics(run_a, series_a), _key_metrics(run_b, series_b)
+
+    key_rows = []
+    for key, label, unit, digits, quantity in KEY_ROWS:
+        a, b = ma[key], mb[key]
+        if a is None and b is None:
+            continue
+        delta = b - a if a is not None and b is not None else None
+        pct = delta / abs(a) * 100.0 if delta is not None and a else None
+        key_rows.append({
+            "label": label, "unit": unit, "quantity": quantity,
+            "a": fmt_number(a, digits), "b": fmt_number(b, digits),
+            "delta": ("+" if delta is not None and delta > 0 else "") + fmt_number(delta, digits) if delta is not None else "—",
+            "pct": ("+" if pct is not None and pct > 0 else "") + fmt_number(pct, 1) + " %" if pct is not None else "",
+            "same": delta is not None and abs(delta) < 0.5 * 10.0 ** -digits,
+        })
+
+    osc_figure = phase_vx = phase_fv = None
+    osc_a = build_oscillogram_data(run_a, series_a)
+    osc_b = build_oscillogram_data(run_b, series_b)
+    if osc_a is not None and osc_b is not None:
+        name_a, name_b = f"A: {run_a.name}", f"B: {run_b.name}"
+        to_dict = lambda fig: json.loads(pio.to_json(fig, validate=False))  # noqa: E731
+        osc_figure = to_dict(make_compare_oscillogram_figure(osc_a, osc_b, name_a, name_b))
+        vx, fv = make_compare_phase_figures(osc_a, osc_b, name_a, name_b)
+        phase_vx, phase_fv = to_dict(vx), to_dict(fv)
+
+    missing = [r.name for r, s in ((run_a, series_a), (run_b, series_b)) if s is None]
+    return {
+        "key_rows": key_rows,
+        "osc_figure": osc_figure,
+        "phase_vx": phase_vx,
+        "phase_fv": phase_fv,
+        "missing_snapshots": missing,
+    }
 
 
 def build_compare_metrics_table(run_a: CalculationRun, run_b: CalculationRun) -> list[dict]:

@@ -1,91 +1,19 @@
-/* RecoilLab Modules Controller v2
-   Управление видимостью модулей и табами через чекбоксы в боковой панели.
+/* RecoilLab — вкладки [data-tab-group].
 
-   Конвенции в HTML:
-     <section class="rb-module-section" data-module="overview">...</section>
-     <input type="checkbox" class="rb-module-checkbox" data-module="overview" checked>
-     <button class="rb-tab" data-tab-group="phases" data-tab="recoil">Откат</button>
-     <div class="rb-tab-panel" data-tab-group="phases" data-tab="recoil">...</div>
+   Разметка:
+     <div class="rb-tabs" data-tab-group="brake-3d">
+       <button class="rb-tab is-active" data-tab="b1">…</button>
+     </div>
+     <div class="rb-tab-panel is-active" data-tab-group="brake-3d" data-tab="b1">…</div>
 
-   Состояние сохраняется в localStorage (по ключу страницы), чтобы пользователь
-   не терял настройку при перезагрузке.
+   Используется на странице результата (3D-модели тормозов) и на странице теплового
+   сценария (графики). Графики Plotly в только что показанной панели пересчитывают размер.
+   (Раньше здесь же были чекбоксы видимости модулей страницы результата — после
+   редизайна их заменили сворачиваемые разделы <details class="rb-fold">.)
 */
 
 (function () {
     'use strict';
-
-    const STORAGE_KEY = 'rb-modules-state-v1';
-
-    function readState() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            return raw ? JSON.parse(raw) : {};
-        } catch (e) {
-            return {};
-        }
-    }
-
-    function writeState(state) {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        } catch (e) {
-            // ignore quota
-        }
-    }
-
-    function applyVisibility(moduleKey, visible) {
-        document.querySelectorAll(`.rb-module-section[data-module="${moduleKey}"]`).forEach(el => {
-            if (visible) {
-                el.classList.remove('is-hidden');
-            } else {
-                el.classList.add('is-hidden');
-            }
-        });
-        // Trigger Plotly relayout — иначе графики при первом показе сжаты.
-        if (visible && window.Plotly) {
-            requestAnimationFrame(() => {
-                document.querySelectorAll(`.rb-module-section[data-module="${moduleKey}"] .plotly-graph-div`).forEach(div => {
-                    try { window.Plotly.Plots.resize(div); } catch (e) { /* noop */ }
-                });
-            });
-        }
-    }
-
-    function initModuleToggles() {
-        const state = readState();
-        const checkboxes = document.querySelectorAll('.rb-module-checkbox');
-
-        checkboxes.forEach(cb => {
-            const key = cb.dataset.module;
-            if (!key) return;
-
-            // Восстановить состояние
-            if (key in state) {
-                cb.checked = !!state[key];
-            }
-            applyVisibility(key, cb.checked);
-
-            cb.addEventListener('change', () => {
-                applyVisibility(key, cb.checked);
-                const cur = readState();
-                cur[key] = cb.checked;
-                writeState(cur);
-            });
-        });
-
-        // Кнопки «Показать все» / «Скрыть все»
-        const showAll = document.getElementById('rb-modules-show-all');
-        const hideAll = document.getElementById('rb-modules-hide-all');
-        if (showAll) showAll.addEventListener('click', () => bulkSet(true));
-        if (hideAll) hideAll.addEventListener('click', () => bulkSet(false));
-
-        function bulkSet(value) {
-            checkboxes.forEach(cb => {
-                cb.checked = value;
-                cb.dispatchEvent(new Event('change'));
-            });
-        }
-    }
 
     function initTabs() {
         document.querySelectorAll('.rb-tabs').forEach(tabBar => {
@@ -116,7 +44,7 @@
                     if (isActive && window.Plotly) {
                         requestAnimationFrame(() => {
                             p.querySelectorAll('.plotly-graph-div').forEach(div => {
-                                try { window.Plotly.Plots.resize(div); } catch (e) {}
+                                try { window.Plotly.Plots.resize(div); } catch (e) { /* noop */ }
                             });
                         });
                     }
@@ -125,14 +53,9 @@
         });
     }
 
-    function init() {
-        initModuleToggles();
-        initTabs();
-    }
-
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', initTabs);
     } else {
-        init();
+        initTabs();
     }
 })();
