@@ -86,3 +86,42 @@ class CalcCopyTests(TestCase):
         page = self.client.get(reverse("index") + f"?catalog={entry.pk}")
         self.assertContains(page, "подставлен из каталога")
         self.assertContains(page, f'name="brakes-0-catalog_source_id" value="{entry.pk}"')
+
+
+class FixedBrakeParamsTests(TestCase):
+    """λa и w_n0 не показываются в редакторе тормоза, но передаются и по умолчанию равны 2.5 и 1.0."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._media = tempfile.mkdtemp(prefix="calc_fixed_media_")
+        cls._override = override_settings(MEDIA_ROOT=cls._media)
+        cls._override.enable()
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls._override.disable()
+        shutil.rmtree(cls._media, ignore_errors=True)
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("fixed_owner", "f@example.com", "pw")
+        self.client.force_login(self.user)
+
+    def test_editor_hides_lya_and_wn0(self):
+        page = self.client.get(reverse("index")).content.decode()
+        self.assertIn('type="hidden" name="brakes-0-lya" value="2.5"', page)
+        self.assertIn('type="hidden" name="brakes-0-wn0" value="1.0"', page)
+        self.assertIn('type="hidden" name="brakes-__prefix__-lya"', page)   # шаблон «Добавить тормоз»
+        self.assertNotIn("Параметр λa", page)
+        self.assertNotIn("Начальное состояние wn", page)
+
+    def test_missing_lya_and_wn0_default(self):
+        data = _post_data("no_fixed")
+        del data["brakes-0-lya"], data["brakes-0-wn0"]
+        data["input_file"] = _drive_xlsx()
+        response = self.client.post(reverse("index"), data)
+        run = CalculationRun.objects.get(name="no_fixed")
+        self.assertRedirects(response, reverse("run_detail_v2", args=[run.pk]))
+        brake = run.brakes.get()
+        self.assertEqual((brake.lya, brake.wn0), (2.5, 1.0))

@@ -61,23 +61,35 @@ def geometry_3d_available(brake) -> bool:
 # Короткие подсказки под полем (там, где символа и подписи мало).
 PARAM_HINTS: dict[str, str] = {
     "n": "Число секций тормоза, целое ≥ 1",
-    "lya": "Обычно 2.5",
-    "wn0": "Начальное значение рекурсивного параметра, обычно 1",
 }
+
+# Параметры модели, которые на практике всегда одинаковы: в редакторе тормоза не
+# показываются (передаются скрытыми полями, чтобы не потерять значение при копировании
+# расчёта, подстановке из каталога и «Дублировать»); пустое значение — это значение по умолчанию.
+FIXED_PARAM_DEFAULTS: dict[str, float] = {"lya": 2.5, "wn0": 1.0}
+
+
+def apply_fixed_param_defaults(cleaned: dict) -> dict:
+    """Пустые λa и w_n0 в cleaned_data формы тормоза → значения по умолчанию."""
+    for field, default in FIXED_PARAM_DEFAULTS.items():
+        if field in cleaned and cleaned.get(field) in (None, ""):
+            cleaned[field] = default
+    return cleaned
 
 
 def param_field_groups(form, fields: tuple[str, ...] | None = None) -> list[dict]:
     """Поля параметров тормоза из формы, сгруппированные для единого редактора.
 
     Работает с любой формой, где параметры названы как поля `BrakeParametersMixin`
-    (расчёт, свободное падение, пошаговая сессия, каталог). Отсутствующие поля пропускаются.
+    (расчёт, свободное падение, пошаговая сессия, каталог). Отсутствующие поля пропускаются,
+    фиксированные (FIXED_PARAM_DEFAULTS) — см. `hidden_param_fields`.
     """
     wanted = set(fields) if fields else None
     groups = []
     for group_key, title in PARAM_GROUPS:
         items = []
         for field, label, symbol, unit, group in PARAM_SPECS:
-            if group != group_key or field not in form.fields:
+            if group != group_key or field not in form.fields or field in FIXED_PARAM_DEFAULTS:
                 continue
             if wanted is not None and field not in wanted:
                 continue
@@ -99,3 +111,8 @@ def param_summary(obj) -> str:
         text = f"{value:g}" if isinstance(value, float) else str(value)
         parts.append(f"{symbol} = {text}{(' ' + unit) if unit else ''}")
     return ", ".join(parts)
+
+
+def hidden_param_fields(form) -> list:
+    """Поля λa и w_n0 формы — для вывода скрытыми (as_hidden) в редакторе тормоза."""
+    return [form[field] for field in FIXED_PARAM_DEFAULTS if field in form.fields]

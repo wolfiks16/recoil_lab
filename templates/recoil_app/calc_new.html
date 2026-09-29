@@ -79,8 +79,6 @@
                         {{ form.input_file }}
                         {% if source_run and source_run.input_file %}
                         <div class="rb-cad-field-hint">Можно не загружать: возьмётся файл расчёта «{{ source_run.name }}».</div>
-                        {% else %}
-                        <div class="rb-cad-field-hint">Листы «сила от времени» (t, с; F, кН) и «сила от перемещения» (X, м; F, кН).</div>
                         {% endif %}
                         {% if form.input_file.errors %}<div class="rb-cad-field-error">{{ form.input_file.errors|join:"; " }}</div>{% endif %}
                     </div>
@@ -95,7 +93,6 @@
                     <div class="rb-cad-field">
                         <label for="{{ form.angle_deg.id_for_label }}" class="rb-cad-field-label"><span>Угол</span><span class="rb-cad-field-symbol">α, °</span></label>
                         {{ form.angle_deg }}
-                        {% if mode == 'free_fall' %}<div class="rb-cad-field-hint">90° — вертикальное падение, тяжесть действует полностью.</div>{% endif %}
                         {% if form.angle_deg.errors %}<div class="rb-cad-field-error">{{ form.angle_deg.errors|join:"; " }}</div>{% endif %}
                     </div>
 
@@ -114,8 +111,7 @@
                     <div class="rb-cad-field">
                         <label for="{{ form.t_max.id_for_label }}" class="rb-cad-field-label"><span>Предел времени</span><span class="rb-cad-field-symbol">t<sub>max</sub>, с</span></label>
                         {{ form.t_max }}
-                        {% if mode == 'free_fall' %}<div class="rb-cad-field-hint">Без верхнего предела; большое t<sub>max</sub> при малом шаге — долгий расчёт.</div>
-                        {% else %}<div class="rb-cad-field-hint">Не больше 10 с; расчёт закончится раньше, если вернётся в x = 0.</div>{% endif %}
+                        {% if mode != 'free_fall' %}<div class="rb-cad-field-hint">Не больше 10 с; расчёт закончится раньше, если вернётся в x = 0.</div>{% endif %}
                         {% if form.t_max.errors %}<div class="rb-cad-field-error">{{ form.t_max.errors|join:"; " }}</div>{% endif %}
                     </div>
 

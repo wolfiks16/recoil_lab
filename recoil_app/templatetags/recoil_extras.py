@@ -144,6 +144,7 @@ def brake_param_grid(form, required_mark=False):
     {% brake_param_grid brake_form %} — в форме расчёта, свободного падения,
     пошаговой сессии и каталога параметры выглядят и подписаны одинаково.
     """
-    from ..services.brake_params import param_field_groups
+    from ..services.brake_params import hidden_param_fields, param_field_groups
 
-    return {"groups": param_field_groups(form), "required_mark": required_mark}
+    return {"groups": param_field_groups(form), "hidden": hidden_param_fields(form),
+            "required_mark": required_mark}

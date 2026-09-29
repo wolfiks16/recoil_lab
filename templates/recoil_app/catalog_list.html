@@ -9,8 +9,6 @@
     <div class="rb-hero-row">
         <div>
             <h1 class="rb-h1">Каталог тормозов</h1>
-            <p class="rb-lead">Общая библиотека: {{ total_count }} {{ total_count|ru_plural:"тормоз,тормоза,тормозов" }}, из них с параметрической моделью {{ parametric_count }}, с таблицей F(v) {{ curve_count }}.
-                При подстановке в расчёт параметры и таблица копируются — правка каталога не меняет готовые расчёты.</p>
         </div>
         <div class="rb-hero-actions">
             {% if can_create %}<a class="rb-btn rb-btn-primary" href="{% url 'catalog_new' %}">Добавить тормоз</a>{% endif %}

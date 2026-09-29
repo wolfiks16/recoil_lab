@@ -10,6 +10,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.forms import BaseFormSet, formset_factory
 
 from .models import CalculationRun, IterativeCalc, MagneticBrakeConfig, UserProfile
+from .services.brake_params import apply_fixed_param_defaults
 from .services.curve_parser import parse_force_curve_file
 
 
@@ -216,7 +217,7 @@ class MagneticBrakeForm(forms.Form):
     )
 
     def clean(self):
-        cleaned_data = super().clean()
+        cleaned_data = apply_fixed_param_defaults(super().clean())
         model_type = cleaned_data.get("model_type")
 
         if model_type == MagneticBrakeConfig.MODEL_TYPE_PARAMETRIC:
@@ -361,7 +362,7 @@ class BrakeCatalogForm(forms.ModelForm):
         }
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = apply_fixed_param_defaults(super().clean())
         model_type = cleaned.get("model_type")
 
         if model_type == BrakeCatalog.MODEL_TYPE_PARAMETRIC:
@@ -1150,7 +1151,7 @@ class IterativeSlotForm(forms.Form):
         return [self[name] for name in self.PARAM_FIELDS]
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = apply_fixed_param_defaults(super().clean())
         kind = cleaned.get("kind")
         cleaned["parsed_points"] = None
 
