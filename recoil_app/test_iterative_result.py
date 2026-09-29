@@ -154,6 +154,19 @@ class ResultPageTests(TestCase):
         self.assertContains(response, 'data-r="s"')
         self.assertLess(len(response.content), 600_000)
 
+    def test_classic_charts_endpoint(self):
+        """«Отдельные графики» (прежний формат): JSON фигур по требованию, этапы — скрытыми полосами."""
+        page = self.client.get(reverse("run_detail_v2", args=[self.run.pk]))
+        self.assertContains(page, 'data-view="classic"')
+        response = self.client.get(reverse("run_chart", args=[self.run.pk, "classic"]))
+        self.assertEqual(response.status_code, 200)
+        figures = response.json()["figures"]
+        self.assertEqual(set(figures), {"x_t", "v_a_t", "forces_t", "drive_t"})
+        shapes = figures["x_t"]["layout"].get("shapes", [])
+        self.assertTrue(any(s.get("name") == "stage-band" and s.get("visible") is False for s in shapes))
+        self.run.snapshot.delete()
+        self.assertEqual(self.client.get(reverse("run_chart", args=[self.run.pk, "classic"])).status_code, 404)
+
     def test_lazy_chart_endpoint(self):
         ok = self.client.get(reverse("run_chart", args=[self.run.pk, "v_x"]))
         self.assertEqual(ok.status_code, 200)

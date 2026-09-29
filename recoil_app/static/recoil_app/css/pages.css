@@ -374,6 +374,13 @@
 .rb-result-left { display: flex; flex-direction: column; min-width: 0; }
 .rb-result-left > .rb-osc-panel { flex: 1 1 auto; display: flex; flex-direction: column; }
 .rb-osc-panel .rb-osc { flex: 1 1 auto; height: auto; min-height: 640px; max-height: 1000px; }
+/* Два вида графиков в одном блоке: «Осциллограмма» и «Отдельные графики» (прежний формат) */
+.rb-osc-panel .rb-view { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.rb-osc-panel .rb-view[hidden] { display: none; }
+.rb-classic-tabs { margin: 0; padding: 0 16px; }
+.rb-classic-plot { flex: 1 1 auto; min-height: 600px; max-height: 1000px; padding: 0; margin: 4px 8px 8px; }
+.rb-classic-plot[hidden] { display: none; }
+.rb-osc-hint[hidden] { display: none; }
 .rb-osc-hint { margin-left: auto; }
 .rb-seg > button[aria-pressed="true"] { background: var(--rb-blue); color: #FFFFFF; }
 
@@ -410,6 +417,7 @@
 @media (max-width: 900px) {
     .rb-osc { height: 560px; }
     .rb-osc-panel .rb-osc { min-height: 560px; }
+    .rb-classic-plot { min-height: 480px; }
     .rb-osc-hint { display: none; }
 }
 .rb-lazy.is-loaded { min-height: 0; }

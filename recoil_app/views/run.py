@@ -6,7 +6,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -23,7 +23,7 @@ from ..services.run_pipeline import (
     persist_result_and_snapshot,
     resolve_curve_sources,
 )
-from ..services.result_page import build_result_page, lazy_chart_html
+from ..services.result_page import build_result_page, classic_figures_json, lazy_chart_html
 
 
 def index_view(request):
@@ -176,12 +176,20 @@ def run_detail_v2_view(request, run_id):
 def run_chart_view(request, run_id, key):
     """HTML-фрагмент вторичного графика (догружается страницей результата).
 
-    key — из services.result_page.LAZY_CHART_FIELDS или «geometry-<индекс тормоза>».
+    key — из services.result_page.LAZY_CHART_FIELDS, «geometry-<индекс тормоза>» или
+    «classic» (JSON фигур «Отдельных графиков»).
     """
     run = get_object_or_404(CalculationRun, pk=run_id)
     denied = _deny_run_view(request, run)
     if denied is not None:
         return denied
+
+    if key == "classic":
+        # «Отдельные графики» (прежний формат) — JSON фигур, грузится при первом переключении вида.
+        figures = classic_figures_json(run)
+        if figures is None:
+            raise Http404("У расчёта нет снимка данных")
+        return JsonResponse({"figures": figures})
 
     if key.startswith("geometry-"):
         try:

@@ -75,7 +75,13 @@
     <div class="rb-result-left">
         <section class="rb-panel rb-osc-panel" aria-labelledby="osc-title">
             <div class="rb-panel-head">
-                <h2 id="osc-title">Осциллограмма {% if run.is_free_fall %}расчёта{% else %}цикла{% endif %}</h2>
+                <h2 id="osc-title">{% if osc_figure %}Графики{% else %}Осциллограмма{% endif %} {% if run.is_free_fall %}расчёта{% else %}цикла{% endif %}</h2>
+                {% if osc_figure %}
+                <div class="rb-seg" role="group" aria-label="Вид графиков">
+                    <button type="button" data-view="osc" aria-pressed="true" title="x, v, a и F на общей оси времени">Осциллограмма</button>
+                    <button type="button" data-view="classic" aria-pressed="false" title="Прежний формат: каждый график отдельно">Отдельные графики</button>
+                </div>
+                {% endif %}
                 {% if osc_extra and osc_extra.ranges|length > 1 %}
                 <div class="rb-seg" role="group" aria-label="Участок цикла">
                     <button type="button" data-range="all" aria-pressed="true">Весь {% if run.is_free_fall %}расчёт{% else %}цикл{% endif %}</button>
@@ -88,6 +94,7 @@
                 {% endif %}
             </div>
             {% if osc_figure %}
+            <div class="rb-view" data-view-panel="osc">
             <div class="rb-readout" id="osc-readout" aria-live="off">
                 <div><span>t</span><b data-r="t">—</b></div>
                 <div><span class="q-x-text">x</span><b data-r="x">—</b></div>
@@ -98,6 +105,20 @@
             </div>
             <div id="osc" class="rb-osc" role="img" aria-label="Графики перемещения, скорости, ускорения и силы торможения от времени"></div>
             <p class="rb-panel-note">Показано {{ osc_extra.n_shown }} из {{ osc_extra.n_full }} точек: ряд прорежен с сохранением пиков, разворота и переключений. Полные данные — в Excel-отчёте.</p>
+            </div>
+            {# Прежний формат: каждый график отдельно, цвета — как в новом интерфейсе. Грузится при первом переключении. #}
+            <div class="rb-view rb-classic" data-view-panel="classic" hidden data-classic-url="{% url 'run_chart' run.id 'classic' %}">
+                <div class="rb-tabs rb-classic-tabs" role="tablist" aria-label="График">
+                    <button type="button" class="rb-tab is-active" role="tab" aria-selected="true" data-classic-tab="x_t">Перемещение x(t)</button>
+                    <button type="button" class="rb-tab" role="tab" aria-selected="false" data-classic-tab="v_a_t">Скорость и ускорение</button>
+                    <button type="button" class="rb-tab" role="tab" aria-selected="false" data-classic-tab="forces_t">Силы F(t)</button>
+                    <button type="button" class="rb-tab" role="tab" aria-selected="false" data-classic-tab="drive_t" hidden>Движущая и суммарная</button>
+                </div>
+                <div class="rb-classic-plot" data-classic-plot="x_t"><div class="rb-lazy-placeholder">Загружаю графики</div></div>
+                <div class="rb-classic-plot" data-classic-plot="v_a_t" hidden></div>
+                <div class="rb-classic-plot" data-classic-plot="forces_t" hidden></div>
+                <div class="rb-classic-plot" data-classic-plot="drive_t" hidden></div>
+            </div>
             {% else %}
             <div class="rb-panel-body">
                 <p class="rb-chart-missing">Осциллограмма недоступна: расчёт сохранён до появления снимков данных. Нажмите «Скопировать» и пересчитайте, чтобы получить новую страницу результата.</p>
@@ -299,5 +320,5 @@
 {% endif %}
 <script src="{% static 'recoil_app/js/modules.js' %}?v=3"></script>
 <script src="{% static 'recoil_app/js/stage_toggle.js' %}?v=3"></script>
-<script src="{% static 'recoil_app/js/result_page.js' %}?v=6"></script>
+<script src="{% static 'recoil_app/js/result_page.js' %}?v=8"></script>
 {% endblock %}

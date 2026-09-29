@@ -397,3 +397,102 @@ def build_result_page(run: CalculationRun) -> dict:
         ],
         "warnings": [w for w in (run.warnings_text or "").splitlines() if w.strip()],
     }
+
+
+# ---------------------------------------------------------------------------
+# «Отдельные графики» — прежний формат (x(t); v и a (t); силы F(t)) в цветах
+# нового интерфейса. Строятся по требованию (views.run.run_chart_view, key="classic").
+# ---------------------------------------------------------------------------
+
+def _stage_events(run: CalculationRun) -> list[dict]:
+    """Переключения этапов для полос/линий на графиках: включение на откате и снятие на накате."""
+    events = []
+    for s in BrakeStage.objects.filter(run=run).order_by("stage"):
+        if s.stage == 0:
+            continue
+        if s.t_forward is not None:
+            events.append({"t": float(s.t_forward), "direction": "forward"})
+        if s.t_return is not None:
+            events.append({"t": float(s.t_return), "direction": "return"})
+    return events
+
+
+def build_classic_data(run: CalculationRun) -> dict | None:
+    """Прореженные ряды для графиков прежнего формата (None — нет snapshot'а).
+
+    В отличие от осциллограммы, здесь нужны все силы по отдельности (вход, пружина,
+    тяжесть, каждый тормоз, сумма) — они тоже участвуют в прореживании, чтобы
+    не потерять короткий импульс выстрела.
+    """
+    series = load_series(run)
+    if series is None:
+        return None
+    try:
+        forces_raw = run.snapshot.result_snapshot.get("forces") or {}
+    except CalculationSnapshot.DoesNotExist:
+        return None
+
+    t = series["t"]
+    n = len(t)
+
+    def arr(key):
+        values = forces_raw.get(key) or []
+        return np.asarray(values, dtype=float) if len(values) == n else None
+
+    forces = {key: arr(key) for key in ("ext", "spring", "angle", "magnetic_sum", "total")}
+    each_raw = forces_raw.get("magnetic_each") or []
+    each = np.asarray(each_raw, dtype=float) if len(each_raw) == n else None
+
+    stage = stage_index_for(run, t, series["recoil_end_time"])
+    keep = [series["recoil_end_index"], series["return_end_index"]]
+    if series["recoil_end_index"] is not None:
+        keep.append(series["recoil_end_index"] + 1)
+    if stage is not None:
+        switch_rows = np.nonzero(np.diff(stage))[0]
+        keep.extend(int(i) for i in switch_rows)
+        keep.extend(int(i) + 1 for i in switch_rows)
+    channels = [series["x"], series["v"], series["a"], series["f"]]
+    channels += [f for f in forces.values() if f is not None]
+    idx = decimate_indices(channels, keep)
+
+    all_forces = [np.abs(f) for f in forces.values() if f is not None]
+    f_peak = float(max((np.max(f) for f in all_forces), default=0.0))
+    f_div, f_unit = force_scale(f_peak)
+
+    def scaled(values):
+        return _round(values[idx] / f_div, 4 if f_div > 1 else 3)
+
+    i_x = int(np.argmax(series["x"]))
+    i_v = int(np.argmax(np.abs(series["v"])))
+    t_end = series["return_end_time"] if series["return_end_time"] is not None else float(t[-1])
+    return {
+        "t": _round(t[idx], 6),
+        "x_mm": _round(series["x"][idx] * 1000.0, 3),
+        "v": _round(series["v"][idx], 5),
+        "a_g": _round(series["a"][idx] / G, 4),
+        "forces": {key: scaled(values) for key, values in forces.items() if values is not None},
+        "forces_each": [scaled(each[:, j]) for j in range(each.shape[1])] if each is not None and each.ndim == 2 else [],
+        "f_unit": f_unit,
+        "peak_x": {"t": float(t[i_x]), "value": float(series["x"][i_x] * 1000.0)},
+        "peak_v": {"t": float(t[i_v]), "value": float(series["v"][i_v])},
+        "t0": float(t[0]),
+        "t_turn": float(series["recoil_end_time"]) if series["recoil_end_time"] is not None else None,
+        "t_end": float(t_end),
+        "stage_overlay": ({"segments": stage_segments(t, stage), "events": _stage_events(run)}
+                          if stage is not None else None),
+    }
+
+
+def classic_figures_json(run: CalculationRun) -> dict | None:
+    """Фигуры «Отдельных графиков» как JSON Plotly: {"x_t": {...}, "v_a_t": {...}, "forces_t": {...}}."""
+    import json
+
+    import plotly.io as pio
+
+    from .charting import make_classic_figures
+
+    data = build_classic_data(run)
+    if data is None:
+        return None
+    figures = make_classic_figures(data, free_fall=run.is_free_fall)
+    return {key: json.loads(pio.to_json(fig, validate=False)) for key, fig in figures.items()}

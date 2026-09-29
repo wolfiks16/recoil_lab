@@ -66,8 +66,13 @@ def _add_recoil_vline(fig: go.Figure, result, label_text: str = "разворо�
     idx = int(result.recoil_end_index)
     if not (0 <= idx < len(result.t)):
         return
+    _add_turn_vline(fig, float(result.t[idx]), label_text)
+
+
+def _add_turn_vline(fig: go.Figure, t_turn: float, label_text: str = "разворот") -> None:
+    """Линия разворота по известному моменту t (оформление — как у _add_recoil_vline)."""
     fig.add_vline(
-        x=float(result.t[idx]),
+        x=float(t_turn),
         line=dict(color=RB_ACCENT, width=RECOIL_LINE_W, dash=RECOIL_LINE_DASH),
         annotation_text=label_text,
         annotation_position="top",
@@ -1561,3 +1566,121 @@ def make_compare_phase_figures(osc_a: dict, osc_b: dict, name_a: str, name_b: st
         fig.update_layout(margin=dict(l=60, r=16, t=20, b=50), hovermode="closest", height=380,
                           legend=dict(x=0.99, y=0.99, xanchor="right", yanchor="top"))
     return vx, fv
+
+
+def make_classic_figures(data: dict, *, free_fall: bool = False) -> dict[str, go.Figure]:
+    """Графики страницы результата в прежнем формате — отдельными полотнами:
+    «Перемещение x(t)», «Скорость и ускорение» (две оси), «Силы F(t)» (тормоза, пружина,
+    тяжесть) и, если есть входная сила, «Движущая и суммарная» (выстрел и сумма сил —
+    как прежний «F движущая · F общая»: импульс выстрела на общем графике сжимал бы остальное).
+
+    Цвета — как в новом интерфейсе (цвет = величина, `QUANTITY_COLORS`), отметки пиков и
+    линия разворота — общими хелперами (`_add_peak_marker`, `_add_turn_vline`), этапы
+    пошагового расчёта — `_add_stage_overlay_t` (скрыты по умолчанию, общий переключатель).
+    data — `services.result_page.build_classic_data`.
+    """
+    t = data["t"]
+    overlay = data.get("stage_overlay")
+    turn = data["t_turn"] if data.get("t_turn") is not None and not free_fall else None
+    x_line, x_text = QUANTITY_COLORS["x"]
+    v_line, v_text = QUANTITY_COLORS["v"]
+    a_line, a_text = QUANTITY_COLORS["a"]
+    f_line, f_text = QUANTITY_COLORS["f"]
+    figures: dict[str, go.Figure] = {}
+
+    # --- Перемещение x(t) ---
+    fig = go.Figure(go.Scatter(
+        x=t, y=data["x_mm"], mode="lines", name="x(t)",
+        line=dict(color=x_line, width=LINE_WIDTH_PRIMARY), fill="tozeroy", fillcolor=_hex_to_rgba(x_line, 0.10),
+        hovertemplate="t %{x:.4f} с<br>x %{y:.1f} мм<extra></extra>",
+    ))
+    peak = data["peak_x"]
+    _add_peak_marker(fig, peak["t"], peak["value"], f"x max = {peak['value']:.1f} мм · t = {peak['t']:.3f} с", color=x_line)
+    if turn is not None:
+        _add_turn_vline(fig, turn)
+    _add_stage_overlay_t(fig, overlay)
+    _apply_layout(fig, "Перемещение x(t)", "t, с", "x, мм")
+    fig.update_yaxes(title_font_color=x_text)
+    figures["x_t"] = fig
+
+    # --- Скорость и ускорение (две оси, нули совмещены) ---
+    left_range, right_range = _aligned_zero_ranges(data["v"], data["a_g"])
+    # запас 10 % — чтобы подпись пика скорости не упиралась в край (нули осей остаются совмещены)
+    left_range = [left_range[0] * 1.1, left_range[1] * 1.1]
+    right_range = [right_range[0] * 1.1, right_range[1] * 1.1]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=t, y=data["v"], mode="lines", name="v(t), м/с", yaxis="y",
+                             line=dict(color=v_line, width=LINE_WIDTH_SECONDARY),
+                             hovertemplate="v %{y:.3f} м/с<extra></extra>"))
+    fig.add_trace(go.Scatter(x=t, y=data["a_g"], mode="lines", name="a(t), g", yaxis="y2",
+                             line=dict(color=a_line, width=LINE_WIDTH_SECONDARY),
+                             hovertemplate="a %{y:.1f} g<extra></extra>"))
+    peak = data["peak_v"]
+    _add_peak_marker(fig, peak["t"], peak["value"], f"v max = {abs(peak['value']):.2f} м/с · t = {peak['t']:.3f} с",
+                     color=v_line)
+    if turn is not None:
+        _add_turn_vline(fig, turn)
+    _add_stage_overlay_t(fig, overlay)
+    _apply_layout(fig, "Скорость и ускорение", "t, с", "v, м/с")
+    fig.update_layout(
+        hovermode="x unified",
+        yaxis=dict(range=left_range, title=dict(text="v, м/с", font=dict(family=FONT_FAMILY_UI, size=12, color=v_text)),
+                   tickfont=dict(family=FONT_FAMILY_MONO, size=10, color=v_text)),
+        yaxis2=dict(range=right_range, overlaying="y", side="right", showgrid=False, zeroline=False,
+                    title=dict(text="a, g", font=dict(family=FONT_FAMILY_UI, size=12, color=a_text)),
+                    tickfont=dict(family=FONT_FAMILY_MONO, size=10, color=a_text)),
+    )
+    figures["v_a_t"] = fig
+
+    # --- Силы F(t): тормоза (Σ и по одному), вход, пружина, тяжесть, сумма ---
+    unit = data["f_unit"]
+    forces = data["forces"]
+    fig = go.Figure()
+
+    def add_force(key, name, color, width, dash="solid"):
+        values = forces.get(key)
+        if values is None or not any(abs(v) > 0 for v in values):
+            return
+        fig.add_trace(go.Scatter(x=t, y=values, mode="lines", name=name,
+                                 line=dict(color=color, width=width, dash=dash),
+                                 hovertemplate=f"{name}: %{{y:.2f}} {unit}<extra></extra>"))
+
+    add_force("angle", "F тяжести", RB_GRAY, LINE_WIDTH_SECONDARY)
+    add_force("spring", "F пружины", RB_PINK, LINE_WIDTH_SECONDARY)
+    each = data.get("forces_each") or []
+    if len(each) > 1:
+        for j, values in enumerate(each):
+            fig.add_trace(go.Scatter(x=t, y=values, mode="lines", name=f"F тормоза {j + 1}",
+                                     line=dict(color=_BRAKE_LINE_COLORS[j % len(_BRAKE_LINE_COLORS)], width=1.4, dash="dot"),
+                                     hovertemplate=f"тормоз {j + 1}: %{{y:.2f}} {unit}<extra></extra>"))
+    add_force("magnetic_sum", "F тормозов, сумма", f_line, LINE_WIDTH_PRIMARY)
+    if turn is not None:
+        _add_turn_vline(fig, turn)
+    _add_stage_overlay_t(fig, overlay)
+    _apply_layout(fig, "Силы F(t)", "t, с", f"F, {unit}")
+    fig.update_yaxes(title_font_color=f_text)
+    fig.update_layout(hovermode="x unified")
+    figures["forces_t"] = fig
+
+    # --- Движущая и суммарная сила (только если есть входная — у свободного падения её нет) ---
+    if any(abs(v) > 0 for v in forces.get("ext") or []):
+        fig = go.Figure()
+        add_force("ext", "F входная (выстрел)", RB_PURPLE, LINE_WIDTH_PRIMARY)
+        add_force("total", "F суммарная", "#1B2430", LINE_WIDTH_SECONDARY)
+        if turn is not None:
+            _add_turn_vline(fig, turn)
+        _add_stage_overlay_t(fig, overlay)
+        _apply_layout(fig, "Движущая и суммарная сила", "t, с", f"F, {unit}")
+        fig.update_layout(hovermode="x unified")
+        figures["drive_t"] = fig
+
+    for key, fig in figures.items():
+        # Название графика — на вкладке страницы, поэтому заголовок внутри полотна не нужен
+        # (иначе с ним сталкивается легенда). Справа поле — только под вторую ось v·a.
+        fig.update_layout(
+            title=None, autosize=True,
+            margin=dict(l=64, r=64 if key == "v_a_t" else 24, t=36, b=50),
+            showlegend=key != "x_t",   # легенда — как у прежних графиков: справа вверху внутри (_apply_layout)
+        )
+        fig.update_xaxes(range=[data["t0"], data["t_end"]])
+    return figures
