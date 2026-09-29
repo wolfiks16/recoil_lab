@@ -33,6 +33,8 @@ urlpatterns = [
     # Детали расчёта
     path("run/<int:run_id>/", views.run_detail_v2_view, name="run_detail_v2"),
     path("run/<int:run_id>/delete/", views.delete_run_view, name="delete_run"),
+    # Вторичные графики страницы результата — догружаются по мере прокрутки
+    path("run/<int:run_id>/chart/<str:key>/", views.run_chart_view, name="run_chart"),
     # Сравнение
     path("compare/", views.compare_view, name="compare"),
 

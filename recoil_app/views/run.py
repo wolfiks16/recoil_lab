@@ -6,23 +6,22 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from ..forms import CalculationForm, FreeFallForm, MagneticBrakeFormSet
-from ..models import BrakeCatalog, CalculationRun
+from ..models import BrakeCatalog, CalculationRun, MagneticBrakeConfig
 from ..services.permissions import can_delete_run, can_run_calc, can_view_run
 from ..services.charting import build_brake_geometry_3d
 from ..services.dynamics import RecoilParams, simulate_free_fall, simulate_recoil
-from ..services.iterative.result_view import build_stage_tables, session_for_run
-from ..services.kpi import build_kpi_groups
 from ..services.run_pipeline import (
     build_initial_from_run,
     create_brake_objects_and_runtime_models,
     persist_result_and_snapshot,
     resolve_curve_sources,
 )
-from ..services.snapshot import extract_snapshot_parts
+from ..services.result_page import build_result_page, lazy_chart_html
 
 
 def index_view(request):
@@ -230,138 +229,67 @@ def _build_catalog_items() -> list[dict]:
 
 
 def run_detail_v2_view(request, run_id):
-    """Страница результата расчёта.
-
-    KPI-карточки, аннотированный главный график x(t), энергобаланс, табы графиков.
+    """Страница результата: протокол итогов, осциллограмма, вторичные графики по требованию.
 
     Доступ:
-      гость           → 403 (вообще не пускать)
+      гость           → на вход
       engineer        → только свои
       analyst/admin   → любые
     """
     run = get_object_or_404(CalculationRun, pk=run_id)
-    if not can_view_run(request.user, run):
-        if not request.user.is_authenticated:
-            messages.warning(
-                request,
-                "Результаты доступны только зарегистрированным пользователям. "
-                "Войдите или создайте аккаунт.",
-            )
-            return redirect(f"/login/?next={request.path}")
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden(
-            "У вас нет прав на просмотр этого расчёта. Расчёт создан другим инженером."
+    denied = _deny_run_view(request, run)
+    if denied is not None:
+        return denied
+
+    context = build_result_page(run)
+    context.update({
+        "run": run,
+        "thermal_runs_preview": list(run.thermal_runs.order_by("-created_at")[:3]),
+        "thermal_runs_total": run.thermal_runs.count(),
+        "perm_can_delete": can_delete_run(request.user, run),
+    })
+    return render(request, "recoil_app/run_detail_v2.html", context)
+
+
+def run_chart_view(request, run_id, key):
+    """HTML-фрагмент вторичного графика (догружается страницей результата).
+
+    key — из services.result_page.LAZY_CHART_FIELDS или «geometry-<индекс тормоза>».
+    """
+    run = get_object_or_404(CalculationRun, pk=run_id)
+    denied = _deny_run_view(request, run)
+    if denied is not None:
+        return denied
+
+    if key.startswith("geometry-"):
+        try:
+            brake = run.brakes.get(index=int(key.split("-", 1)[1]))
+        except (ValueError, MagneticBrakeConfig.DoesNotExist):
+            raise Http404("Нет такого тормоза")
+        html = build_brake_geometry_3d(brake) or (
+            '<p class="rb-chart-missing">Для 3D-модели нужны размеры n, x_m, y_m, Δh₁, Δh₂, d_m.</p>'
         )
-    brakes = list(run.brakes.order_by("index"))
+        return HttpResponse(html)
 
-    chart_fields = [
-        # v2-специфичные
-        "chart_x_t_annotated",
-        "chart_energy",
-        # общие
-        "chart_x_t",
-        "chart_v_a_t",
-        "chart_v_x",
-        "chart_fmag_v",
-        "chart_forces_secondary",
-        # фаза отката
-        "chart_x_t_recoil",
-        "chart_v_a_t_recoil",
-        "chart_forces_main_recoil",
-        "chart_forces_secondary_recoil",
-        # фаза наката
-        "chart_x_t_return",
-        "chart_v_a_t_return",
-        "chart_forces_secondary_return",
-    ]
+    html = lazy_chart_html(run, key)
+    if html is None:
+        raise Http404("Нет такого графика")
+    return HttpResponse(html)
 
-    chart_html: dict[str, str] = {}
-    chart_errors: list[str] = []
-    for field_name in chart_fields:
-        field_file = getattr(run, field_name, None)
-        if field_file and getattr(field_file, "name", ""):
-            try:
-                chart_html[field_name] = _read_chart_fragment(field_file.path)
-            except (FileNotFoundError, OSError) as exc:
-                chart_html[field_name] = ""
-                chart_errors.append(f"{field_name}: файл не найден ({exc})")
-            except UnicodeDecodeError as exc:
-                chart_html[field_name] = ""
-                chart_errors.append(f"{field_name}: ошибка кодировки ({exc})")
-            except Exception as exc:  # noqa: BLE001
-                chart_html[field_name] = ""
-                chart_errors.append(f"{field_name}: {type(exc).__name__}: {exc}")
 
-    has_annotated = bool(chart_html.get("chart_x_t_annotated"))
-    has_energy = bool(chart_html.get("chart_energy"))
-    has_x_t = bool(chart_html.get("chart_x_t"))
-
-    snapshot_parts = extract_snapshot_parts(run)
-    kpi_groups = build_kpi_groups(run, snapshot_parts)
-
-    energy_summary = None
-    if run.energy_residual_pct is not None or run.energy_input_total is not None:
-        energy_summary = {
-            "input_total": run.energy_input_total,
-            "brake_total": run.energy_brake_total,
-            "residual_pct": run.energy_residual_pct,
-        }
-
-    has_charts_main = any(chart_html.get(k) for k in [
-        "chart_x_t", "chart_v_a_t", "chart_v_x", "chart_fmag_v", "chart_forces_secondary"
-    ])
-    has_charts_recoil = any(chart_html.get(k) for k in [
-        "chart_x_t_recoil", "chart_v_a_t_recoil", "chart_forces_main_recoil", "chart_forces_secondary_recoil"
-    ])
-    has_charts_return = any(chart_html.get(k) for k in [
-        "chart_x_t_return", "chart_v_a_t_return", "chart_forces_secondary_return"
-    ])
-
-    thermal_runs_preview = list(run.thermal_runs.order_by("-created_at")[:3])
-    thermal_runs_total = run.thermal_runs.count()
-
-    # Срез 8a: 3D-геометрия каждого тормоза. Для curve-тормозов и параметрических
-    # без полного набора размеров вернётся None — шаблон покажет placeholder.
-    brakes_geometry = [
-        {"brake": b, "html": build_brake_geometry_3d(b)}
-        for b in brakes
-    ]
-    has_brakes_geometry_3d = any(item["html"] for item in brakes_geometry)
-
-    # Срез 12: этапы итерационного расчёта (таблицы) и ссылка на его сессию.
-    stage_tables, iterative_calc = None, None
-    if run.is_iterative:
-        stage_tables = build_stage_tables(run)
-        iterative_calc = session_for_run(run)
-
-    return render(
-        request,
-        "recoil_app/run_detail_v2.html",
-        {
-            "run": run,
-            "brakes": brakes,
-            "chart_html": chart_html,
-            "has_annotated": has_annotated,
-            "has_energy": has_energy,
-            "has_x_t": has_x_t,
-            "has_charts_main": has_charts_main,
-            "has_charts_recoil": has_charts_recoil,
-            "has_charts_return": has_charts_return,
-            "chart_errors": chart_errors,
-            "kpi_groups": kpi_groups,
-            "energy_summary": energy_summary,
-            "phase_analysis": snapshot_parts["phase_analysis"],
-            "characteristic_points": snapshot_parts["characteristic_points"],
-            "engineering_metrics": snapshot_parts["engineering_metrics"],
-            "thermal_runs_preview": thermal_runs_preview,
-            "thermal_runs_total": thermal_runs_total,
-            "brakes_geometry": brakes_geometry,
-            "has_brakes_geometry_3d": has_brakes_geometry_3d,
-            "stage_tables": stage_tables,
-            "iterative_calc": iterative_calc,
-            # --- Permission flags для шаблона ---
-            "perm_can_delete": can_delete_run(request.user, run),
-        },
+def _deny_run_view(request, run):
+    """Ответ-отказ, если смотреть расчёт нельзя (иначе None)."""
+    if can_view_run(request.user, run):
+        return None
+    if not request.user.is_authenticated:
+        messages.warning(
+            request,
+            "Результаты доступны только зарегистрированным пользователям. "
+            "Войдите или создайте аккаунт.",
+        )
+        return redirect(f"/login/?next={request.path}")
+    return HttpResponseForbidden(
+        "У вас нет прав на просмотр этого расчёта. Расчёт создан другим инженером."
     )
 
 
@@ -423,6 +351,3 @@ def delete_run_view(request, run_id):
     messages.success(request, "Расчёт и его файлы удалены.")
     return redirect("dashboard")
 
-
-def _read_chart_fragment(path: str | Path) -> str:
-    return Path(path).read_text(encoding="utf-8")

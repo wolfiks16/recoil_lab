@@ -49,6 +49,7 @@ from .run import (  # noqa: F401
     delete_run_view,
     free_fall_new_view,
     index_view,
+    run_chart_view,
     run_detail_v2_view,
 )
 from .thermal import (  # noqa: F401

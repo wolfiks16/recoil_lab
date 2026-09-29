@@ -1932,3 +1932,104 @@ def build_brake_geometry_3d(brake) -> str | None:
         default_height="520px",
         validate=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Осциллограмма страницы результата (редизайн «протокол + осциллограмма»)
+# ---------------------------------------------------------------------------
+
+# Цвет = физическая величина (на той же палитре): (линия, подпись оси — темнее, для контраста).
+QUANTITY_COLORS = {
+    "x": (RB_BLUE, "#2C5FD0"),
+    "v": (RB_GREEN, "#047857"),
+    "a": (RB_ACCENT, "#9A3F68"),
+    "f": (RB_AMBER, "#B45309"),
+}
+OSC_GRID = "#EEF1F4"
+OSC_ZERO = "#D3D9DF"
+OSC_MARKER = "#56606B"
+
+
+def make_oscillogram_figure(data: dict, *, free_fall: bool = False) -> go.Figure:
+    """Синхронная осциллограмма: x, v, a, |F| на общей оси t + лента этапов.
+
+    data — `services.result_page.build_oscillogram_data`. Все каналы на ОДНОЙ оси x
+    (разные y-домены), hoversubplots='axis' — курсор показывает все каналы в один
+    момент времени. Участки цикла (откат/накат) — это диапазон общей оси, а не
+    отдельные наборы графиков. Этапы — одна лента под осью, а не полосы на каждом канале.
+    """
+    rows = [
+        ("x_mm", "x, мм", "x", "мм", ".1f"),
+        ("v", "v, м/с", "v", "м/с", ".3f"),
+        ("a_g", "a, g", "a", "g", ".1f"),
+        ("f", f"|F| торм., {data.get('f_unit', 'кН')}", "f", data.get("f_unit", "кН"), ".1f"),
+    ]
+    has_ribbon = bool(data.get("segments")) and len(data["segments"]) > 1
+    heights = [0.235] * 4 + ([0.06] if has_ribbon else [])
+    total = sum(heights)
+    heights = [h / total for h in heights]
+    gap = 0.014
+    domains, edge = [], 1.0
+    for h in heights:
+        domains.append([max(edge - h + gap / 2, 0.0), edge - gap / 2])
+        edge -= h
+
+    tick_font = dict(family=FONT_FAMILY_MONO, size=10, color="#5A6A7F")
+    fig = go.Figure()
+    for i, (key, name, q, unit, fmt) in enumerate(rows):
+        line_color, text_color = QUANTITY_COLORS[q]
+        fig.add_trace(go.Scatter(
+            x=data["t"], y=data[key], mode="lines", name=name,
+            xaxis="x", yaxis="y" if i == 0 else f"y{i + 1}",
+            line=dict(color=line_color, width=2),
+            hovertemplate=f"%{{y:{fmt}}} {unit}<extra></extra>",
+        ))
+        axis = "yaxis" if i == 0 else f"yaxis{i + 1}"
+        fig.update_layout({axis: dict(
+            domain=domains[i],
+            title=dict(text=name, font=dict(family=FONT_FAMILY_UI, size=12, color=text_color)),
+            tickfont=tick_font, gridcolor=OSC_GRID, zerolinecolor=OSC_ZERO, fixedrange=True,
+        )})
+
+    shapes, annotations = [], []
+    anchor = "y4"
+    if has_ribbon:
+        anchor = "y5"
+        fig.update_layout(yaxis5=dict(domain=domains[4], range=[0, 1], visible=False, fixedrange=True))
+        span = max(data["t_end"] - data["t0"], 1e-12)
+        for seg in data["segments"]:
+            color = _stage_color(seg["stage"])
+            shapes.append(dict(type="rect", xref="x", yref="y5", x0=seg["t0"], x1=seg["t1"], y0=0, y1=1,
+                               fillcolor=_hex_to_rgba(color, 0.22 if seg["stage"] == 0 else 0.45),
+                               line=dict(width=0), layer="below"))
+            if seg["t1"] - seg["t0"] >= 0.05 * span:
+                annotations.append(dict(xref="x", yref="y5", x=(seg["t0"] + seg["t1"]) / 2, y=0.5,
+                                        text=f"этап {seg['stage']}", showarrow=False,
+                                        font=dict(family=FONT_FAMILY_UI, size=11, color="#1B2430")))
+
+    if data.get("t_turn") is not None and not free_fall:
+        shapes.append(dict(type="line", xref="x", yref="paper", x0=data["t_turn"], x1=data["t_turn"],
+                           y0=0, y1=1, line=dict(color=OSC_MARKER, width=1, dash="dot")))
+        annotations.append(dict(xref="x", yref="paper", x=data["t_turn"], y=1, yanchor="bottom",
+                                text="разворот", showarrow=False,
+                                font=dict(family=FONT_FAMILY_UI, size=11, color=OSC_MARKER)))
+
+    fig.update_layout(
+        template="plotly_white",
+        font=dict(family=FONT_FAMILY_UI, size=12, color="#1B2430"),
+        margin=dict(l=64, r=16, t=24, b=40),
+        showlegend=False,
+        paper_bgcolor="white", plot_bgcolor="white",
+        hovermode="x", hoversubplots="axis", dragmode="zoom",
+        hoverlabel=dict(font=dict(family=FONT_FAMILY_MONO, size=11)),
+        xaxis=dict(
+            anchor=anchor, title=dict(text="t, с", font=dict(family=FONT_FAMILY_UI, size=12)),
+            tickfont=tick_font, gridcolor=OSC_GRID, zeroline=False,
+            showspikes=True, spikemode="across", spikesnap="cursor",
+            spikethickness=1, spikecolor="#1B2430", spikedash="solid",
+            range=[data["t0"], data["t_end"]],
+        ),
+        shapes=shapes, annotations=annotations,
+        height=640 if has_ribbon else 600,
+    )
+    return fig
