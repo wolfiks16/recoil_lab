@@ -148,7 +148,8 @@
     function syncBrakeHeader() {
         const items = formsContainer.querySelectorAll(".brake-form-item");
         items.forEach((card, index) => {
-            const name = getBrakeName(card, index);
+            const nameInput = card.querySelector('input[name$="-name"]');
+            const name = nameInput ? (nameInput.value || "").trim() : "";
             const display = card.querySelector("[data-brake-display-name]");
             if (display) display.textContent = name;
             const prefix = card.querySelector(".rb-cad-brake-head-prefix");

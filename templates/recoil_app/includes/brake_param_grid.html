@@ -1,5 +1,7 @@
 {% comment %}
 Параметры вихретокового тормоза — общий вид для всех форм (тег brake_param_grid).
+Каждое поле — три строки общей сетки (subgrid): подпись, поле с единицей, подсказка/ошибка;
+поэтому в одном ряду поля ввода стоят на одной линии, как бы ни переносились подписи.
 {% endcomment %}
 <div class="rb-param-groups">
     {% for group in groups %}
@@ -8,13 +10,18 @@
         <div class="rb-param-grid">
             {% for f in group.fields %}
             <div class="rb-param-field{% if f.bf.errors %} has-error{% endif %}">
-                <label for="{{ f.bf.id_for_label }}">
+                <label for="{{ f.bf.id_for_label }}" title="{{ f.label }}{% if f.unit %}, {{ f.unit }}{% endif %}">
                     <span class="rb-param-symbol">{{ f.symbol }}</span>
-                    <span class="rb-param-label">{{ f.label }}{% if f.unit %}, {{ f.unit }}{% endif %}{% if required_mark %} *{% endif %}</span>
+                    <span class="rb-param-label">{{ f.label }}{% if f.unit %}<span class="rb-visually-hidden">, {{ f.unit }}</span>{% endif %}{% if required_mark %}&nbsp;*{% endif %}</span>
                 </label>
-                {{ f.bf }}
-                {% if f.bf.errors %}<div class="field-error">{{ f.bf.errors|join:" " }}</div>{% endif %}
-                {% if f.hint %}<div class="rb-param-hint">{{ f.hint }}</div>{% endif %}
+                <div class="rb-param-input{% if f.unit %} has-unit{% endif %}">
+                    {{ f.bf }}
+                    {% if f.unit %}<span class="rb-param-unit" aria-hidden="true">{{ f.unit }}</span>{% endif %}
+                </div>
+                <div class="rb-param-foot">
+                    {% if f.bf.errors %}<div class="field-error">{{ f.bf.errors|join:" " }}</div>{% endif %}
+                    {% if f.hint %}<div class="rb-param-hint">{{ f.hint }}</div>{% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>
