@@ -12,6 +12,8 @@
      параметра каждого тормоза; выделяется доминирующая пара (тормоз, параметр).
 
 Потолок ΣF применяется к СУММЕ (sigma_f_peak прогона = max|ΣF(t)|).
+Шина (если задана) — у КАЖДОГО тормоза своя той же длины: проверяется каждый тормоз.
+Подбираются только размеры из `space.free_params`; в робастности — все размеры.
 """
 
 from __future__ import annotations
@@ -23,16 +25,15 @@ from scipy.optimize import least_squares
 
 from ..magnetic import MagneticParams
 from .forward import Metrics, evaluate_brakes
-from .objective import design_residuals, within_limits
+from .objective import bus_message, bus_report, design_residuals, within_limits
 from .param_fit import (
-    CONT_PARAMS,
-    ParamSpace,
     ParamTolerances,
     fit_parametric_to_curve,
     params_from_vec,
     quasistatic_curve,
     _with,
 )
+from .space import CONT_PARAMS, ParamSpace, bound_hits, bound_hits_message
 from .targets import DesignConstraints, DesignTargets
 
 
@@ -49,6 +50,9 @@ class MultiBrakeResult:
     sigma_f_ok: bool
     robustness: dict
     messages: list = field(default_factory=list)
+    bus: dict | None = None          # проверка шины (у каждого тормоза своя); None — не задана
+    bus_ok: bool = True
+    bound_hits: list = field(default_factory=list)  # по тормозам: параметры у края диапазона
 
 
 def _normalize_weights(weights, n: int) -> tuple:
@@ -62,23 +66,27 @@ def _normalize_weights(weights, n: int) -> tuple:
 
 def refine_multi_end_to_end(drive, base, brakes0: list, targets: DesignTargets,
                             space: ParamSpace, *, symmetric: bool = False,
-                            sigma_f_max: float | None = None, max_nfev: int | None = None) -> list:
-    """Совместная доводка непрерывных параметров тормозов под метрики цикла.
+                            sigma_f_max: float | None = None, bus_length: float | None = None,
+                            max_nfev: int | None = None) -> list:
+    """Совместная доводка подбираемых размеров тормозов под метрики цикла.
 
-    symmetric=True (равные веса) → один общий набор из 7 параметров, N одинаковых
-    тормозов: well-posed и вдвое-втрое дешевле. Иначе — независимые N·7 параметров
-    (underdetermined, LM держится рядом с по-долевым приближением).
+    symmetric=True (равные веса) → один общий набор подбираемых размеров, N
+    одинаковых тормозов: well-posed и вдвое-втрое дешевле. Иначе — независимые
+    наборы по тормозам (underdetermined, LM держится рядом с по-долевым приближением).
     n каждого тормоза фиксировано из curve-подгона.
     """
+    free = space.free_params
+    if not free:
+        return list(brakes0)
     n = len(brakes0)
-    nc = len(CONT_PARAMS)
-    lo = np.array([space.cont_bounds[p][0] for p in CONT_PARAMS])
-    hi = np.array([space.cont_bounds[p][1] for p in CONT_PARAMS])
+    nc = len(free)
+    lo = np.array([space.cont_bounds[p][0] for p in free])
+    hi = np.array([space.cont_bounds[p][1] for p in free])
     span = hi - lo
     ns = [int(b.n) for b in brakes0]
 
     def _u_of(b):
-        x = np.array([getattr(b, p) for p in CONT_PARAMS])
+        x = np.array([getattr(b, p) for p in free])
         return np.clip((x - lo) / span, 0.0, 1.0)
 
     if symmetric:
@@ -101,7 +109,9 @@ def refine_multi_end_to_end(drive, base, brakes0: list, targets: DesignTargets,
         dim = n * nc
 
     def _resid(u):
-        return design_residuals(evaluate_brakes(drive, base, _brakes(u)), targets, sigma_f_max)
+        brakes = _brakes(u)
+        return design_residuals(evaluate_brakes(drive, base, brakes), targets, sigma_f_max,
+                                brakes=brakes, bus_length=bus_length)
 
     if max_nfev is None:
         max_nfev = min(90, 12 * dim) if symmetric else min(150, 10 * dim)
@@ -177,11 +187,12 @@ def _multi_robustness(drive, base, brakes: list, targets: DesignTargets,
 def run_multi_brake_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
                           constraints: DesignConstraints, *, n_brakes: int, weights=None,
                           space: ParamSpace | None = None, param_tol: ParamTolerances | None = None,
-                          seed: int = 0) -> MultiBrakeResult:
+                          seed: int = 0, stroke_hint: float | None = None) -> MultiBrakeResult:
     space = space or ParamSpace.default()
     param_tol = param_tol or ParamTolerances.uniform(0.02)
     weights = _normalize_weights(weights, n_brakes)
     symmetric = bool(np.allclose(weights, weights[0], atol=1e-9))
+    bus_length = constraints.bus_length
 
     v_nodes = np.asarray(v_nodes, dtype=float)
     f_nodes = np.asarray(f_nodes, dtype=float)
@@ -195,14 +206,15 @@ def run_multi_brake_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
     for w in weights:
         key = round(w, 9)
         if key not in fits:
-            fits[key] = fit_parametric_to_curve(v_grid, w * f_total, space, seed=seed)
+            fits[key] = fit_parametric_to_curve(v_grid, w * f_total, space, bus_length=bus_length,
+                                                stroke=stroke_hint or 0.0, seed=seed)
         fit = fits[key]
         brakes0.append(fit.params)
         per_rmse.append(fit.curve_rmse)
 
     # Совместная доводка под метрики.
     brakes = refine_multi_end_to_end(drive, base, brakes0, targets, space, symmetric=symmetric,
-                                     sigma_f_max=constraints.sigma_f_max)
+                                     sigma_f_max=constraints.sigma_f_max, bus_length=bus_length)
 
     achieved = evaluate_brakes(drive, base, brakes)
     rel_error = _rel_error(achieved, targets)
@@ -212,18 +224,25 @@ def run_multi_brake_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
     sigma_f_ok = bool(np.isfinite(sigma_f_peak)
                       and sigma_f_peak <= constraints.sigma_f_max * (1.0 + targets.rel_tol))
 
+    bus = bus_report(brakes, achieved.x_max if achieved.completed else None, bus_length)
+    bus_ok = bus is None or bus["fits"]
+    hits = [bound_hits(b, space) for b in brakes]
+    # Одинаковые тормоза упираются одинаково — сообщаем один раз, без номеров.
+    hits_message = bound_hits_message(hits[:1] if symmetric else hits)
+
     robustness = {}
     if achieved.completed:
         robustness = _multi_robustness(drive, base, brakes, targets, param_tol,
                                        constraints.sigma_f_max, sigma_f_peak, symmetric=symmetric)
 
-    messages = _diagnose(achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints, n_brakes)
+    messages = _diagnose(achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints, n_brakes,
+                         bus=bus, hits_message=hits_message)
 
     return MultiBrakeResult(
         n_brakes=n_brakes, weights=weights, brakes=brakes, per_brake_curve_rmse=per_rmse,
         achieved=achieved, rel_error=rel_error, within_tol=within_tol,
         sigma_f_peak=sigma_f_peak, sigma_f_ok=sigma_f_ok, robustness=robustness,
-        messages=messages,
+        messages=messages, bus=bus, bus_ok=bus_ok, bound_hits=hits,
     )
 
 
@@ -237,7 +256,8 @@ def _rel_error(achieved: Metrics, targets: DesignTargets) -> dict:
     }
 
 
-def _diagnose(achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints, n_brakes) -> list:
+def _diagnose(achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints, n_brakes, *,
+              bus=None, hits_message=None) -> list:
     msgs = []
     if not achieved.completed:
         msgs.append(f"С {n_brakes} подобранными тормозами цикл не завершается — параметры непригодны.")
@@ -246,9 +266,15 @@ def _diagnose(achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints, n_bra
         msgs.append(
             f"Суммарный пик ΣF={sigma_f_peak:.0f} Н превышает потолок {constraints.sigma_f_max:.0f} Н."
         )
-    if within_tol and sigma_f_ok:
+    bus_text = bus_message(bus)
+    if bus_text:
+        msgs.append(bus_text)
+    if within_tol and sigma_f_ok and not bus_text:
+        on_bus = ", каждый помещается на своей шине" if bus else ""
         msgs.append(f"{n_brakes} тормоза укладываются во все пределы (x_max/T/v_end ≤ лимитов, "
-                    f"ΣF ≤ ΣF_max); x_max минимизирован.")
+                    f"ΣF ≤ ΣF_max{on_bus}); x_max минимизирован.")
     elif not within_tol:
         msgs.append("Не удаётся уложиться во все пределы одновременно — ослабьте самый тесный.")
+    if hits_message:
+        msgs.append(hits_message)
     return msgs

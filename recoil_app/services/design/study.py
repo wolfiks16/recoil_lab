@@ -18,6 +18,7 @@ from .param_fit import ParamTolerances, ParametricResult, run_parametric_stage
 from .multi_brake import MultiBrakeResult, run_multi_brake_stage
 from .multistart import MultistartResult, run_multistart
 from .robustness import RobustnessReport, score_robustness
+from .space import ParamSpace
 from .synthesis import synthesize_curve
 from .targets import DesignConstraints, DesignTargets, ToleranceModel
 
@@ -38,6 +39,8 @@ class DesignResult:
     parametric: ParametricResult | None = None   # Stage 2, один тормоз
     multi: MultiBrakeResult | None = None         # Stage 2, N тормозов
     multistart_result: MultistartResult | None = None  # мультистарт + отбор по робастности
+    space: ParamSpace | None = None               # границы/фиксация, с которыми шёл Stage 2
+    bus_length: float | None = None               # длина шины (у каждого тормоза своя), м
 
 
 def _estimate_v_peak(drive, base) -> float:
@@ -75,7 +78,11 @@ def run_design_study(
     n_brakes: int = 1,
     weights=None,
     multistart: bool = False,
+    space: ParamSpace | None = None,
 ) -> DesignResult:
+    """`space` — что подбирать и в каких границах (None → ParamSpace.default());
+    длина шины — `constraints.bus_length`. Оба действуют только на Stage 2."""
+    space = space or ParamSpace.default()
     drive = load_recoil_characteristics(input_file_path)
     t_ext_max = drive[2]
 
@@ -130,20 +137,27 @@ def run_design_study(
     multistart_result = None
     if fit_parametric and achieved.completed:
         p_tol = ParamTolerances.uniform(param_tol_rel)
+        # Оценка хода для шины в подгоне под кривую — x_max идеальной кривой (нижняя оценка).
+        stage2 = dict(space=space, param_tol=p_tol, seed=seed, stroke_hint=achieved.x_max)
         if multistart:
+            if n_brakes <= 1 and space.n_fixed:
+                messages.append("Число блоков N зафиксировано, а тормоз один — мультистарту "
+                                "перебирать нечего: подобран один вариант.")
             multistart_result = run_multistart(
-                drive, base, v_nodes, f_nodes, targets, constraints,
-                n_brakes=n_brakes, param_tol=p_tol, seed=seed,
+                drive, base, v_nodes, f_nodes, targets, constraints, n_brakes=n_brakes, **stage2,
             )
         elif n_brakes <= 1:
             parametric = run_parametric_stage(
-                drive, base, v_nodes, f_nodes, targets, constraints, param_tol=p_tol, seed=seed,
+                drive, base, v_nodes, f_nodes, targets, constraints, **stage2,
             )
         else:
             multi = run_multi_brake_stage(
                 drive, base, v_nodes, f_nodes, targets, constraints,
-                n_brakes=n_brakes, weights=weights, param_tol=p_tol, seed=seed,
+                n_brakes=n_brakes, weights=weights, **stage2,
             )
+    elif not fit_parametric and constraints.bus_length is not None:
+        messages.append("Длина шины проверяется только при подборе физических параметров "
+                        "(у табличного тормоза нет размеров).")
 
     return DesignResult(
         feasible=within_tol,
@@ -163,6 +177,8 @@ def run_design_study(
         parametric=parametric,
         multi=multi,
         multistart_result=multistart_result,
+        space=space,
+        bus_length=constraints.bus_length,
     )
 
 

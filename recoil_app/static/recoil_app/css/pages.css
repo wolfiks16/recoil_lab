@@ -587,6 +587,40 @@
 .rb-same { font-family: var(--rb-font-ui); color: var(--rb-text-muted); }
 .rb-run-table .rb-status { white-space: nowrap; }
 
+/* ============================================================================
+   ПОДБОР ТОРМОЗА: границы подбора (optimize_form.html) и карточки тормозов (optimize_detail.html)
+   ============================================================================ */
+.rb-optimize-form { max-width: 920px; }
+.rb-optimize-form > * + * { margin-top: 16px; }
+.rb-space-donor-brake { width: auto; }
+.rb-space-donor-brake[hidden] { display: none; }
+.rb-space { display: flex; flex-direction: column; gap: 6px; }
+.rb-space-head, .rb-space-row {
+    display: grid;
+    grid-template-columns: minmax(170px, 1.6fr) 140px repeat(4, minmax(78px, 1fr));
+    gap: 8px;
+    align-items: center;
+}
+.rb-space-head { font-size: 12px; color: var(--rb-text-soft); padding-bottom: 4px; border-bottom: 1px solid var(--rb-panel-border); }
+.rb-space-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 13px; }
+.rb-space-label { color: var(--rb-text-soft); min-width: 0; }
+/* Неактивные поля строки приглушены: «подбирать» → значение, «зафиксировать» → от/до/шаг */
+.rb-space-row:not(.is-fixed) .rb-space-value input,
+.rb-space-row.is-fixed .rb-space-range input { opacity: .4; }
+.rb-space-row.has-error input { border-color: var(--rb-danger); }
+.rb-space-error { grid-column: 1 / -1; font-size: 13px; color: var(--rb-danger-dark); background: var(--rb-danger-soft); padding: 4px 8px; border-radius: var(--rb-radius-sm); }
+.rb-space-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+@media (max-width: 720px) {
+    .rb-space-head { display: none; }
+    .rb-space-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 8px 0; border-bottom: 1px solid var(--rb-panel-border); }
+    .rb-space-name, .rb-space-mode { grid-column: 1 / -1; }
+    .rb-space-range:empty { display: none; }
+    .rb-space-range::before, .rb-space-value::before { content: attr(data-label); display: block; font-size: 12px; color: var(--rb-text-soft); margin-bottom: 2px; }
+}
+.rb-design-params td.rng { font-family: var(--rb-font-mono); font-size: 12px; color: var(--rb-text-soft); white-space: nowrap; }
+.rb-design-params th small { display: block; font-weight: 400; color: var(--rb-text-soft); }
+.rb-design-hit { display: block; font-family: var(--rb-font-ui); font-size: 12px; white-space: nowrap; }
+
 /* Единый вертикальный шаг между блоками страницы: у соседних блоков контента всегда
    ≥ 16 px (вертикальные поля схлопываются, поэтому больший отступ, например у шапки, сохраняется). */
 .rb-content > * + * { margin-top: 16px; }

@@ -10,6 +10,7 @@
   1. Скрининг ВСЕХ кандидатов на грубом dt (дёшево) → грубые R и допустимость.
   2. Точная доводка только победителя на рабочем dt.
 Грубый dt смещает абсолютные метрики, но относительный порядок робастности держит.
+Варианты n для одного тормоза — из `space.n_choices` (N зафиксирован → один кандидат).
 """
 
 from __future__ import annotations
@@ -62,26 +63,29 @@ def _default_configs(n_brakes: int, space: ParamSpace) -> list:
 
 
 def _evaluate_config(drive, base, v_nodes, f_nodes, targets, constraints,
-                     n_brakes, cfg, space, param_tol, seed):
+                     n_brakes, cfg, space, param_tol, seed, stroke_hint):
     if n_brakes <= 1:
-        sp = ParamSpace(cont_bounds=space.cont_bounds, n_choices=(cfg["n"],), fixed=space.fixed)
         res = run_parametric_stage(drive, base, v_nodes, f_nodes, targets, constraints,
-                                   space=sp, param_tol=param_tol, seed=seed)
+                                   space=space.with_n_choices((cfg["n"],)), param_tol=param_tol,
+                                   seed=seed, stroke_hint=stroke_hint)
     else:
         res = run_multi_brake_stage(drive, base, v_nodes, f_nodes, targets, constraints,
                                     n_brakes=n_brakes, weights=cfg["weights"],
-                                    space=space, param_tol=param_tol, seed=seed)
+                                    space=space, param_tol=param_tol, seed=seed,
+                                    stroke_hint=stroke_hint)
     R = (res.robustness or {}).get("R", float("inf"))
-    feasible = bool(res.within_tol and res.sigma_f_ok)
-    # Мера «насколько нарушены пределы» (0 = всё под пределами) — для отбора/ранжирования.
-    overshoot = constraint_overshoot(res.achieved, targets)
+    feasible = bool(res.within_tol and res.sigma_f_ok and res.bus_ok)
+    # Мера «насколько нарушены пределы» (0 = всё под пределами, шина — тоже предел)
+    # — для отбора/ранжирования.
+    overshoot = max(constraint_overshoot(res.achieved, targets), (res.bus or {}).get("overshoot", 0.0))
     return res, R, feasible, overshoot
 
 
 def run_multistart(drive, base_fine: RecoilParams, v_nodes, f_nodes, targets, constraints, *,
                    n_brakes: int, space: ParamSpace | None = None,
                    param_tol: ParamTolerances | None = None,
-                   configs: list | None = None, seed: int = 0) -> MultistartResult:
+                   configs: list | None = None, seed: int = 0,
+                   stroke_hint: float | None = None) -> MultistartResult:
     space = space or ParamSpace.default()
     param_tol = param_tol or ParamTolerances.uniform(0.02)
     configs = configs or _default_configs(n_brakes, space)
@@ -95,7 +99,7 @@ def run_multistart(drive, base_fine: RecoilParams, v_nodes, f_nodes, targets, co
     for cfg in configs:
         res, R, feasible, max_err = _evaluate_config(
             drive, coarse, v_nodes, f_nodes, targets, constraints,
-            n_brakes, cfg, space, param_tol, seed)
+            n_brakes, cfg, space, param_tol, seed, stroke_hint)
         screened.append(Candidate(label=cfg["label"], config=cfg, result=res, R=R,
                                   feasible=feasible, max_abs_err=max_err, fidelity="coarse"))
 
@@ -116,7 +120,7 @@ def run_multistart(drive, base_fine: RecoilParams, v_nodes, f_nodes, targets, co
         win_cfg = best_coarse.config
         res, R, feasible, max_err = _evaluate_config(
             drive, base_fine, v_nodes, f_nodes, targets, constraints,
-            n_brakes, win_cfg, space, param_tol, seed)
+            n_brakes, win_cfg, space, param_tol, seed, stroke_hint)
         best = Candidate(label=best_coarse.label, config=win_cfg, result=res, R=R,
                          feasible=feasible, max_abs_err=max_err, fidelity="fine")
 

@@ -41,6 +41,8 @@ urlpatterns = [
     # Оптимизация / обратное проектирование (DesignStudy)
     path("optimize/", views.optimize_list_view, name="optimize_list"),
     path("optimize/new/", views.optimize_new_view, name="optimize_new"),
+    path("optimize/donor-brakes/<int:run_id>/", views.optimize_donor_brakes_view,
+         name="optimize_donor_brakes"),
     path("optimize/<int:study_id>/", views.optimize_detail_view, name="optimize_detail"),
     path("optimize/<int:study_id>/status/", views.optimize_status_view, name="optimize_status"),
     path("optimize/<int:study_id>/spawn/", views.optimize_spawn_view, name="optimize_spawn"),

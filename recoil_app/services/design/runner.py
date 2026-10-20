@@ -10,7 +10,8 @@ from __future__ import annotations
 import threading
 import traceback
 
-from .persist import serialize_design
+from .persist import serialize_design, study_summary
+from .space import ParamSpace
 from .study import run_design_study
 from .targets import DesignConstraints, DesignTargets, ToleranceModel
 
@@ -19,6 +20,25 @@ def start_study(study_id: int) -> None:
     """Запускает исследование в фоновом потоке (не блокирует запрос)."""
     thread = threading.Thread(target=_run, args=(study_id,), daemon=True)
     thread.start()
+
+
+def study_inputs(study) -> dict:
+    """Вход `run_design_study` из `DesignStudy` (кроме донора/привода).
+
+    Старые исследования без `param_space` считаются с границами по умолчанию.
+    """
+    return {
+        "targets": DesignTargets(T=study.target_T, x_max=study.target_x_max,
+                                 v_end=study.target_v_end, rel_tol=study.rel_tol),
+        "constraints": DesignConstraints(sigma_f_max=study.sigma_f_max, n_free_nodes=study.n_nodes,
+                                         bus_length=study.bus_length),
+        "tol": ToleranceModel.from_fraction(study.n_nodes, study.sigma_f_max, 0.02),
+        "space": ParamSpace.from_dict(study.param_space),
+        "fit_parametric": study.do_parametric,
+        "param_tol_rel": study.param_tol_rel,
+        "n_brakes": study.n_brakes,
+        "multistart": study.multistart,
+    }
 
 
 def _run(study_id: int) -> None:
@@ -35,32 +55,16 @@ def _run(study_id: int) -> None:
         if donor is None or not donor.input_file:
             raise ValueError("Донор-расчёт удалён или без входного файла.")
 
-        targets = DesignTargets(T=study.target_T, x_max=study.target_x_max,
-                                v_end=study.target_v_end, rel_tol=study.rel_tol)
-        constraints = DesignConstraints(sigma_f_max=study.sigma_f_max, n_free_nodes=study.n_nodes)
-        tol = ToleranceModel.from_fraction(study.n_nodes, study.sigma_f_max, 0.02)
-
         result = run_design_study(
             input_file_path=donor.input_file.path,
             mass=donor.mass, angle_deg=donor.angle_deg, v0=donor.v0, x0=donor.x0,
             base_dt=donor.dt,
-            targets=targets, constraints=constraints, tol=tol,
-            fit_parametric=study.do_parametric, param_tol_rel=study.param_tol_rel,
-            n_brakes=study.n_brakes, multistart=study.multistart,
+            **study_inputs(study),
         )
 
         snapshot = serialize_design(result)
         study.result_snapshot = snapshot
-
-        s2 = snapshot.get("stage2")
-        s1 = snapshot["stage1"]
-        if s2 and s2.get("kind") != "multistart_failed":
-            study.feasible = bool(s2.get("within_tol") and s2.get("sigma_f_ok"))
-            study.best_R = (s2.get("robustness") or {}).get("R")
-        else:
-            study.feasible = bool(s1["feasible"])
-            study.best_R = (s1.get("robustness") or {}).get("R")
-
+        study.feasible, study.best_R = study_summary(snapshot)
         study.status = DesignStudy.STATUS_DONE
         study.save()
 

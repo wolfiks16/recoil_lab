@@ -4,14 +4,16 @@
 её «статическая» форма — квазистатическая сила `magnetic_force_quasistatic`
 (закрытая форма wn*). Её и подгоняем под целевую кривую Stage 1.
 
-Свободные параметры (design): delta, xm, ym, dh1, dh2, dm, bz + целое n.
-Фиксированные (материал/стандарт): gamma (проводник), mu, lya, wn0 —
-wn0 в квазистатику не входит вовсе (сходится из любого начального).
+Что подбирается, а что зафиксировано, задаёт `ParamSpace` (space.py): размеры
+delta, xm, ym, dh1, dh2, dm, bz — каждый в своём диапазоне или зафиксирован,
+целое n — набор вариантов; gamma (проводник), mu, lya, wn0 — фиксированы
+(wn0 в квазистатику не входит вовсе — сходится из любого начального).
 
 Подгон — differential_evolution по относительной RMSE (без симуляции в цикле:
 только алгебра силы → тысячи прогонов дёшевы), с внешним перебором целого n.
 Затем — верификация полной переходной динамикой и оценка робастности метрик к
-индивидуальным допускам параметров.
+индивидуальным допускам параметров (всех размеров, в т.ч. зафиксированных).
+Если задана длина шины — система обязана на ней помещаться (objective.py).
 """
 
 from __future__ import annotations
@@ -23,37 +25,15 @@ from scipy.optimize import differential_evolution, least_squares
 
 from ..magnetic import MagneticParams, magnetic_force_quasistatic
 from .forward import Metrics, evaluate_parametric
-from .objective import constraint_overshoot, design_residuals, within_limits
+from .objective import (
+    bus_message,
+    bus_report,
+    curve_fit_penalty,
+    design_residuals,
+    within_limits,
+)
+from .space import CONT_PARAMS, ParamSpace, bound_hits, bound_hits_message  # noqa: F401
 from .targets import DesignConstraints, DesignTargets
-
-# Порядок свободных непрерывных параметров.
-CONT_PARAMS = ("delta", "xm", "ym", "dh1", "dh2", "dm", "bz")
-
-
-@dataclass(slots=True)
-class ParamSpace:
-    """Границы конструкции: диапазоны непрерывных параметров, набор целых n,
-    фиксированные материал/стандарт."""
-
-    cont_bounds: dict
-    n_choices: tuple
-    fixed: dict
-
-    @classmethod
-    def default(cls) -> "ParamSpace":
-        return cls(
-            cont_bounds={
-                "delta": (0.001, 0.008),
-                "xm": (0.012, 0.035),
-                "ym": (0.10, 0.75),
-                "dh1": (0.008, 0.040),
-                "dh2": (0.008, 0.040),
-                "dm": (0.006, 0.030),
-                "bz": (0.40, 2.00),
-            },
-            n_choices=(8, 10, 12, 14, 16, 18, 20, 24),
-            fixed={"gamma": 1.77e7, "mu": 1.0, "lya": 2.5, "wn0": 1.0},
-        )
 
 
 @dataclass(slots=True)
@@ -88,20 +68,25 @@ class ParametricResult:
     sigma_f_ok: bool           # пик ΣF ≤ потолок
     robustness: dict           # {'R', 'rel_sigma', 'per_param', 'sigma_f_margin'}
     messages: list = field(default_factory=list)
+    bus: dict | None = None    # проверка длины шины (objective.bus_report); None — шина не задана
+    bus_ok: bool = True        # помещается на шине (или шина не задана)
+    bound_hits: list = field(default_factory=list)  # параметры у края диапазона (space.bound_hits)
 
 
 def params_from_vec(x, n: int, space: ParamSpace) -> MagneticParams:
-    d = {k: float(v) for k, v in zip(CONT_PARAMS, x)}
-    return MagneticParams(n=int(n), **d, **space.fixed)
+    """Тормоз из вектора ПОДБИРАЕМЫХ размеров (порядок space.free_params) + фиксированных."""
+    d = dict(space.fixed)
+    d.update({k: float(v) for k, v in zip(space.free_params, x)})
+    return MagneticParams(n=int(n), **d)
 
 
 def quasistatic_curve(v_grid, params: MagneticParams) -> np.ndarray:
     return np.array([magnetic_force_quasistatic(float(v), params) for v in v_grid], dtype=float)
 
 
-def _rmse(x, n, space, v_grid, f_target, f_scale) -> float:
+def _curve_rmse(params: MagneticParams, v_grid, f_target, f_scale) -> float:
     try:
-        fq = quasistatic_curve(v_grid, params_from_vec(x, n, space))
+        fq = quasistatic_curve(v_grid, params)
     except (ValueError, OverflowError, ZeroDivisionError, FloatingPointError):
         return 1.0e6
     if not np.all(np.isfinite(fq)):
@@ -110,27 +95,46 @@ def _rmse(x, n, space, v_grid, f_target, f_scale) -> float:
     return float(np.sqrt(np.mean(r * r)))
 
 
+def _fit_cost(x, n, space, v_grid, f_target, f_scale, bus_length, stroke) -> float:
+    """RMSE к кривой + штраф за непомещение на шине (ход — оценка, динамики тут нет)."""
+    params = params_from_vec(x, n, space)
+    return _curve_rmse(params, v_grid, f_target, f_scale) + curve_fit_penalty(params, stroke, bus_length)
+
+
 def fit_parametric_to_curve(v_grid, f_target, space: ParamSpace | None = None,
-                            *, seed: int = 0, maxiter: int = 40, popsize: int = 12) -> ParametricFit:
-    """Подгоняет 7 непрерывных параметров + целое n под кривую F(v) (квазистатика)."""
+                            *, bus_length: float | None = None, stroke: float = 0.0,
+                            seed: int = 0, maxiter: int = 40, popsize: int = 12) -> ParametricFit:
+    """Подгоняет подбираемые размеры + целое n под кривую F(v) (квазистатика).
+
+    `stroke` — оценка хода для ограничения шины: x_max синтезированной кривой
+    (нижняя оценка реального отката — годные варианты не отсекает); точную
+    проверку с фактическим x_max делает доводка под метрики.
+    """
     space = space or ParamSpace.default()
     v_grid = np.asarray(v_grid, dtype=float)
     f_target = np.asarray(f_target, dtype=float)
     f_scale = max(float(np.max(np.abs(f_target))), 1e-9)
-    bounds = [space.cont_bounds[k] for k in CONT_PARAMS]
+    bounds = [space.cont_bounds[k] for k in space.free_params]
+    args_tail = (v_grid, f_target, f_scale, bus_length, stroke)
 
-    best = None  # (rmse, n, x)
+    best = None  # (cost, n, x)
     for n in space.n_choices:
-        res = differential_evolution(
-            _rmse, bounds, args=(n, space, v_grid, f_target, f_scale),
-            seed=seed, maxiter=maxiter, popsize=popsize, tol=1e-4,
-            mutation=(0.5, 1.0), recombination=0.7, polish=True, init="latinhypercube",
-        )
-        if best is None or res.fun < best[0]:
-            best = (res.fun, n, res.x)
+        if bounds:
+            res = differential_evolution(
+                _fit_cost, bounds, args=(n, space, *args_tail),
+                seed=seed, maxiter=maxiter, popsize=popsize, tol=1e-4,
+                mutation=(0.5, 1.0), recombination=0.7, polish=True, init="latinhypercube",
+            )
+            cost, x = float(res.fun), res.x
+        else:  # все размеры зафиксированы — перебирается только n
+            x = np.empty(0)
+            cost = _fit_cost(x, n, space, *args_tail)
+        if best is None or cost < best[0]:
+            best = (cost, n, x)
 
-    rmse, n, x = best
+    _cost, n, x = best
     params = params_from_vec(x, n, space)
+    rmse = _curve_rmse(params, v_grid, f_target, f_scale)
     fq = quasistatic_curve(v_grid, params)
     max_rel = float(np.max(np.abs((fq - f_target) / f_scale)))
     return ParametricFit(params=params, n=n, curve_rmse=rmse,
@@ -139,19 +143,24 @@ def fit_parametric_to_curve(v_grid, f_target, space: ParamSpace | None = None,
 
 def refine_parametric_end_to_end(drive, base, params0: MagneticParams, targets: DesignTargets,
                                  space: ParamSpace, *, sigma_f_max: float | None = None,
+                                 bus_length: float | None = None,
                                  max_nfev: int = 60) -> MagneticParams:
-    """Доводит непрерывные параметры (от curve-подгона) под МЕТРИКИ цикла.
+    """Доводит подбираемые размеры (от curve-подгона) под МЕТРИКИ цикла.
 
     Кривая-подгон даёт хорошее нач. приближение, но переходник wn уводит метрики
     от статической кривой. Здесь `least_squares` минимизирует невязки (x_max, T,
-    v_end) уже по полной симуляции. Оптимизируем в нормированных координатах
-    u∈[0,1] (параметры разного масштаба). n — целое, фиксировано от curve-подгона.
+    v_end, ΣF, шина) уже по полной симуляции. Оптимизируем в нормированных
+    координатах u∈[0,1] (параметры разного масштаба). n — целое, фиксировано от
+    curve-подгона; зафиксированные размеры не трогаются.
     """
-    lo = np.array([space.cont_bounds[p][0] for p in CONT_PARAMS])
-    hi = np.array([space.cont_bounds[p][1] for p in CONT_PARAMS])
+    free = space.free_params
+    if not free:
+        return params0
+    lo = np.array([space.cont_bounds[p][0] for p in free])
+    hi = np.array([space.cont_bounds[p][1] for p in free])
     span = hi - lo
 
-    x0 = np.array([getattr(params0, p) for p in CONT_PARAMS])
+    x0 = np.array([getattr(params0, p) for p in free])
     u0 = np.clip((x0 - lo) / span, 0.0, 1.0)
 
     def _params_from_u(u):
@@ -159,7 +168,9 @@ def refine_parametric_end_to_end(drive, base, params0: MagneticParams, targets: 
         return params_from_vec(x, params0.n, space)
 
     def _resid(u):
-        return design_residuals(evaluate_parametric(drive, base, _params_from_u(u)), targets, sigma_f_max)
+        p = _params_from_u(u)
+        return design_residuals(evaluate_parametric(drive, base, p), targets, sigma_f_max,
+                                brakes=[p], bus_length=bus_length)
 
     res = least_squares(_resid, u0, method="trf", bounds=(0.0, 1.0),
                         max_nfev=max_nfev, diff_step=0.03, xtol=1e-4, ftol=1e-4, gtol=1e-8)
@@ -228,10 +239,15 @@ def _with(params: MagneticParams, name: str, value: float) -> MagneticParams:
 
 def run_parametric_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
                          constraints: DesignConstraints, *, space: ParamSpace | None = None,
-                         param_tol: ParamTolerances | None = None, seed: int = 0) -> ParametricResult:
-    """Полный Stage 2: подгон под кривую → верификация полной динамикой → робастность."""
+                         param_tol: ParamTolerances | None = None, seed: int = 0,
+                         stroke_hint: float | None = None) -> ParametricResult:
+    """Полный Stage 2: подгон под кривую → верификация полной динамикой → робастность.
+
+    `stroke_hint` — x_max синтезированной кривой (оценка хода для шины в подгоне).
+    """
     space = space or ParamSpace.default()
     param_tol = param_tol or ParamTolerances.uniform(0.02)
+    bus_length = constraints.bus_length
 
     # Целевая кривая, сэмплированная на рабочей сетке (пропускаем окрестность v=0).
     v_nodes = np.asarray(v_nodes, dtype=float)
@@ -241,11 +257,13 @@ def run_parametric_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
     f_target = np.interp(v_grid, v_nodes, f_nodes)
 
     # Stage 2a — подгон под характеристику (даёт нач. приближение и выбор n).
-    fit = fit_parametric_to_curve(v_grid, f_target, space, seed=seed)
+    fit = fit_parametric_to_curve(v_grid, f_target, space, bus_length=bus_length,
+                                  stroke=stroke_hint or 0.0, seed=seed)
 
     # Stage 2b — доводка под метрики полной динамикой (закрывает переходный зазор wn).
     params_final = refine_parametric_end_to_end(
-        drive, base, fit.params, targets, space, sigma_f_max=constraints.sigma_f_max)
+        drive, base, fit.params, targets, space, sigma_f_max=constraints.sigma_f_max,
+        bus_length=bus_length)
 
     # RMSE итоговых параметров к кривой (мог вырасти — метрики важнее формы).
     fq_final = quasistatic_curve(v_grid, params_final)
@@ -261,18 +279,23 @@ def run_parametric_stage(drive, base, v_nodes, f_nodes, targets: DesignTargets,
     sigma_f_ok = bool(np.isfinite(sigma_f_peak)
                       and sigma_f_peak <= constraints.sigma_f_max * (1.0 + targets.rel_tol))
 
+    bus = bus_report([params_final], achieved.x_max if achieved.completed else None, bus_length)
+    bus_ok = bus is None or bus["fits"]
+    hits = bound_hits(params_final, space)
+
     robustness = {}
     if achieved.completed:
         robustness = _param_robustness(drive, base, params_final, targets, param_tol,
                                        constraints.sigma_f_max, sigma_f_peak)
 
-    messages = _diagnose(fit, achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints)
+    messages = _diagnose(fit, achieved, within_tol, sigma_f_ok, sigma_f_peak, constraints,
+                         bus=bus, hits_message=bound_hits_message([hits]))
 
     return ParametricResult(
         fit=fit, params_final=params_final, curve_rmse_final=curve_rmse_final,
         achieved=achieved, rel_error=rel_error, within_tol=within_tol,
         sigma_f_peak=sigma_f_peak, sigma_f_ok=sigma_f_ok, robustness=robustness,
-        messages=messages,
+        messages=messages, bus=bus, bus_ok=bus_ok, bound_hits=hits,
     )
 
 
@@ -287,7 +310,7 @@ def _rel_error(achieved: Metrics, targets: DesignTargets) -> dict:
 
 
 def _diagnose(fit: ParametricFit, achieved: Metrics, within_tol, sigma_f_ok,
-              sigma_f_peak, constraints) -> list:
+              sigma_f_peak, constraints, *, bus=None, hits_message=None) -> list:
     msgs = []
     if not fit.fit_ok:
         msgs.append(
@@ -303,10 +326,16 @@ def _diagnose(fit: ParametricFit, achieved: Metrics, within_tol, sigma_f_ok,
             f"Пик ΣF={sigma_f_peak:.0f} Н превышает потолок {constraints.sigma_f_max:.0f} Н "
             f"(переходный заброс силы). Ужесточите целевую кривую или потолок."
         )
-    if within_tol and sigma_f_ok:
-        msgs.append("Параметры укладываются во все пределы (x_max/T/v_end ≤ лимитов, ΣF ≤ ΣF_max); "
-                    "x_max минимизирован.")
+    bus_text = bus_message(bus)
+    if bus_text:
+        msgs.append(bus_text)
+    if within_tol and sigma_f_ok and not bus_text:
+        on_bus = ", помещается на шине" if bus else ""
+        msgs.append("Параметры укладываются во все пределы (x_max/T/v_end ≤ лимитов, ΣF ≤ ΣF_max"
+                    f"{on_bus}); x_max минимизирован.")
     elif not within_tol:
         msgs.append("Не удаётся уложиться во все пределы одновременно — какой-то из T/v_end/x_max "
                     "превышен. Ослабьте самый тесный предел или ΣF_max.")
+    if hits_message:
+        msgs.append(hits_message)
     return msgs

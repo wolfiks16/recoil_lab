@@ -32,6 +32,10 @@ class DesignConstraints:
     # Число свободных узлов кривой F(v) (не считая закреплённого узла v=0, F=0).
     n_free_nodes: int = 4
 
+    # Длина шины, м (у каждого тормоза своя): N·x_m + (N−1)·d_m + x_max ≤ bus_length.
+    # None — не ограничивать. Проверяется только для параметрических тормозов (Stage 2).
+    bus_length: float | None = None
+
 
 @dataclass(slots=True)
 class ToleranceModel:

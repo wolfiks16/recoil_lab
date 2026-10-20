@@ -1,4 +1,5 @@
 {% extends "recoil_app/base_v2.html" %}
+{% load static %}
 
 {% block title %}Новое исследование: подбор тормоза — RecoilLab{% endblock %}
 {% block shell_crumb %}Новое исследование{% endblock %}
@@ -17,25 +18,83 @@
 </div>
 {% endif %}
 
-<form method="post" class="rb-panel rb-form-narrow">
+<form method="post" class="rb-optimize-form" id="optimize-form"
+      data-donor-url="{% url 'optimize_donor_brakes' 0 %}">
     {% csrf_token %}
-    <div class="rb-panel-head"><h2>Параметры исследования</h2></div>
-    <div class="rb-panel-body rb-form-fields">
-        {% for field in form %}
-        <div class="rb-cad-field{% if field.field.widget.input_type == 'checkbox' %} rb-cad-field-check{% endif %}">
-            {% if field.field.widget.input_type == 'checkbox' %}
-                <label for="{{ field.id_for_label }}" class="rb-check">{{ field }} <span>{{ field.label }}</span></label>
-            {% else %}
-                <label for="{{ field.id_for_label }}" class="rb-cad-field-label">{{ field.label }}</label>
-                {{ field }}
-            {% endif %}
-            {% if field.help_text %}<div class="rb-cad-field-hint">{{ field.help_text }}</div>{% endif %}
-            {% if field.errors %}<div class="rb-cad-field-error">{{ field.errors|join:"; " }}</div>{% endif %}
+    <section class="rb-panel">
+        <div class="rb-panel-head"><h2>Параметры исследования</h2></div>
+        <div class="rb-panel-body rb-form-fields">
+            {% for field in form.main_fields %}
+            <div class="rb-cad-field{% if field.field.widget.input_type == 'checkbox' %} rb-cad-field-check{% endif %}">
+                {% if field.field.widget.input_type == 'checkbox' %}
+                    <label for="{{ field.id_for_label }}" class="rb-check">{{ field }} <span>{{ field.label }}</span></label>
+                {% else %}
+                    <label for="{{ field.id_for_label }}" class="rb-cad-field-label">{{ field.label }}</label>
+                    {{ field }}
+                {% endif %}
+                {% if field.help_text %}<div class="rb-cad-field-hint">{{ field.help_text }}</div>{% endif %}
+                {% if field.errors %}<div class="rb-cad-field-error">{{ field.errors|join:"; " }}</div>{% endif %}
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-        <div>
-            <button type="submit" class="rb-btn rb-btn-primary">Запустить подбор</button>
+    </section>
+
+    <section class="rb-panel">
+        <div class="rb-panel-head">
+            <h2>Границы подбора</h2>
+            <div class="rb-panel-actions">
+                <select class="rb-input rb-space-donor-brake" data-donor-brake hidden aria-label="Тормоз донора"></select>
+                <button type="button" class="rb-btn rb-btn-sm" data-donor-fill>Подставить из расчёта-донора</button>
+            </div>
         </div>
+        <div class="rb-panel-body rb-form-fields">
+            <p class="rb-muted-note">Каждый размер подбирается в диапазоне или фиксируется. «Подставить из расчёта-донора»
+                заполняет столбец «значение» параметрами тормоза донора, режимы не меняет.</p>
+
+            <div class="rb-space" role="table" aria-label="Границы подбора параметров тормоза">
+                <div class="rb-space-head" role="row">
+                    <span role="columnheader">Параметр</span>
+                    <span role="columnheader">Режим</span>
+                    <span role="columnheader">от</span>
+                    <span role="columnheader">до</span>
+                    <span role="columnheader">шаг</span>
+                    <span role="columnheader">значение</span>
+                </div>
+                {% for row in form.space_rows %}
+                <div class="rb-space-row{% if row.is_fixed %} is-fixed{% endif %}{% if row.errors %} has-error{% endif %}" role="row" data-space-row>
+                    <span class="rb-space-name" role="cell">
+                        <span class="rb-param-symbol">{{ row.symbol }}</span>
+                        <span class="rb-space-label">{{ row.label }}{% if row.unit %}, {{ row.unit }}{% endif %}</span>
+                    </span>
+                    <span class="rb-space-mode" role="cell">{{ row.mode }}</span>
+                    <span class="rb-space-range" role="cell" data-label="от">{{ row.min }}</span>
+                    <span class="rb-space-range" role="cell" data-label="до">{{ row.max }}</span>
+                    <span class="rb-space-range" role="cell" data-label="шаг">{% if row.step %}{{ row.step }}{% endif %}</span>
+                    <span class="rb-space-value" role="cell" data-label="значение">{{ row.value }}</span>
+                    {% if row.errors %}<div class="rb-space-error">{{ row.errors|join:"; " }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="rb-space-extra">
+                {% for field in form.space_extra_fields %}
+                <div class="rb-cad-field">
+                    <label for="{{ field.id_for_label }}" class="rb-cad-field-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="rb-cad-field-hint">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div class="rb-cad-field-error">{{ field.errors|join:"; " }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <div class="rb-form-actions">
+        <button type="submit" class="rb-btn rb-btn-primary">Запустить подбор</button>
     </div>
 </form>
+{% endblock %}
+
+{% block body_extra %}
+<script src="{% static 'recoil_app/js/optimize_form.js' %}?v=1"></script>
 {% endblock %}

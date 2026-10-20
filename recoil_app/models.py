@@ -538,6 +538,12 @@ class DesignStudy(models.Model):
     param_tol_rel = models.FloatField(default=0.02)
     do_parametric = models.BooleanField(default=True, help_text="Подбирать физ. параметры (Stage 2)")
     multistart = models.BooleanField(default=False)
+    # Что подбирать и в каких границах (`ParamSpace.to_dict()`); пусто — границы по умолчанию.
+    param_space = models.JSONField(null=True, blank=True)
+    bus_length = models.FloatField(
+        null=True, blank=True,
+        help_text="Длина шины, м (у каждого тормоза своя); пусто — не ограничивать",
+    )
 
     # --- Состояние/результат ---
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)

@@ -63,6 +63,20 @@ def _robustness_report(rr) -> dict | None:
             "sigma_f_margin": _f(rr.sigma_f_margin), "dominant": None}
 
 
+def _bus_dict(bus) -> dict | None:
+    if not bus:
+        return None
+    return {"bus_length": _f(bus["bus_length"]), "stroke": _f(bus["stroke"]),
+            "system_lengths": [_f(x) for x in bus["system_lengths"]],
+            "required": _f(bus["required"]), "margin": _f(bus["margin"]),
+            "overshoot": _f(bus["overshoot"]), "fits": bool(bus["fits"])}
+
+
+def _hits_list(hits) -> list:
+    return [{"param": h["param"], "side": h["side"], "value": _f(h["value"]),
+             "lo": _f(h["lo"]), "hi": _f(h["hi"])} for h in hits]
+
+
 def _stage2_common(r) -> dict:
     return {
         "achieved": _metrics(r.achieved),
@@ -72,6 +86,8 @@ def _stage2_common(r) -> dict:
         "sigma_f_ok": bool(r.sigma_f_ok),
         "robustness": _robustness_dict(r.robustness),
         "messages": list(r.messages),
+        "bus": _bus_dict(r.bus),
+        "fits_bus": bool(r.bus_ok),
     }
 
 
@@ -79,7 +95,7 @@ def _stage2_single(pr) -> dict:
     d = _stage2_common(pr)
     d.update(kind="single", n_brakes=1, params=[_params(pr.params_final)],
              curve_rmse=_f(pr.fit.curve_rmse), curve_rmse_final=_f(pr.curve_rmse_final),
-             n=int(pr.fit.n), weights=[1.0])
+             n=int(pr.fit.n), weights=[1.0], bound_hits=[_hits_list(pr.bound_hits)])
     return d
 
 
@@ -88,7 +104,8 @@ def _stage2_multi(mr) -> dict:
     d.update(kind="multi", n_brakes=int(mr.n_brakes),
              weights=[_f(w) for w in mr.weights],
              params=[_params(b) for b in mr.brakes],
-             per_brake_curve_rmse=[_f(x) for x in mr.per_brake_curve_rmse])
+             per_brake_curve_rmse=[_f(x) for x in mr.per_brake_curve_rmse],
+             bound_hits=[_hits_list(h) for h in mr.bound_hits])
     return d
 
 
@@ -124,7 +141,7 @@ def _stage2_of(result) -> dict | None:
         # мультистарт был, но ни один кандидат не попал в цель
         return {"kind": "multistart_failed",
                 "candidates": [_cand_dict(c, ms) for c in ms.candidates],
-                "params": None, "within_tol": False, "sigma_f_ok": False,
+                "params": None, "within_tol": False, "sigma_f_ok": False, "fits_bus": False,
                 "robustness": None, "achieved": None, "rel_error": {}, "messages": []}
     if result.multi:
         return _stage2_multi(result.multi)
@@ -154,7 +171,25 @@ def serialize_design(result) -> dict:
     else:
         design = {"type": "curve", "curve": stage1["curve"]}
 
-    return {"stage1": stage1, "stage2": s2, "design": design}
+    space = getattr(result, "space", None)
+    return {"stage1": stage1, "stage2": s2, "design": design,
+            # С какими границами/фиксацией и шиной шёл подбор (для страницы результата).
+            "space": space.to_dict() if space is not None else None,
+            "bus_length": _f(getattr(result, "bus_length", None))}
+
+
+def study_summary(snapshot: dict) -> tuple[bool, float | None]:
+    """(достижимость, R) реализуемого дизайна для денормализованных полей `DesignStudy`.
+
+    Параметрический дизайн (Stage 2): пределы цикла + ΣF + помещается на шине.
+    Иначе (Stage 2 не было или мультистарт ничего не нашёл) — синтез-кривая Stage 1.
+    """
+    s2 = snapshot.get("stage2")
+    if s2 and s2.get("kind") != "multistart_failed":
+        feasible = bool(s2.get("within_tol") and s2.get("sigma_f_ok") and s2.get("fits_bus", True))
+        return feasible, (s2.get("robustness") or {}).get("R")
+    s1 = snapshot["stage1"]
+    return bool(s1["feasible"]), (s1.get("robustness") or {}).get("R")
 
 
 def create_brakes_from_design(run, design: dict):

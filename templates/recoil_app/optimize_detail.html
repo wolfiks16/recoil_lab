@@ -58,6 +58,13 @@
         <div class="rb-protocol-q"><i class="q-f"></i>Суммарная сила ΣF</div>
         <div class="rb-protocol-val">≤ {{ study.sigma_f_max|smart_num }}<small>Н</small></div>
     </div>
+    {% if study.bus_length %}
+    <div class="rb-protocol-cell">
+        <div class="rb-protocol-q">Длина шины</div>
+        <div class="rb-protocol-val">{{ study.bus_length|smart_num }}<small>м</small></div>
+        <div class="rb-protocol-when">система + ход отката ≤ шины</div>
+    </div>
+    {% endif %}
 </section>
 
 {% if study.status == 'pending' or study.status == 'running' %}
@@ -179,17 +186,22 @@
         {% endif %}
 
         <div class="rb-split">
-            <div class="rb-grid-2">
-                {% for brake in stage2.params %}
-                <div class="rb-card">
-                    <div class="rb-card-title">
-                        <span class="rb-card-title-text">Тормоз {{ forloop.counter }}{% if stage2.kind == 'multi' %}, доля {{ stage2.weights|index_or:forloop.counter0|smart_num }}{% endif %}</span>
-                    </div>
-                    <table class="rb-params-table">
-                        {% for k, v in brake.items %}<tr><td>{{ k }}</td><td class="num">{{ v|smart_num }}</td></tr>{% endfor %}
-                    </table>
-                </div>
-                {% endfor %}
+            <div class="rb-table-wrap">
+                <table class="rb-params-table rb-design-params">
+                    <thead><tr>
+                        <th>Параметр</th><th>Диапазон подбора</th>
+                        {% for b in brake_columns %}<th class="num">Тормоз {{ b.index }}{% if stage2.kind == 'multi' and b.weight is not None %}<small>доля {{ b.weight|smart_num }}</small>{% endif %}</th>{% endfor %}
+                    </tr></thead>
+                    {% for row in brake_rows %}
+                    <tr>
+                        <td><span class="rb-param-symbol">{{ row.symbol }}</span> {{ row.label }}{% if row.unit %}, {{ row.unit }}{% endif %}</td>
+                        <td class="rng">{% if row.free %}{{ row.lo|smart_num }} … {{ row.hi|smart_num }}{% else %}задан{% endif %}</td>
+                        {% for cell in row.cells %}
+                        <td class="num">{{ cell.value|smart_num }}{% if cell.hit == 'max' %}<span class="rb-warn-text rb-design-hit">у максимума</span>{% elif cell.hit == 'min' %}<span class="rb-warn-text rb-design-hit">у минимума</span>{% endif %}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </table>
             </div>
             <div class="rb-split-side">
                 <div>
@@ -200,8 +212,16 @@
                         <tr><td>T, с</td><td class="num">{{ study.target_T|smart_num }}</td><td class="num">{{ stage2.achieved.T|smart_num }}</td><td class="st">{% if stage2.achieved.T <= study.target_T %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
                         <tr><td>v в конце, м/с</td><td class="num">{{ study.target_v_end|smart_num }}</td><td class="num">{{ stage2.achieved.v_end|smart_num }}</td><td class="st">{% if stage2.achieved.v_end <= study.target_v_end %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
                         <tr><td>пик ΣF, Н</td><td class="num">{{ study.sigma_f_max|smart_num }}</td><td class="num">{{ stage2.sigma_f_peak|smart_num }}</td><td class="st">{% if stage2.sigma_f_ok %}<span class="rb-ok-text">в пределе</span>{% else %}<span class="rb-danger-text">выше</span>{% endif %}</td></tr>
+                        {% if stage2.bus %}
+                        <tr><td>система + ход, м</td><td class="num">{{ stage2.bus.bus_length|smart_num }}</td><td class="num">{{ stage2.bus.required|smart_num }}</td><td class="st">{% if stage2.bus.fits %}<span class="rb-ok-text">на шине</span>{% else %}<span class="rb-danger-text">длиннее</span>{% endif %}</td></tr>
+                        {% endif %}
                     </table>
                     <p class="rb-muted-note">{% if stage2.within_tol %}Все пределы выполнены с учётом допуска.{% else %}Есть превышение сверх допуска.{% endif %}</p>
+                    {% if stage2.bus %}
+                    <p class="rb-muted-note">У каждого тормоза своя шина {{ stage2.bus.bus_length|smart_num }} м:
+                        система N·x<sub>m</sub> + (N−1)·d<sub>m</sub> = {% for L in stage2.bus.system_lengths %}{{ L|smart_num }}{% if not forloop.last %} / {% endif %}{% endfor %} м
+                        плюс ход отката {{ stage2.bus.stroke|smart_num }} м{% if stage2.bus.margin is not None %}, запас {{ stage2.bus.margin|smart_num }} м{% endif %}.</p>
+                    {% endif %}
                 </div>
                 {% if stage2.robustness %}
                 <div>
@@ -220,6 +240,11 @@
         </div>
     {% endif %}
     </div>
+    {% if stage2.messages %}
+    <ul class="rb-panel-note rb-plain-list">
+        {% for m in stage2.messages %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+    {% endif %}
 </section>
 {% endif %}
 

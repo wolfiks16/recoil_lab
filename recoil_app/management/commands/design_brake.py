@@ -8,6 +8,13 @@
     python manage.py design_brake --from-run 12 \
         --T 0.9 --xmax 0.45 --vend 0.2 --sigma-f-max 80000 \
         --tol 800,1200,1600,2000 --plot
+
+Границы Stage 2 (по умолчанию — ParamSpace.default()):
+    --fix bz=1.2,ym=0.5          зафиксировать размеры
+    --bounds xm=0.012:0.03       подбирать в диапазоне
+    --n 8:16:2 | --n 16          варианты N (от:до:шаг) или фиксированное N
+    --gamma 5.8e7                γ шины
+    --bus-length 1.2             длина шины (у каждого тормоза своя), м
 """
 
 from __future__ import annotations
@@ -23,6 +30,12 @@ from recoil_app.services.design import (
     DesignTargets,
     ToleranceModel,
     run_design_study,
+)
+from recoil_app.services.design.space import (
+    CONT_PARAMS,
+    ParamSpace,
+    n_choices_range,
+    space_with_overrides,
 )
 
 
@@ -73,6 +86,17 @@ class Command(BaseCommand):
                             help="Перебрать семейство кандидатов (для 1 тормоза — разные n; "
                                  "для N — разные раскладки ΣF) и выбрать самый робастный. "
                                  "Включает Stage 2.")
+        parser.add_argument("--fix", type=str, default="",
+                            help="Зафиксировать размеры: имя=значение через запятую "
+                                 f"(имена: {', '.join(CONT_PARAMS)}).")
+        parser.add_argument("--bounds", type=str, default="",
+                            help="Диапазоны подбора: имя=от:до через запятую.")
+        parser.add_argument("--n", type=str, default="",
+                            help="Варианты N: от:до:шаг (или от:до) либо одно число — N зафиксирован.")
+        parser.add_argument("--gamma", type=float, default=None, help="γ шины, (Ом·м)⁻¹.")
+        parser.add_argument("--bus-length", type=float, default=None,
+                            help="Длина шины, м (у каждого тормоза своя): "
+                                 "N·xm + (N−1)·dm + x_max ≤ L.")
 
     def handle(self, *args, **opts):
         run = self._load_run(opts["from_run"])
@@ -80,10 +104,12 @@ class Command(BaseCommand):
         n_free = opts["nodes"]
         sigma_f_max = opts["sigma_f_max"]
         tol = self._parse_tol(opts["tol"], n_free, sigma_f_max)
+        space = self._parse_space(opts)
 
         targets = DesignTargets(T=opts["T"], x_max=opts["xmax"], v_end=opts["vend"],
                                 rel_tol=opts["rel_tol"])
-        constraints = DesignConstraints(sigma_f_max=sigma_f_max, n_free_nodes=n_free)
+        constraints = DesignConstraints(sigma_f_max=sigma_f_max, n_free_nodes=n_free,
+                                        bus_length=opts["bus_length"])
 
         self.stdout.write(self.style.MIGRATE_HEADING(
             f"\nОбратное проектирование тормоза · донор расчёт «{run.name}» (#{run.id})"))
@@ -109,6 +135,11 @@ class Command(BaseCommand):
         if do_stage2:
             mode = "мультистарт + отбор по робастности" if use_ms else f"{n_brakes} тормоз(а)"
             self.stdout.write(f"Stage 2 включён ({mode}) — после синтеза кривой это дольше…")
+            bounds = ", ".join(f"{k}∈[{_fmt(lo)}, {_fmt(hi)}]" for k, (lo, hi) in space.cont_bounds.items())
+            fixed = ", ".join(f"{k}={_fmt(space.fixed[k])}" for k in CONT_PARAMS if k in space.fixed)
+            self.stdout.write(f"  подбирать: {bounds or '—'} · N из {list(space.n_choices)}")
+            self.stdout.write(f"  зафиксировано: {fixed or '—'} · γ={_fmt(space.fixed['gamma'])}"
+                              + (f" · шина L={_fmt(opts['bus_length'])} м" if opts["bus_length"] else ""))
 
         result = run_design_study(
             input_file_path=run.input_file.path,
@@ -116,7 +147,7 @@ class Command(BaseCommand):
             base_dt=run.dt,
             targets=targets, constraints=constraints, tol=tol, seed=opts["seed"],
             fit_parametric=do_stage2, param_tol_rel=opts["param_tol"],
-            n_brakes=n_brakes, weights=weights, multistart=use_ms,
+            n_brakes=n_brakes, weights=weights, multistart=use_ms, space=space,
         )
 
         self._print_result(result, run)
@@ -161,6 +192,32 @@ class Command(BaseCommand):
                 f"--tol: ожидалось 1 или {n_free} значений, получено {len(vals)}."
             )
         return ToleranceModel(node_tol=tuple(vals))
+
+    def _parse_space(self, opts) -> ParamSpace:
+        def pairs(raw, flag):
+            out = {}
+            for part in (p.strip() for p in (raw or "").split(",") if p.strip()):
+                name, sep, value = part.partition("=")
+                name = name.strip()
+                if not sep or name not in CONT_PARAMS:
+                    raise CommandError(f"{flag}: ожидалось имя=значение, имена: {', '.join(CONT_PARAMS)}.")
+                out[name] = value.strip()
+            return out
+
+        try:
+            fixed = {k: float(v) for k, v in pairs(opts["fix"], "--fix").items()}
+            bounds = {}
+            for k, v in pairs(opts["bounds"], "--bounds").items():
+                lo, _, hi = v.partition(":")
+                bounds[k] = (float(lo), float(hi))
+            n_choices = None
+            if opts["n"].strip():
+                parts = [int(x) for x in opts["n"].split(":")]
+                n_choices = (parts[0],) if len(parts) == 1 else n_choices_range(*parts[:3])
+            return space_with_overrides(ParamSpace.default(), bounds=bounds, fixed=fixed,
+                                        n_choices=n_choices, gamma=opts["gamma"])
+        except ValueError as exc:
+            raise CommandError(f"Границы подбора: {exc}") from exc
 
     def _parse_weights(self, raw: str, n: int):
         raw = (raw or "").strip()
@@ -240,7 +297,7 @@ class Command(BaseCommand):
         w(style.MIGRATE_HEADING("\n\n════ СТАДИЯ 2 · подбор физических параметров ════"))
 
         verdict = (style.SUCCESS("✔ параметры обеспечивают цели")
-                   if (pr.within_tol and pr.sigma_f_ok)
+                   if (pr.within_tol and pr.sigma_f_ok and pr.bus_ok)
                    else style.ERROR("✘ цели не достигнуты в допуске"))
         w(f"Вердикт: {verdict}")
 
@@ -265,6 +322,7 @@ class Command(BaseCommand):
 
         cap_s = style.SUCCESS("в пределах") if pr.sigma_f_ok else style.ERROR("ПРЕВЫШЕН")
         w(f"\nΣF пик = {_fmt(pr.sigma_f_peak)} Н / потолок {_fmt(constraints.sigma_f_max)} Н → {cap_s}")
+        self._print_bus(pr.bus)
 
         rob = pr.robustness or {}
         if rob:
@@ -295,7 +353,7 @@ class Command(BaseCommand):
         w(style.MIGRATE_HEADING(
             f"\n\n════ СТАДИЯ 2 · {mr.n_brakes} тормоза · подбор параметров ════"))
         verdict = (style.SUCCESS("✔ N тормозов обеспечивают цели")
-                   if (mr.within_tol and mr.sigma_f_ok)
+                   if (mr.within_tol and mr.sigma_f_ok and mr.bus_ok)
                    else style.ERROR("✘ цели не достигнуты в допуске"))
         w(f"Вердикт: {verdict}")
         w("Раскладка ΣF по весам: " + ", ".join(f"{100*x:.0f}%" for x in mr.weights))
@@ -316,6 +374,7 @@ class Command(BaseCommand):
         cap_s = style.SUCCESS("в пределах") if mr.sigma_f_ok else style.ERROR("ПРЕВЫШЕН")
         w(f"\nСуммарный ΣF пик = {_fmt(mr.sigma_f_peak)} Н / потолок "
           f"{_fmt(constraints.sigma_f_max)} Н → {cap_s}")
+        self._print_bus(mr.bus)
 
         rob = mr.robustness or {}
         if rob:
@@ -337,6 +396,17 @@ class Command(BaseCommand):
             w("\nДиагностика Stage 2:")
             for m in mr.messages:
                 w(f"  • {m}")
+
+    def _print_bus(self, bus):
+        if not bus:
+            return
+        style = self.style
+        verdict = style.SUCCESS("помещается") if bus["fits"] else style.ERROR("НЕ помещается")
+        lengths = " / ".join(_fmt(x, 4) for x in bus["system_lengths"])
+        margin = f" · запас {_fmt(bus['margin'], 4)} м" if bus["margin"] is not None else ""
+        self.stdout.write(f"Шина: система {lengths} м + ход {_fmt(bus['stroke'], 4)} м = "
+                          f"{_fmt(bus['required'], 4)} м / L = {_fmt(bus['bus_length'], 4)} м → "
+                          f"{verdict}{margin}")
 
     def _print_multistart(self, ms, constraints, n_brakes):
         w = self.stdout.write

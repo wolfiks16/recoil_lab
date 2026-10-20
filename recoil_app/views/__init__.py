@@ -38,6 +38,7 @@ from .iterative import (  # noqa: F401
 from .optimize import (  # noqa: F401
     optimize_delete_view,
     optimize_detail_view,
+    optimize_donor_brakes_view,
     optimize_list_view,
     optimize_new_view,
     optimize_spawn_view,

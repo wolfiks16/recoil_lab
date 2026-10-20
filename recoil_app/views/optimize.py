@@ -12,7 +12,7 @@ from pathlib import Path
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -20,8 +20,9 @@ from ..forms import DesignStudyForm
 from ..models import CalculationRun, DesignStudy
 from ..services.design.persist import create_brakes_from_design
 from ..services.design.runner import start_study
+from ..services.design.space import ParamSpace, brake_param_table, donor_brake_values
 from ..services.dynamics import RecoilParams, simulate_recoil
-from ..services.permissions import can_run_calc
+from ..services.permissions import can_run_calc, visible_run
 from ..services.run_pipeline import persist_result_and_snapshot
 
 
@@ -73,6 +74,8 @@ def optimize_new_view(request):
                 n_brakes=cd["n_brakes"],
                 do_parametric=cd["do_parametric"],
                 multistart=cd["multistart"],
+                param_space=cd["param_space"],
+                bus_length=cd.get("bus_length"),
                 status=DesignStudy.STATUS_PENDING,
             )
             start_study(study.id)
@@ -82,6 +85,14 @@ def optimize_new_view(request):
         form = DesignStudyForm()
 
     return render(request, "recoil_app/optimize_form.html", {"form": form})
+
+
+def optimize_donor_brakes_view(request, run_id):
+    """JSON: параметры параметрических тормозов донора (кнопка «Подставить из расчёта-донора»)."""
+    run = visible_run(request.user, run_id)
+    if run is None:
+        raise Http404("Расчёт не найден.")
+    return JsonResponse({"run": run.name, "brakes": donor_brake_values(run)})
 
 
 def optimize_detail_view(request, study_id):
@@ -132,11 +143,22 @@ def optimize_detail_view(request, study_id):
             from ..services.charting import make_pareto_fragment
             pareto_html = make_pareto_fragment(cands)
 
+    # Таблица подобранных тормозов: значения, диапазоны подбора, «упёрся в границу».
+    # Исследования до появления границ в форме считались с границами по умолчанию.
+    stage2 = snap.get("stage2") or {}
+    brakes = stage2.get("params") or []
+    weights = stage2.get("weights") or []
+    brake_columns = [{"index": i, "weight": weights[i - 1] if i <= len(weights) else None}
+                     for i in range(1, len(brakes) + 1)]
+    brake_rows = brake_param_table(brakes, ParamSpace.from_dict(snap.get("space"))) if brakes else []
+
     return render(request, "recoil_app/optimize_detail.html", {
         "study": study,
         "snap": snap,
         "stage1": snap.get("stage1"),
         "stage2": snap.get("stage2"),
+        "brake_columns": brake_columns,
+        "brake_rows": brake_rows,
         "curve_html": curve_html,
         "pareto_html": pareto_html,
         "design_type": (snap.get("design") or {}).get("type"),

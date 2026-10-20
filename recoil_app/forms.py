@@ -866,10 +866,52 @@ class UserRegistrationForm(UserCreationForm):
 
 
 from .models import DesignStudy  # noqa: E402
+from .services.brake_params import SPEC_BY_FIELD  # noqa: E402
+from .services.design.objective import system_length  # noqa: E402
+from .services.design.space import (  # noqa: E402
+    CONT_PARAMS,
+    DEFAULT_BOUNDS,
+    DEFAULT_FIXED_VALUES,
+    DEFAULT_GAMMA,
+    MAX_N_CHOICES,
+    NONNEGATIVE_PARAMS,
+    build_space,
+    n_choices_range,
+)
+
+SPACE_MODE_FREE = "free"
+SPACE_MODE_FIXED = "fixed"
+SPACE_MODE_CHOICES = [(SPACE_MODE_FREE, "подбирать"), (SPACE_MODE_FIXED, "зафиксировать")]
+# Варианты N в форме по умолчанию: 8…24 с шагом 2.
+DEFAULT_N_RANGE = (8, 24, 2)
+
+
+def _space_float(initial) -> forms.FloatField:
+    return forms.FloatField(required=False, initial=initial,
+                            widget=forms.NumberInput(attrs={"step": "any", "class": "rb-input"}))
+
+
+def _space_int(initial, minimum=1) -> forms.IntegerField:
+    return forms.IntegerField(required=False, initial=initial, widget=forms.NumberInput(
+        attrs={"step": "1", "min": str(minimum), "class": "rb-input"}))
+
+
+def _space_mode() -> forms.ChoiceField:
+    return forms.ChoiceField(choices=SPACE_MODE_CHOICES, initial=SPACE_MODE_FREE,
+                             widget=forms.Select(attrs={"data-space-mode": "", "class": "rb-input"}))
 
 
 class DesignStudyForm(forms.Form):
-    """Форма запуска исследования обратного проектирования тормоза."""
+    """Форма запуска исследования обратного проектирования тормоза.
+
+    Кроме пределов цикла — границы подбора: для каждого размера (и N) режим
+    «подбирать в диапазоне [от, до]» или «зафиксировать = значение», γ шины,
+    необязательная длина шины. Поля строк — `<параметр>_mode/_min/_max/_value`
+    (+ `n_step`); итог — `cleaned_data["param_space"]` (`ParamSpace.to_dict()`).
+    """
+
+    # Порядок строк таблицы границ: размеры, затем N.
+    SPACE_PARAMS = (*CONT_PARAMS, "n")
 
     name = forms.CharField(
         required=True,
@@ -932,6 +974,65 @@ class DesignStudyForm(forms.Form):
         label="Мультистарт + отбор по робастности (дольше)",
     )
 
+    # --- Границы подбора (панель «Границы подбора») ---
+    gamma = forms.FloatField(
+        initial=DEFAULT_GAMMA,
+        label="Удельная проводимость шины γ, (Ом·м)⁻¹",
+        validators=[MinValueValidator(1e-9, "Должна быть положительной.")],
+        widget=forms.NumberInput(attrs={"step": "any", "min": "0"}),
+    )
+    bus_length = forms.FloatField(
+        required=False,
+        label="Длина шины L, м",
+        help_text="У каждого тормоза своя шина: N·x_m + (N−1)·d_m + x_max ≤ L. Пусто — не ограничивать.",
+        validators=[MinValueValidator(1e-6, "Должна быть положительной.")],
+        widget=forms.NumberInput(attrs={"step": "any", "min": "0"}),
+    )
+
+    MAIN_FIELDS = ("name", "source_run", "target_x_max", "target_T", "target_v_end",
+                   "sigma_f_max", "rel_tol", "n_brakes", "do_parametric", "multistart")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for p in CONT_PARAMS:
+            lo, hi = DEFAULT_BOUNDS[p]
+            self.fields[f"{p}_mode"] = _space_mode()
+            self.fields[f"{p}_min"] = _space_float(lo)
+            self.fields[f"{p}_max"] = _space_float(hi)
+            self.fields[f"{p}_value"] = _space_float(DEFAULT_FIXED_VALUES[p])
+        n_lo, n_hi, n_step = DEFAULT_N_RANGE
+        self.fields["n_mode"] = _space_mode()
+        self.fields["n_min"] = _space_int(n_lo)
+        self.fields["n_max"] = _space_int(n_hi)
+        self.fields["n_step"] = _space_int(n_step)
+        self.fields["n_value"] = _space_int(DEFAULT_FIXED_VALUES["n"])
+
+    # --- для шаблона ---
+
+    def main_fields(self) -> list:
+        return [self[name] for name in self.MAIN_FIELDS]
+
+    def space_extra_fields(self) -> list:
+        return [self["gamma"], self["bus_length"]]
+
+    def space_rows(self) -> list[dict]:
+        """Строки таблицы границ: символ/подпись/единица из PARAM_SPECS + поля строки."""
+        rows = []
+        for p in self.SPACE_PARAMS:
+            _field, label, symbol, unit, _group = SPEC_BY_FIELD[p]
+            names = [f"{p}_mode", f"{p}_min", f"{p}_max", f"{p}_value"]
+            if p == "n":
+                names.append("n_step")
+            errors = [e for name in names for e in self[name].errors]
+            rows.append({
+                "param": p, "symbol": symbol, "label": label, "unit": unit,
+                "mode": self[f"{p}_mode"], "min": self[f"{p}_min"], "max": self[f"{p}_max"],
+                "value": self[f"{p}_value"], "step": self["n_step"] if p == "n" else None,
+                "is_fixed": self[f"{p}_mode"].value() == SPACE_MODE_FIXED,
+                "errors": errors,
+            })
+        return rows
+
     def clean_name(self):
         name = (self.cleaned_data.get("name") or "").strip()
         if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
@@ -947,7 +1048,107 @@ class DesignStudyForm(forms.Form):
         # N≥2 требует Stage 2 (иначе подбирать нечего — только кривая одна).
         if cleaned.get("n_brakes", 1) >= 2 and not cleaned.get("do_parametric"):
             cleaned["do_parametric"] = True
+
+        rows = {p: self._clean_space_row(p) for p in CONT_PARAMS}
+        n_choices = self._clean_n_row()
+        gamma = cleaned.get("gamma")
+        if any(r is None for r in rows.values()) or n_choices is None or gamma is None:
+            return cleaned
+
+        if all(r[0] == SPACE_MODE_FIXED for r in rows.values()) and len(n_choices) == 1:
+            raise forms.ValidationError(
+                "Всё зафиксировано — подбирать нечего. Отметьте хотя бы один параметр «подбирать».")
+        try:
+            space = build_space(rows, n_choices, gamma)
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+        bus_length = cleaned.get("bus_length")
+        if bus_length is not None:
+            shortest = system_length(n_choices[0], space.min_size("xm"), space.min_size("dm"))
+            if shortest >= bus_length:
+                self.add_error("bus_length", (
+                    f"Даже самая короткая система (N = {n_choices[0]}, наименьшие x_m и d_m) "
+                    f"длиной {shortest:.4g} м не короче шины, а нужен ещё ход отката. "
+                    f"Удлините шину или уменьшите N, x_m, d_m."))
+        cleaned["param_space"] = space.to_dict()
         return cleaned
+
+    def _drop_errors(self, *names):
+        """Ошибки разбора в неактивных полях строки (режим их не использует) не мешают."""
+        for name in names:
+            self._errors.pop(name, None)
+
+    def _clean_space_row(self, p):
+        """("free", lo, hi) | ("fixed", value) или None (ошибка уже добавлена к полю)."""
+        cd = self.cleaned_data
+        nonneg = p in NONNEGATIVE_PARAMS
+        sign_error = "Должно быть ≥ 0." if nonneg else "Должно быть больше 0."
+
+        def bad_sign(v):
+            return v < 0 if nonneg else v <= 0
+
+        if cd.get(f"{p}_mode") == SPACE_MODE_FIXED:
+            self._drop_errors(f"{p}_min", f"{p}_max")
+            if f"{p}_value" in self._errors:
+                return None
+            value = cd.get(f"{p}_value")
+            if value is None:
+                self.add_error(f"{p}_value", "Укажите значение.")
+                return None
+            if bad_sign(value):
+                self.add_error(f"{p}_value", sign_error)
+                return None
+            return (SPACE_MODE_FIXED, value)
+
+        self._drop_errors(f"{p}_value")
+        if f"{p}_min" in self._errors or f"{p}_max" in self._errors:
+            return None
+        lo, hi = cd.get(f"{p}_min"), cd.get(f"{p}_max")
+        if lo is None or hi is None:
+            self.add_error(f"{p}_min" if lo is None else f"{p}_max", "Укажите обе границы диапазона.")
+            return None
+        if bad_sign(lo):
+            self.add_error(f"{p}_min", sign_error)
+            return None
+        if hi <= lo:
+            self.add_error(f"{p}_max", "Верхняя граница должна быть больше нижней.")
+            return None
+        return (SPACE_MODE_FREE, lo, hi)
+
+    def _clean_n_row(self):
+        """Варианты N (кортеж) или None (ошибка уже добавлена к полю)."""
+        cd = self.cleaned_data
+        if cd.get("n_mode") == SPACE_MODE_FIXED:
+            self._drop_errors("n_min", "n_max", "n_step")
+            if "n_value" in self._errors:
+                return None
+            value = cd.get("n_value")
+            if value is None or value < 1:
+                self.add_error("n_value", "Укажите целое N ≥ 1.")
+                return None
+            return (value,)
+
+        self._drop_errors("n_value")
+        if any(name in self._errors for name in ("n_min", "n_max", "n_step")):
+            return None
+        lo, hi, step = cd.get("n_min"), cd.get("n_max"), cd.get("n_step")
+        if lo is None or hi is None or step is None:
+            self.add_error("n_min", "Укажите от, до и шаг.")
+            return None
+        if lo < 1 or step < 1:
+            self.add_error("n_min" if lo < 1 else "n_step", "N и шаг — целые ≥ 1.")
+            return None
+        if hi < lo:
+            self.add_error("n_max", "«До» не может быть меньше «от».")
+            return None
+        choices = n_choices_range(lo, hi, step)
+        if len(choices) > MAX_N_CHOICES:
+            self.add_error("n_step", (
+                f"Вариантов N получилось {len(choices)}, максимум {MAX_N_CHOICES} "
+                f"(каждый вариант — отдельный подгон). Увеличьте шаг или сузьте диапазон."))
+            return None
+        return choices
 
 
 class UserProfileEditForm(forms.Form):
