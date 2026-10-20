@@ -69,6 +69,11 @@ DATABASES = {
     }
 }
 
+# Тип id по умолчанию задан явно: в Django 6 умолчание сменилось с AutoField на
+# BigAutoField, и без этой строки makemigrations на разных версиях Django
+# предлагал разные «изменения id» (миграция 0030 привела все модели к BigAutoField).
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
 
 # === PASSWORD VALIDATION ===
 AUTH_PASSWORD_VALIDATORS = [
