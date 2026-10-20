@@ -86,6 +86,18 @@ class ParamSpaceTests(SimpleTestCase):
         with self.assertRaises(ValueError):   # нет вариантов N
             ParamSpace(cont_bounds=bounds, n_choices=(), fixed=fixed)
 
+    def test_overlap_width_with_negative_dh(self):
+        base = ParamSpace.default()
+        space = space_with_overrides(base, bounds={"dh1": (-0.03, 0.02), "dh2": (-0.02, 0.01)})
+        self.assertAlmostEqual(space.min_overlap_width(), 0.10 - 0.03 - 0.02)
+        # Положительный Δh₂ не «прикрывает» слишком отрицательный Δh₁: в модели он h не меняет.
+        with self.assertRaises(ValueError):
+            space_with_overrides(base, bounds={"dh1": (-0.12, 0.0)}, fixed={"dh2": 0.05})
+        with self.assertRaises(ValueError):
+            space_with_overrides(base, fixed={"ym": 0.05, "dh1": -0.03, "dh2": -0.03})
+        with self.assertRaises(ValueError):   # ровно ноль (с погрешностью float) — тоже нельзя
+            space_with_overrides(base, fixed={"ym": 0.05, "dh1": -0.03, "dh2": -0.02})
+
     def test_n_choices_range_and_build_space(self):
         self.assertEqual(n_choices_range(8, 24, 2), (8, 10, 12, 14, 16, 18, 20, 22, 24))
         self.assertEqual(n_choices_range(5, 10, 3), (5, 8))
@@ -185,6 +197,16 @@ class ParamFitSpaceTests(SimpleTestCase):
             lo, hi = space.cont_bounds[name]
             self.assertTrue(lo <= getattr(fit.params, name) <= hi, name)
         self.assertLess(fit.curve_rmse, 0.05)
+
+    def test_negative_dh_range_through_zero(self):
+        """Диапазон Δh через ноль: подгон находит отрицательный выступ (магнит шире шины)."""
+        target = quasistatic_curve(self.v_grid, replace(BRAKE, dh1=-0.01, dh2=-0.01))
+        fixed = {p: getattr(BRAKE, p) for p in CONT_PARAMS if p not in ("dh1", "dh2")}
+        space = space_with_overrides(ParamSpace.default(), fixed=fixed, n_choices=(12,),
+                                     bounds={"dh1": (-0.03, 0.02), "dh2": (-0.03, 0.02)})
+        fit = fit_parametric_to_curve(self.v_grid, target, space, maxiter=15, popsize=8)
+        self.assertLess(fit.curve_rmse, 0.01)
+        self.assertLess(fit.params.dh1 + fit.params.dh2, 0.0)
 
     def test_all_dimensions_fixed_picks_n(self):
         target = quasistatic_curve(self.v_grid, BRAKE)
@@ -289,10 +311,23 @@ class DesignFormTests(TestCase):
         self.assertIn("xm_max", form.errors)
 
     def test_sign_rules(self):
+        # Δh — любого знака (магнит шире шины), остальные размеры > 0.
         self.assertTrue(self._form(dh1_mode="fixed", dh1_value="0").is_valid())
+        self.assertTrue(self._form(dh1_mode="fixed", dh1_value="-0.01").is_valid())
+        form = self._form(dh2_min="-0.03", dh2_max="0.02")
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(ParamSpace.from_dict(form.cleaned_data["param_space"]).cont_bounds["dh2"],
+                         (-0.03, 0.02))
         form = self._form(delta_mode="fixed", delta_value="0")
         self.assertFalse(form.is_valid())
         self.assertIn("delta_value", form.errors)
+
+    def test_negative_dh_overlap_must_stay_positive(self):
+        # y_m от 0.1, Δh₁ и Δh₂ от −0.06: магнит над шиной 0.1 − 0.12 < 0 — не допускается.
+        form = self._form(dh1_min="-0.06", dh2_min="-0.06")
+        self.assertFalse(form.is_valid())
+        self.assertIn("Ширина магнита над шиной", " ".join(form.non_field_errors()))
+        self.assertTrue(self._form(dh1_min="-0.04", dh2_min="-0.04").is_valid())
 
     def test_everything_fixed(self):
         overrides = {f"{p}_mode": "fixed" for p in CONT_PARAMS}

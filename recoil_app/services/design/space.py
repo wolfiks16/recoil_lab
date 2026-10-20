@@ -19,8 +19,11 @@ from ..brake_params import FIXED_PARAM_DEFAULTS, PARAM_SPECS, SPEC_BY_FIELD
 # Все непрерывные размеры конструкции (порядок вектора поиска и строк формы).
 CONT_PARAMS = ("delta", "xm", "ym", "dh1", "dh2", "dm", "bz")
 
-# Размеры, которые могут быть нулевыми (выступ края шины); остальные — строго > 0.
-NONNEGATIVE_PARAMS = ("dh1", "dh2")
+# Выступы краёв шины могут быть любого знака (< 0 — магнит шире шины); остальные — строго > 0.
+# Общее условие для них — ширина магнита над шиной > 0 (см. ParamSpace.min_overlap_width).
+SIGNED_PARAMS = ("dh1", "dh2")
+# Минимальная ширина магнита над шиной, м (1 мкм — «больше нуля» с запасом на округление float).
+MIN_OVERLAP_WIDTH = 1e-6
 
 # Параметры модели, которые не подбираются никогда.
 MODEL_FIXED = {"mu": 1.0, "lya": 2.5, "wn0": 1.0}
@@ -79,6 +82,12 @@ class ParamSpace:
         for name in ("gamma", *MODEL_FIXED):
             if name not in self.fixed:
                 raise ValueError(f"Не задан фиксированный параметр {name}.")
+        width = self.min_overlap_width()
+        if width < MIN_OVERLAP_WIDTH:
+            raise ValueError(
+                f"Ширина магнита над шиной (y_m плюс отрицательные Δh₁, Δh₂) должна быть больше 0 "
+                f"при любых значениях из диапазонов, а при наименьших получается {width:.4g} м. "
+                f"Поднимите нижнюю границу y_m или Δh.")
 
     @classmethod
     def default(cls) -> "ParamSpace":
@@ -101,6 +110,16 @@ class ParamSpace:
     def min_size(self, name: str) -> float:
         """Наименьшее возможное значение размера (нижняя граница или фиксированное значение)."""
         return self.cont_bounds[name][0] if name in self.cont_bounds else self.fixed[name]
+
+    def min_overlap_width(self) -> float:
+        """Наименьшая ширина магнита над шиной h = y_m + отрицательные Δh по всему пространству.
+
+        Так считает модель силы (`magnetic._magnetic_core`: положительный выступ
+        шины h не меняет, отрицательный — магнит шире шины — уменьшает) и делит на h;
+        при h ≤ 0 сила не определена, поэтому такое пространство не допускается.
+        """
+        return (self.min_size("ym") + min(self.min_size("dh1"), 0.0)
+                + min(self.min_size("dh2"), 0.0))
 
     def to_dict(self) -> dict:
         return {"cont_bounds": {k: [lo, hi] for k, (lo, hi) in self.cont_bounds.items()},

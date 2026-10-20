@@ -874,7 +874,7 @@ from .services.design.space import (  # noqa: E402
     DEFAULT_FIXED_VALUES,
     DEFAULT_GAMMA,
     MAX_N_CHOICES,
-    NONNEGATIVE_PARAMS,
+    SIGNED_PARAMS,
     build_space,
     n_choices_range,
 )
@@ -1080,13 +1080,16 @@ class DesignStudyForm(forms.Form):
             self._errors.pop(name, None)
 
     def _clean_space_row(self, p):
-        """("free", lo, hi) | ("fixed", value) или None (ошибка уже добавлена к полю)."""
+        """("free", lo, hi) | ("fixed", value) или None (ошибка уже добавлена к полю).
+
+        Δh₁, Δh₂ — любого знака (< 0 — магнит шире шины); допустимость их сочетания
+        с y_m (ширина магнита над шиной > 0) проверяет ParamSpace при сборке.
+        """
         cd = self.cleaned_data
-        nonneg = p in NONNEGATIVE_PARAMS
-        sign_error = "Должно быть ≥ 0." if nonneg else "Должно быть больше 0."
+        sign_error = "Должно быть больше 0."
 
         def bad_sign(v):
-            return v < 0 if nonneg else v <= 0
+            return p not in SIGNED_PARAMS and v <= 0
 
         if cd.get(f"{p}_mode") == SPACE_MODE_FIXED:
             self._drop_errors(f"{p}_min", f"{p}_max")
